@@ -1,0 +1,187 @@
+{
+  "name": "Basic Data Processing Example",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Trigger (9 AM Weekdays)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "content": "# 📅 Scheduled Automation Example\n\nThis workflow demonstrates:\n- **Schedule Trigger**: Runs at 9 AM on weekdays\n- **Data Processing**: Processes and formats data\n- **Conditional Logic**: Makes decisions based on data\n\n## 🔧 Customize This Workflow\n- Change the schedule in the trigger\n- Add your own data sources\n- Connect to external services\n- Add notifications or alerts\n\n*This is a template - modify it for your needs!*"
+      },
+      "id": "info-note",
+      "name": "Workflow Info",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [240, 100]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "task_name",
+              "value": "Daily Data Processing"
+            },
+            {
+              "name": "status",
+              "value": "started"
+            },
+            {
+              "name": "execution_time",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ],
+          "number": [
+            {
+              "name": "random_value",
+              "value": "={{ Math.floor(Math.random() * 100) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "process-data",
+      "name": "Process Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.random_value }}",
+              "rightValue": 50,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-condition",
+      "name": "Check Value > 50",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "result",
+              "value": "High value detected!"
+            },
+            {
+              "name": "action",
+              "value": "Send notification or trigger alert"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "high-value",
+      "name": "High Value Action",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "result",
+              "value": "Normal value"
+            },
+            {
+              "name": "action",
+              "value": "Continue normal processing"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "normal-value",
+      "name": "Normal Value Action",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "Daily Trigger (9 AM Weekdays)": {
+      "main": [
+        [
+          {
+            "node": "Process Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Data": {
+      "main": [
+        [
+          {
+            "node": "Check Value > 50",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Value > 50": {
+      "main": [
+        [
+          {
+            "node": "High Value Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normal Value Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

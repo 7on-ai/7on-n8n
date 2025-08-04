@@ -1,0 +1,29 @@
+{
+  "name": "Custom Workflow Placeholder",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "start-node",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "content": "# 🎯 Custom Workflow Template\n\nThis is where you can add custom workflows specific to your use case.\n\n## 💡 Ideas for Custom Workflows\n- Industry-specific automations\n- Company-specific integrations\n- Advanced data processing pipelines\n- Custom API integrations\n\n**Replace this with your own workflow templates!**"
+      },
+      "id": "custom-note",
+      "name": "Custom Template Info",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [440, 300]
+    }
+  ],
+  "connections": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1"
+}

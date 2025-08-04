@@ -1,0 +1,70 @@
+{
+  "name": "Welcome to Your N8N Instance",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "start-node",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "content": "# 🎉 Welcome to Your N8N Automation Platform!\n\nThis is your first workflow. Here's what you can do:\n\n## ✨ Getting Started\n- Click the \"Execute Workflow\" button to test this workflow\n- Edit nodes by double-clicking them\n- Add new nodes by clicking the \"+\" button\n\n## �� What's Next?\n- Connect to your favorite services\n- Set up automated triggers\n- Build powerful workflows\n\n## 🚀 Pro Tips\n- Use the Template library for inspiration\n- Join the N8N community for help\n- Explore integrations with 400+ services\n\n**Happy Automating!** 🤖"
+      },
+      "id": "welcome-note",
+      "name": "Welcome Message",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [440, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "Welcome to your N8N instance! This workflow ran successfully."
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "name": "user_info",
+              "value": "Your N8N instance is ready for automation!"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-data",
+      "name": "Set Welcome Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [640, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Welcome Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
