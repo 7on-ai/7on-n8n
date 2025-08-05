@@ -1,0 +1,222 @@
+{
+  "apiVersion": "v1.2",
+  "spec": {
+    "kind": "Workflow",
+    "spec": {
+      "type": "sequential",
+      "steps": [
+        {
+          "ref": "project",
+          "kind": "Project",
+          "spec": {
+            "name": "Sunday-${args.id}",
+            "description": "Version 1.103.2",
+            "color": "#ea4b70",
+            "networking": {
+              "allowedIngressProjects": [],
+              "hostAliases": {
+                "enabled": false
+              }
+            },
+            "region": "asia-southeast"
+          }
+        },
+        {
+          "kind": "Workflow",
+          "spec": {
+            "context": {
+              "projectId": "${refs.project.id}"
+            },
+            "type": "sequential",
+            "steps": [
+              {
+                "kind": "DeploymentService",
+                "spec": {
+                  "name": "n8n",
+                  "infrastructure": {
+                    "architecture": "x86"
+                  },
+                  "billing": {
+                    "deploymentPlan": "nf-compute-100-2"
+                  },
+                  "deployment": {
+                    "type": "deployment",
+                    "instances": 1,
+                    "external": {
+                      "imagePath": "docker.n8n.io/n8nio/n8n:1.103.2"
+                    },
+                    "metadata": {
+                      "labels": {},
+                      "annotations": {}
+                    }
+                  },
+                  "autoscaling": {
+                    "horizontal": {
+                      "enabled": true,
+                      "minReplicas": 1,
+                      "maxReplicas": 3,
+                      "cpu": {
+                        "enabled": true,
+                        "thresholdPercentage": 80
+                      },
+                      "memory": {
+                        "enabled": true,
+                        "thresholdPercentage": 80
+                      }
+                    }
+                  },
+                  "loadBalancing": {
+                    "mode": "leastConnection"
+                  },
+                  "ports": [
+                    {
+                      "name": "app",
+                      "internalPort": 5678,
+                      "protocol": "HTTP",
+                      "public": true,
+                      "security": {
+                        "credentials": [],
+                        "policies": [],
+                        "sso": {}
+                      }
+                    }
+                  ],
+                  "healthChecks": [
+                    {
+                      "protocol": "HTTP",
+                      "type": "startupProbe",
+                      "port": 5678,
+                      "path": "/healthz",
+                      "initialDelaySeconds": 5,
+                      "periodSeconds": 15,
+                      "timeoutSeconds": 10,
+                      "failureThreshold": 8
+                    },
+                    {
+                      "protocol": "HTTP",
+                      "type": "livenessProbe",
+                      "port": 5678,
+                      "path": "/healthz",
+                      "initialDelaySeconds": 5,
+                      "periodSeconds": 60,
+                      "timeoutSeconds": 10,
+                      "failureThreshold": 3
+                    },
+                    {
+                      "protocol": "HTTP",
+                      "type": "readinessProbe",
+                      "port": 5678,
+                      "path": "/healthz/readiness",
+                      "initialDelaySeconds": 5,
+                      "periodSeconds": 60,
+                      "timeoutSeconds": 10,
+                      "failureThreshold": 3,
+                      "successThreshold": 1
+                    }
+                  ],
+                  "runtimeEnvironment": {}
+                }
+              },
+              {
+                "kind": "Addon",
+                "spec": {
+                  "name": "database",
+                  "infrastructure": {
+                    "architecture": "x86"
+                  },
+                  "type": "postgresql",
+                  "version": "16",
+                  "billing": {
+                    "deploymentPlan": "nf-compute-20",
+                    "storageClass": "ssd",
+                    "storage": 4096,
+                    "replicas": 1
+                  }
+                }
+              },
+              {
+                "kind": "SecretGroup",
+                "spec": {
+                  "name": "secrets",
+                  "type": "secret",
+                  "secretType": "environment-arguments",
+                  "priority": 10,
+                  "addonDependencies": [
+                    {
+                      "addonId": "database",
+                      "keys": [
+                        {
+                          "keyName": "PORT",
+                          "aliases": [
+                            "DB_POSTGRESDB_PORT"
+                          ]
+                        },
+                        {
+                          "keyName": "HOST",
+                          "aliases": [
+                            "DB_POSTGRESDB_HOST"
+                          ]
+                        },
+                        {
+                          "keyName": "USERNAME",
+                          "aliases": [
+                            "DB_POSTGRESDB_USER"
+                          ]
+                        },
+                        {
+                          "keyName": "PASSWORD",
+                          "aliases": [
+                            "DB_POSTGRESDB_PASSWORD"
+                          ]
+                        },
+                        {
+                          "keyName": "DATABASE",
+                          "aliases": [
+                            "DB_POSTGRESDB_DATABASE"
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "secrets": {
+                    "variables": {
+                      "DB_TYPE": "postgresdb",
+                      "N8N_HOST": "${args.id}.workflow.7on.ai",
+                      "N8N_EDITOR_BASE_URL": "https://${N8N_HOST}",
+                      "WEBHOOK_URL": "https://${N8N_HOST}",
+                      "N8N_ENCRYPTION_KEY": "${fn.randomSecret(32)}",
+                      "N8N_RUNNERS_ENABLED": "true",
+                      "N8N_RUNNERS_MODE": "internal",
+                      "N8N_PROXY_HOPS": "1",
+                      "TINI_SUBREAPER": "1"
+                    }
+                  },
+                  "restrictions": {
+                    "restricted": false,
+                    "nfObjects": [],
+                    "tags": []
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "name": "Sunday",
+  "description": "n8n Version 1.103.2",
+  "options": {
+    "autorun": false,
+    "concurrencyPolicy": "allow",
+    "runOnUpdate": false
+  },
+  "gitops": {
+    "repoUrl": "https://github.com/7on-ai/7on-n8n",
+    "vcsService": "github",
+    "accountLogin": "7on-ai",
+    "branch": "main",
+    "filePath": "/northflank.json"
+  },
+  "$schema": "https://api.northflank.com/v1/schemas/template"
+}
