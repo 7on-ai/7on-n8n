@@ -10,7 +10,7 @@
           "kind": "Project",
           "spec": {
             "name": "Sunday-${args.id}",
-            "description": "Version 1.103.2",
+            "description": "N8N SaaS Instance - Version 1.103.2",
             "color": "#ea4b70",
             "networking": {
               "allowedIngressProjects": [],
@@ -30,6 +30,161 @@
             "type": "sequential",
             "steps": [
               {
+                "ref": "database",
+                "kind": "Addon",
+                "spec": {
+                  "name": "database",
+                  "infrastructure": {
+                    "architecture": "x86"
+                  },
+                  "type": "postgresql",
+                  "version": "16",
+                  "billing": {
+                    "deploymentPlan": "nf-compute-20",
+                    "storageClass": "ssd",
+                    "storage": 4096,
+                    "replicas": 1
+                  }
+                }
+              },
+              {
+                "ref": "secrets",
+                "kind": "SecretGroup",
+                "spec": {
+                  "name": "secrets",
+                  "type": "secret",
+                  "secretType": "environment-arguments",
+                  "priority": 10,
+                  "addonDependencies": [
+                    {
+                      "addonId": "database",
+                      "keys": [
+                        {
+                          "keyName": "PORT",
+                          "aliases": [
+                            "DB_POSTGRESDB_PORT"
+                          ]
+                        },
+                        {
+                          "keyName": "HOST",
+                          "aliases": [
+                            "DB_POSTGRESDB_HOST"
+                          ]
+                        },
+                        {
+                          "keyName": "USERNAME",
+                          "aliases": [
+                            "DB_POSTGRESDB_USER"
+                          ]
+                        },
+                        {
+                          "keyName": "PASSWORD",
+                          "aliases": [
+                            "DB_POSTGRESDB_PASSWORD"
+                          ]
+                        },
+                        {
+                          "keyName": "DATABASE",
+                          "aliases": [
+                            "DB_POSTGRESDB_DATABASE"
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "secrets": {
+                    "variables": {
+                      "DB_TYPE": "postgresdb",
+                      "N8N_HOST": "${args.id}.workflow.7on.ai",
+                      "N8N_EDITOR_BASE_URL": "https://${N8N_HOST}",
+                      "WEBHOOK_URL": "https://${N8N_HOST}",
+                      "N8N_ENCRYPTION_KEY": "${fn.randomSecret(32)}",
+                      "N8N_RUNNERS_ENABLED": "true",
+                      "N8N_RUNNERS_MODE": "internal",
+                      "N8N_PROXY_HOPS": "1",
+                      "TINI_SUBREAPER": "1",
+                      "USER_ID": "${args.user_id}",
+                      "USER_EMAIL": "${args.user_email}",
+                      "USER_NAME": "${args.user_name}",
+                      "SETUP_WEBHOOK_URL": "${args.webhook_url}",
+                      "N8N_USERNAME": "n8n_user_${fn.randomString(8)}",
+                      "N8N_PASSWORD": "${fn.randomSecret(16)}"
+                    }
+                  },
+                  "restrictions": {
+                    "restricted": false,
+                    "nfObjects": [],
+                    "tags": []
+                  }
+                }
+              },
+              {
+                "ref": "setup_secrets",
+                "kind": "SecretGroup",
+                "spec": {
+                  "name": "setup-secrets",
+                  "type": "secret",
+                  "secretType": "environment-arguments",
+                  "priority": 20,
+                  "secrets": {
+                    "variables": {
+                      "N8N_BASE_URL": "https://${args.id}.workflow.7on.ai",
+                      "N8N_USER_ID": "${args.user_id}",
+                      "N8N_USER_EMAIL": "${args.user_email}",
+                      "N8N_USER_NAME": "${args.user_name}",
+                      "N8N_USER_PASSWORD": "${refs.secrets.N8N_PASSWORD}",
+                      "WEBHOOK_URL": "${args.webhook_url}",
+                      "WORKFLOW_TEMPLATES": "default",
+                      "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
+                      "NORTHFLANK_PROJECT_NAME": "${refs.project.name}"
+                    }
+                  },
+                  "addonDependencies": [
+                    {
+                      "addonId": "database",
+                      "keys": [
+                        {
+                          "keyName": "HOST",
+                          "aliases": [
+                            "DB_POSTGRESDB_HOST"
+                          ]
+                        },
+                        {
+                          "keyName": "PORT",
+                          "aliases": [
+                            "DB_POSTGRESDB_PORT"
+                          ]
+                        },
+                        {
+                          "keyName": "USERNAME",
+                          "aliases": [
+                            "DB_POSTGRESDB_USER"
+                          ]
+                        },
+                        {
+                          "keyName": "PASSWORD",
+                          "aliases": [
+                            "DB_POSTGRESDB_PASSWORD"
+                          ]
+                        },
+                        {
+                          "keyName": "DATABASE",
+                          "aliases": [
+                            "DB_POSTGRESDB_DATABASE"
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "restrictions": {
+                    "restricted": false,
+                    "nfObjects": [],
+                    "tags": []
+                  }
+                }
+              },
+              {
+                "ref": "n8n_service",
                 "kind": "DeploymentService",
                 "spec": {
                   "name": "n8n",
@@ -118,84 +273,41 @@
                 }
               },
               {
-                "kind": "Addon",
+                "ref": "setup-job",
+                "kind": "ManualJob",
                 "spec": {
-                  "name": "database",
+                  "runOnSourceChange": "never",
+                  "backoffLimit": 3,
+                  "activeDeadlineSeconds": 600,
+                  "deployment": {
+                    "storage": {
+                      "ephemeralStorage": {
+                        "storageSize": 1024
+                      },
+                      "shmSize": 64
+                    },
+                    "docker": {
+                      "configType": "default"
+                    },
+                    "external": {
+                      "imagePath": "ghcr.io/7on-ai/7on-n8n:latest"
+                    }
+                  },
+                  "name": "n8n-setup",
                   "infrastructure": {
                     "architecture": "x86"
                   },
-                  "type": "postgresql",
-                  "version": "16",
                   "billing": {
-                    "deploymentPlan": "nf-compute-20",
-                    "storageClass": "ssd",
-                    "storage": 4096,
-                    "replicas": 1
-                  }
-                }
-              },
-              {
-                "kind": "SecretGroup",
-                "spec": {
-                  "name": "secrets",
-                  "type": "secret",
-                  "secretType": "environment-arguments",
-                  "priority": 10,
-                  "addonDependencies": [
-                    {
-                      "addonId": "database",
-                      "keys": [
-                        {
-                          "keyName": "PORT",
-                          "aliases": [
-                            "DB_POSTGRESDB_PORT"
-                          ]
-                        },
-                        {
-                          "keyName": "HOST",
-                          "aliases": [
-                            "DB_POSTGRESDB_HOST"
-                          ]
-                        },
-                        {
-                          "keyName": "USERNAME",
-                          "aliases": [
-                            "DB_POSTGRESDB_USER"
-                          ]
-                        },
-                        {
-                          "keyName": "PASSWORD",
-                          "aliases": [
-                            "DB_POSTGRESDB_PASSWORD"
-                          ]
-                        },
-                        {
-                          "keyName": "DATABASE",
-                          "aliases": [
-                            "DB_POSTGRESDB_DATABASE"
-                          ]
-                        }
-                      ]
-                    }
-                  ],
-                  "secrets": {
-                    "variables": {
-                      "DB_TYPE": "postgresdb",
-                      "N8N_HOST": "${args.id}.workflow.7on.ai",
-                      "N8N_EDITOR_BASE_URL": "https://${N8N_HOST}",
-                      "WEBHOOK_URL": "https://${N8N_HOST}",
-                      "N8N_ENCRYPTION_KEY": "${fn.randomSecret(32)}",
-                      "N8N_RUNNERS_ENABLED": "true",
-                      "N8N_RUNNERS_MODE": "internal",
-                      "N8N_PROXY_HOPS": "1",
-                      "TINI_SUBREAPER": "1"
-                    }
+                    "deploymentPlan": "nf-compute-20"
                   },
-                  "restrictions": {
-                    "restricted": false,
-                    "nfObjects": [],
-                    "tags": []
-                  }
+                  "runtimeEnvironment": {},
+                  "runtimeFiles": {},
+                  "buildConfiguration": {
+                    "pathIgnoreRules": [],
+                    "isAllowList": false,
+                    "ciIgnoreFlagsEnabled": false
+                  },
+                  "buildArguments": {}
                 }
               }
             ]
