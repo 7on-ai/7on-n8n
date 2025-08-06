@@ -107,7 +107,7 @@
                       "USER_EMAIL": "${args.user_email}",
                       "USER_NAME": "${args.user_name}",
                       "SETUP_WEBHOOK_URL": "${args.webhook_url}",
-                      "N8N_USERNAME": "n8n_user_${fn.randomString(8)}",
+                      "N8N_USERNAME": "n8n_user_${fn.randomSecret(8)}",
                       "N8N_PASSWORD": "${fn.randomSecret(16)}"
                     }
                   },
@@ -184,21 +184,19 @@
                 }
               },
               {
-                "kind": "DeploymentService",
                 "ref": "n8n_service",
+                "kind": "DeploymentService",
                 "spec": {
+                  "name": "n8n",
+                  "infrastructure": {
+                    "architecture": "x86"
+                  },
+                  "billing": {
+                    "deploymentPlan": "nf-compute-100-2"
+                  },
                   "deployment": {
-                    "instances": 1,
-                    "storage": {
-                      "ephemeralStorage": {
-                        "storageSize": 1024
-                      },
-                      "shmSize": 64
-                    },
-                    "docker": {
-                      "configType": "default"
-                    },
                     "type": "deployment",
+                    "instances": 1,
                     "external": {
                       "imagePath": "docker.n8n.io/n8nio/n8n:1.103.2"
                     },
@@ -206,16 +204,6 @@
                       "labels": {},
                       "annotations": {}
                     }
-                  },
-                  "loadBalancing": {
-                    "mode": "leastConnection"
-                  },
-                  "name": "n8n",
-                  "infrastructure": {
-                    "architecture": "x86"
-                  },
-                  "billing": {
-                    "deploymentPlan": "nf-compute-100-2"
                   },
                   "autoscaling": {
                     "horizontal": {
@@ -231,6 +219,9 @@
                         "thresholdPercentage": 80
                       }
                     }
+                  },
+                  "loadBalancing": {
+                    "mode": "leastConnection"
                   },
                   "ports": [
                     {
@@ -278,8 +269,7 @@
                       "successThreshold": 1
                     }
                   ],
-                  "runtimeEnvironment": {},
-                  "runtimeFiles": {}
+                  "runtimeEnvironment": {}
                 }
               },
               {
