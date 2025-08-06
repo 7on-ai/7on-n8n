@@ -184,19 +184,21 @@
                 }
               },
               {
-                "ref": "n8n_service",
                 "kind": "DeploymentService",
+                "ref": "n8n_service",
                 "spec": {
-                  "name": "n8n",
-                  "infrastructure": {
-                    "architecture": "x86"
-                  },
-                  "billing": {
-                    "deploymentPlan": "nf-compute-100-2"
-                  },
                   "deployment": {
-                    "type": "deployment",
                     "instances": 1,
+                    "storage": {
+                      "ephemeralStorage": {
+                        "storageSize": 1024
+                      },
+                      "shmSize": 64
+                    },
+                    "docker": {
+                      "configType": "default"
+                    },
+                    "type": "deployment",
                     "external": {
                       "imagePath": "docker.n8n.io/n8nio/n8n:1.103.2"
                     },
@@ -204,6 +206,16 @@
                       "labels": {},
                       "annotations": {}
                     }
+                  },
+                  "loadBalancing": {
+                    "mode": "leastConnection"
+                  },
+                  "name": "n8n",
+                  "infrastructure": {
+                    "architecture": "x86"
+                  },
+                  "billing": {
+                    "deploymentPlan": "nf-compute-100-2"
                   },
                   "autoscaling": {
                     "horizontal": {
@@ -219,9 +231,6 @@
                         "thresholdPercentage": 80
                       }
                     }
-                  },
-                  "loadBalancing": {
-                    "mode": "leastConnection"
                   },
                   "ports": [
                     {
@@ -269,7 +278,8 @@
                       "successThreshold": 1
                     }
                   ],
-                  "runtimeEnvironment": {}
+                  "runtimeEnvironment": {},
+                  "runtimeFiles": {}
                 }
               },
               {
