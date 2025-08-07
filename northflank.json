@@ -265,7 +265,7 @@
                     "N8N_USER_EMAIL": "${args.user_email}",
                     "N8N_USER_NAME": "${args.user_name}",
                     "N8N_USER_ID": "${args.user_id}",
-                    "N8N_USER_PASSWORD": "${refs.secrets.N8N_USER_PASSWORD}",
+                    "N8N_USER_PASSWORD": "${N8N_USER_PASSWORD}",
                     "WORKFLOW_TEMPLATES": "default",
                     "WEBHOOK_URL": "${args.webhook_url}",
                     "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
