@@ -119,71 +119,6 @@
                 }
               },
               {
-                "ref": "setup_secrets",
-                "kind": "SecretGroup",
-                "spec": {
-                  "name": "setup-secrets",
-                  "type": "secret",
-                  "secretType": "environment-arguments",
-                  "priority": 20,
-                  "secrets": {
-                    "variables": {
-                      "N8N_BASE_URL": "https://${args.id}.workflow.7on.ai",
-                      "N8N_USER_ID": "${args.user_id}",
-                      "N8N_USER_EMAIL": "${args.user_email}",
-                      "N8N_USER_NAME": "${args.user_name}",
-                      "N8N_USER_PASSWORD": "${refs.secrets.N8N_PASSWORD}",
-                      "WEBHOOK_URL": "${args.webhook_url}",
-                      "WORKFLOW_TEMPLATES": "default",
-                      "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
-                      "NORTHFLANK_PROJECT_NAME": "${refs.project.name}"
-                    }
-                  },
-                  "addonDependencies": [
-                    {
-                      "addonId": "database",
-                      "keys": [
-                        {
-                          "keyName": "HOST",
-                          "aliases": [
-                            "DB_POSTGRESDB_HOST"
-                          ]
-                        },
-                        {
-                          "keyName": "PORT",
-                          "aliases": [
-                            "DB_POSTGRESDB_PORT"
-                          ]
-                        },
-                        {
-                          "keyName": "USERNAME",
-                          "aliases": [
-                            "DB_POSTGRESDB_USER"
-                          ]
-                        },
-                        {
-                          "keyName": "PASSWORD",
-                          "aliases": [
-                            "DB_POSTGRESDB_PASSWORD"
-                          ]
-                        },
-                        {
-                          "keyName": "DATABASE",
-                          "aliases": [
-                            "DB_POSTGRESDB_DATABASE"
-                          ]
-                        }
-                      ]
-                    }
-                  ],
-                  "restrictions": {
-                    "restricted": false,
-                    "nfObjects": [],
-                    "tags": []
-                  }
-                }
-              },
-              {
                 "ref": "n8n_service",
                 "kind": "DeploymentService",
                 "spec": {
@@ -308,6 +243,71 @@
                     "ciIgnoreFlagsEnabled": false
                   },
                   "buildArguments": {}
+                }
+              },
+              {
+                "ref": "setup_secrets",
+                "kind": "SecretGroup",
+                "spec": {
+                  "name": "setup-secrets",
+                  "type": "secret",
+                  "secretType": "environment-arguments",
+                  "priority": 20,
+                  "secrets": {
+                    "variables": {
+                      "N8N_BASE_URL": "https://${args.id}.workflow.7on.ai",
+                      "N8N_USER_ID": "${args.user_id}",
+                      "N8N_USER_EMAIL": "${args.user_email}",
+                      "N8N_USER_NAME": "${args.user_name}",
+                      "N8N_USER_PASSWORD": "${refs.secrets.N8N_PASSWORD}",
+                      "WEBHOOK_URL": "${args.webhook_url}",
+                      "WORKFLOW_TEMPLATES": "default",
+                      "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
+                      "NORTHFLANK_PROJECT_NAME": "${refs.project.name}"
+                    }
+                  },
+                  "addonDependencies": [
+                    {
+                      "addonId": "database",
+                      "keys": [
+                        {
+                          "keyName": "HOST",
+                          "aliases": [
+                            "DB_POSTGRESDB_HOST"
+                          ]
+                        },
+                        {
+                          "keyName": "PORT",
+                          "aliases": [
+                            "DB_POSTGRESDB_PORT"
+                          ]
+                        },
+                        {
+                          "keyName": "USERNAME",
+                          "aliases": [
+                            "DB_POSTGRESDB_USER"
+                          ]
+                        },
+                        {
+                          "keyName": "PASSWORD",
+                          "aliases": [
+                            "DB_POSTGRESDB_PASSWORD"
+                          ]
+                        },
+                        {
+                          "keyName": "DATABASE",
+                          "aliases": [
+                            "DB_POSTGRESDB_DATABASE"
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "restrictions": {
+                    "restricted": false,
+                    "nfObjects": [],
+                    "tags": []
+                  }
                 }
               }
             ]
