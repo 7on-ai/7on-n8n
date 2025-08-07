@@ -255,6 +255,14 @@
                   },
                   "buildArguments": {}
                 }
+              },
+              {
+                "kind": "JobRun",
+                "spec": {
+                  "jobId": "${refs.setup-job.id}"
+                },
+                "condition": "success",
+                "ref": "refssetup-jobid-jobrun-1"
               }
             ]
           }
