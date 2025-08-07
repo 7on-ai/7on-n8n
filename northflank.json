@@ -96,8 +96,8 @@
                     "variables": {
                       "DB_TYPE": "postgresdb",
                       "N8N_HOST": "${args.id}.workflow.7on.ai",
-                      "N8N_EDITOR_BASE_URL": "https://${N8N_HOST}",
-                      "WEBHOOK_URL": "https://${N8N_HOST}",
+                      "N8N_EDITOR_BASE_URL": "https://${args.id}.workflow.7on.ai",
+                      "WEBHOOK_URL": "https://${args.id}.workflow.7on.ai",
                       "N8N_ENCRYPTION_KEY": "${fn.randomSecret(32)}",
                       "N8N_RUNNERS_ENABLED": "true",
                       "N8N_RUNNERS_MODE": "internal",
@@ -107,8 +107,16 @@
                       "USER_EMAIL": "${args.user_email}",
                       "USER_NAME": "${args.user_name}",
                       "SETUP_WEBHOOK_URL": "${args.webhook_url}",
-                      "N8N_USERNAME": "n8n_user_${fn.randomSecret(8)}",
-                      "N8N_PASSWORD": "${fn.randomSecret(16)}"
+                      "N8N_USERNAME": "${args.user_email}",
+                      "N8N_PASSWORD": "${fn.randomSecret(16)}",
+                      "N8N_BASE_URL": "https://${args.id}.workflow.7on.ai",
+                      "N8N_USER_ID": "${args.user_id}",
+                      "N8N_USER_EMAIL": "${args.user_email}",
+                      "N8N_USER_NAME": "${args.user_name}",
+                      "N8N_USER_PASSWORD": "${fn.randomSecret(16)}",
+                      "WORKFLOW_TEMPLATES": "default",
+                      "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
+                      "NORTHFLANK_PROJECT_NAME": "${refs.project.name}"
                     }
                   },
                   "restrictions": {
@@ -177,17 +185,17 @@
                       "type": "startupProbe",
                       "port": 5678,
                       "path": "/healthz",
-                      "initialDelaySeconds": 5,
+                      "initialDelaySeconds": 30,
                       "periodSeconds": 15,
                       "timeoutSeconds": 10,
-                      "failureThreshold": 8
+                      "failureThreshold": 10
                     },
                     {
                       "protocol": "HTTP",
                       "type": "livenessProbe",
                       "port": 5678,
                       "path": "/healthz",
-                      "initialDelaySeconds": 5,
+                      "initialDelaySeconds": 30,
                       "periodSeconds": 60,
                       "timeoutSeconds": 10,
                       "failureThreshold": 3
@@ -197,23 +205,32 @@
                       "type": "readinessProbe",
                       "port": 5678,
                       "path": "/healthz/readiness",
-                      "initialDelaySeconds": 5,
+                      "initialDelaySeconds": 30,
                       "periodSeconds": 60,
                       "timeoutSeconds": 10,
                       "failureThreshold": 3,
                       "successThreshold": 1
                     }
                   ],
-                  "runtimeEnvironment": {}
+                  "runtimeEnvironment": {
+                    "secretGroups": "secrets"
+                  }
                 }
               },
               {
                 "ref": "setup-job",
                 "kind": "ManualJob",
                 "spec": {
+                  "name": "n8n-setup",
                   "runOnSourceChange": "never",
                   "backoffLimit": 3,
                   "activeDeadlineSeconds": 600,
+                  "infrastructure": {
+                    "architecture": "x86"
+                  },
+                  "billing": {
+                    "deploymentPlan": "nf-compute-20"
+                  },
                   "deployment": {
                     "storage": {
                       "ephemeralStorage": {
@@ -228,86 +245,15 @@
                       "imagePath": "ghcr.io/7on-ai/7on-n8n:latest"
                     }
                   },
-                  "name": "n8n-setup",
-                  "infrastructure": {
-                    "architecture": "x86"
+                  "runtimeEnvironment": {
+                    "secretGroups": "secrets"
                   },
-                  "billing": {
-                    "deploymentPlan": "nf-compute-20"
-                  },
-                  "runtimeEnvironment": {},
-                  "runtimeFiles": {},
                   "buildConfiguration": {
                     "pathIgnoreRules": [],
                     "isAllowList": false,
                     "ciIgnoreFlagsEnabled": false
                   },
                   "buildArguments": {}
-                }
-              },
-              {
-                "ref": "setup_secrets",
-                "kind": "SecretGroup",
-                "spec": {
-                  "name": "setup-secrets",
-                  "type": "secret",
-                  "secretType": "environment-arguments",
-                  "priority": 20,
-                  "secrets": {
-                    "variables": {
-                      "N8N_BASE_URL": "https://${args.id}.workflow.7on.ai",
-                      "N8N_USER_ID": "${args.user_id}",
-                      "N8N_USER_EMAIL": "${args.user_email}",
-                      "N8N_USER_NAME": "${args.user_name}",
-                      "N8N_USER_PASSWORD": "${refs.secrets.N8N_PASSWORD}",
-                      "WEBHOOK_URL": "${args.webhook_url}",
-                      "WORKFLOW_TEMPLATES": "default",
-                      "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
-                      "NORTHFLANK_PROJECT_NAME": "${refs.project.name}"
-                    }
-                  },
-                  "addonDependencies": [
-                    {
-                      "addonId": "database",
-                      "keys": [
-                        {
-                          "keyName": "HOST",
-                          "aliases": [
-                            "DB_POSTGRESDB_HOST"
-                          ]
-                        },
-                        {
-                          "keyName": "PORT",
-                          "aliases": [
-                            "DB_POSTGRESDB_PORT"
-                          ]
-                        },
-                        {
-                          "keyName": "USERNAME",
-                          "aliases": [
-                            "DB_POSTGRESDB_USER"
-                          ]
-                        },
-                        {
-                          "keyName": "PASSWORD",
-                          "aliases": [
-                            "DB_POSTGRESDB_PASSWORD"
-                          ]
-                        },
-                        {
-                          "keyName": "DATABASE",
-                          "aliases": [
-                            "DB_POSTGRESDB_DATABASE"
-                          ]
-                        }
-                      ]
-                    }
-                  ],
-                  "restrictions": {
-                    "restricted": false,
-                    "nfObjects": [],
-                    "tags": []
-                  }
                 }
               }
             ]
