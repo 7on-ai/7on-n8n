@@ -259,18 +259,7 @@
               {
                 "kind": "JobRun",
                 "spec": {
-                  "jobId": "${refs.setup-job.id}",
-                  "runtimeEnvironment": {
-                    "N8N_BASE_URL": "https://${args.id}.workflow.7on.ai",
-                    "N8N_USER_EMAIL": "${args.user_email}",
-                    "N8N_USER_NAME": "${args.user_name}",
-                    "N8N_USER_ID": "${args.user_id}",
-                    "N8N_USER_PASSWORD": "${N8N_USER_PASSWORD}",
-                    "WORKFLOW_TEMPLATES": "default",
-                    "WEBHOOK_URL": "${args.webhook_url}",
-                    "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
-                    "NORTHFLANK_PROJECT_NAME": "${refs.project.name}"
-                  }
+                  "jobId": "${refs.setup-job.id}"
                 },
                 "condition": "success",
                 "ref": "refssetup-jobid-jobrun-1"
