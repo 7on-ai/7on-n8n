@@ -87,8 +87,8 @@
                       "DB_POSTGRESDB_USER": "${refs.database.username}",
                       "DB_POSTGRESDB_PASSWORD": "${refs.database.password}",
                       "N8N_HOST": "${args.id}.workflow.7on.ai",
-                      "N8N_EDITOR_BASE_URL": "${refs.n8n_service.publicURL}",
-                      "WEBHOOK_URL": "${refs.n8n_service.publicURL}",
+                      "N8N_EDITOR_BASE_URL": "https://${args.id}.workflow.7on.ai",
+                      "WEBHOOK_URL": "https://${args.id}.workflow.7on.ai",
                       "N8N_ENCRYPTION_KEY": "${fn.randomSecret(32)}",
                       "N8N_RUNNERS_ENABLED": "true",
                       "N8N_RUNNERS_MODE": "internal",
@@ -100,7 +100,7 @@
                       "SETUP_WEBHOOK_URL": "${args.webhook_url}",
                       "N8N_USERNAME": "${args.user_email}",
                       "N8N_PASSWORD": "${fn.randomSecret(16)}",
-                      "N8N_BASE_URL": "${refs.n8n_service.publicURL}",
+                      "N8N_BASE_URL": "https://${args.id}.workflow.7on.ai",
                       "N8N_USER_ID": "${args.user_id}",
                       "N8N_USER_EMAIL": "${args.user_email}",
                       "N8N_USER_NAME": "${args.user_name}",
@@ -108,8 +108,8 @@
                       "WORKFLOW_TEMPLATES": "default",
                       "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
                       "NORTHFLANK_PROJECT_NAME": "${refs.project.name}",
-                      "N8N_SERVICE_URL": "${refs.n8n_service.publicURL}",
-                      "ACTUAL_N8N_URL": "${refs.n8n_service.publicURL}"
+                      "N8N_SERVICE_URL": "https://${args.id}.workflow.7on.ai",
+                      "ACTUAL_N8N_URL": "https://${args.id}.workflow.7on.ai"
                     },
                     "files": {},
                     "dockerSecretMounts": {}
