@@ -55,36 +55,14 @@
                   "secretType": "environment-arguments",
                   "priority": 10,
                   "name": "secrets",
-                  "addonDependencies": [
-                    {
-                      "addonId": "${refs.database.id}",
-                      "keys": [
-                        {
-                          "keyName": "INTERNALHOST",
-                          "aliases": []
-                        },
-                        {
-                          "keyName": "INTERNALPORT",
-                          "aliases": []
-                        },
-                        {
-                          "keyName": "USERNAME",
-                          "aliases": []
-                        },
-                        {
-                          "keyName": "PASSWORD",
-                          "aliases": []
-                        }
-                      ]
-                    }
-                  ],
+                  "addonDependencies": [],
                   "secrets": {
                     "variables": {
                       "DB_TYPE": "postgresdb",
                       "DB_POSTGRESDB_DATABASE": "n8n",
-                      "DB_POSTGRESDB_HOST": "${refs.database.internalHost}",
-                      "DB_POSTGRESDB_PORT": "${refs.database.internalPort}",
-                      "DB_POSTGRESDB_USER": "${refs.database.username}",
+                      "DB_POSTGRESDB_HOST": "${refs.database.hostname}",
+                      "DB_POSTGRESDB_PORT": "${refs.database.portNumber}",
+                      "DB_POSTGRESDB_USER": "${refs.database.user}",
                       "DB_POSTGRESDB_PASSWORD": "${refs.database.password}",
                       "N8N_HOST": "${args.id}.workflow.7on.ai",
                       "N8N_EDITOR_BASE_URL": "https://${args.id}.workflow.7on.ai",
