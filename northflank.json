@@ -60,11 +60,11 @@
                       "addonId": "${refs.database.id}",
                       "keys": [
                         {
-                          "keyName": "HOST",
+                          "keyName": "INTERNALHOST",
                           "aliases": []
                         },
                         {
-                          "keyName": "PORT",
+                          "keyName": "INTERNALPORT",
                           "aliases": []
                         },
                         {
@@ -82,8 +82,8 @@
                     "variables": {
                       "DB_TYPE": "postgresdb",
                       "DB_POSTGRESDB_DATABASE": "n8n",
-                      "DB_POSTGRESDB_HOST": "${refs.database.host}",
-                      "DB_POSTGRESDB_PORT": "${refs.database.port}",
+                      "DB_POSTGRESDB_HOST": "${refs.database.internalHost}",
+                      "DB_POSTGRESDB_PORT": "${refs.database.internalPort}",
                       "DB_POSTGRESDB_USER": "${refs.database.username}",
                       "DB_POSTGRESDB_PASSWORD": "${refs.database.password}",
                       "N8N_HOST": "${args.id}.workflow.7on.ai",
