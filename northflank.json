@@ -67,18 +67,6 @@
                       "N8N_RUNNERS_MODE": "internal",
                       "N8N_PROXY_HOPS": "1",
                       "TINI_SUBREAPER": "1",
-                      "USER_ID": "${args.user_id}",
-                      "USER_EMAIL": "${args.user_email}",
-                      "USER_NAME": "${args.user_name}",
-                      "SETUP_WEBHOOK_URL": "${args.webhook_url}",
-                      "N8N_USERNAME": "${args.user_email}",
-                      "N8N_PASSWORD": "${fn.randomSecret(16)}",
-                      "N8N_BASE_URL": "https://${N8N_HOST}",
-                      "N8N_USER_ID": "${args.user_id}",
-                      "N8N_USER_EMAIL": "${args.user_email}",
-                      "N8N_USER_NAME": "${args.user_name}",
-                      "N8N_USER_PASSWORD": "${fn.randomSecret(16)}",
-                      "WORKFLOW_TEMPLATES": "default",
                       "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
                       "NORTHFLANK_PROJECT_NAME": "${refs.project.name}"
                     },
@@ -229,6 +217,38 @@
                 },
                 "condition": "success",
                 "ref": "refssetup-jobid-jobrun-1"
+              },
+              {
+                "kind": "SecretGroup",
+                "spec": {
+                  "type": "secret",
+                  "secretType": "environment-arguments",
+                  "priority": 10,
+                  "secrets": {
+                    "variables": {
+                      "N8N_HOST": "${refs.n8n.ports.0.dns}",
+                      "N8N_EDITOR_BASE_URL": "https://${N8N_HOST}",
+                      "WEBHOOK_URL": "https://${N8N_HOST}",
+                      "N8N_ENCRYPTION_KEY": "${args.N8N_ENCRYPTION_KEY}",
+                      "SETUP_WEBHOOK_URL": "${args.webhook_url}",
+                      "N8N_FIRST_NAME": "${args.first_name}",
+                      "N8N_LAST_NAME": "${args.last_name}",
+                      "N8N_USER_EMAIL": "${args.user_email}",
+                      "N8N_USER_PASSWORD": "${fn.randomSecret(16)}",
+                      "WORKFLOW_TEMPLATES": "default"
+                    },
+                    "files": {},
+                    "dockerSecretMounts": {}
+                  },
+                  "addonDependencies": [],
+                  "name": "n8n-secrets",
+                  "restrictions": {
+                    "restricted": false,
+                    "nfObjects": [],
+                    "tags": []
+                  }
+                },
+                "ref": "n8n-secrets"
               }
             ]
           }
