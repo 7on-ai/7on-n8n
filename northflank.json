@@ -59,15 +59,10 @@
                   "secrets": {
                     "variables": {
                       "DB_TYPE": "postgresdb",
-                      "DB_POSTGRESDB_DATABASE": "n8n",
-                      "DB_POSTGRESDB_HOST": "${refs.database.hostname}",
-                      "DB_POSTGRESDB_PORT": "${refs.database.portNumber}",
-                      "DB_POSTGRESDB_USER": "${refs.database.user}",
-                      "DB_POSTGRESDB_PASSWORD": "${refs.database.password}",
-                      "N8N_HOST": "${args.id}.workflow.7on.ai",
-                      "N8N_EDITOR_BASE_URL": "https://${args.id}.workflow.7on.ai",
-                      "WEBHOOK_URL": "https://${args.id}.workflow.7on.ai",
-                      "N8N_ENCRYPTION_KEY": "${fn.randomSecret(32)}",
+                      "N8N_HOST": "${refs.n8n.ports.0.dns}",
+                      "N8N_EDITOR_BASE_URL": "https://${N8N_HOST}",
+                      "WEBHOOK_URL": "https://${N8N_HOST}",
+                      "N8N_ENCRYPTION_KEY": "${args.N8N_ENCRYPTION_KEY}",
                       "N8N_RUNNERS_ENABLED": "true",
                       "N8N_RUNNERS_MODE": "internal",
                       "N8N_PROXY_HOPS": "1",
@@ -78,16 +73,14 @@
                       "SETUP_WEBHOOK_URL": "${args.webhook_url}",
                       "N8N_USERNAME": "${args.user_email}",
                       "N8N_PASSWORD": "${fn.randomSecret(16)}",
-                      "N8N_BASE_URL": "https://${args.id}.workflow.7on.ai",
+                      "N8N_BASE_URL": "https://${N8N_HOST}",
                       "N8N_USER_ID": "${args.user_id}",
                       "N8N_USER_EMAIL": "${args.user_email}",
                       "N8N_USER_NAME": "${args.user_name}",
                       "N8N_USER_PASSWORD": "${fn.randomSecret(16)}",
                       "WORKFLOW_TEMPLATES": "default",
                       "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
-                      "NORTHFLANK_PROJECT_NAME": "${refs.project.name}",
-                      "N8N_SERVICE_URL": "https://${args.id}.workflow.7on.ai",
-                      "ACTUAL_N8N_URL": "https://${args.id}.workflow.7on.ai"
+                      "NORTHFLANK_PROJECT_NAME": "${refs.project.name}"
                     },
                     "files": {},
                     "dockerSecretMounts": {}
@@ -197,7 +190,7 @@
                   "name": "n8n-setup",
                   "runOnSourceChange": "never",
                   "backoffLimit": 3,
-                  "activeDeadlineSeconds": 900,
+                  "activeDeadlineSeconds": 600,
                   "infrastructure": {
                     "architecture": "x86"
                   },
@@ -235,7 +228,7 @@
                   "jobId": "${refs.setup-job.id}"
                 },
                 "condition": "success",
-                "ref": "setup-job-run"
+                "ref": "refssetup-jobid-jobrun-1"
               }
             ]
           }
