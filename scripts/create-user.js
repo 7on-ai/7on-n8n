@@ -1,15 +1,21 @@
 const axios = require('axios');
 
 async function createN8NUser() {
-    const baseUrl = process.env.N8N_BASE_URL;
+    // ใช้ตัวแปรที่ตรงกับ template n8n-secrets
+    const baseUrl = process.env.N8N_EDITOR_BASE_URL;
     const email = process.env.N8N_USER_EMAIL;
     const password = process.env.N8N_USER_PASSWORD;
-    const firstName = process.env.N8N_USER_NAME?.split(' ')[0] || 'User';
-    const lastName = process.env.N8N_USER_NAME?.split(' ').slice(1).join(' ') || '';
+    const firstName = process.env.N8N_FIRST_NAME || 'User';
+    const lastName = process.env.N8N_LAST_NAME || '';
 
     console.log('🔧 Initializing N8N user creation...');
     console.log(`📧 Email: ${email}`);
     console.log(`👤 Name: ${firstName} ${lastName}`);
+    console.log(`🔗 Base URL: ${baseUrl}`);
+
+    if (!baseUrl || !email || !password || !firstName) {
+        throw new Error('Missing required environment variables: N8N_EDITOR_BASE_URL, N8N_USER_EMAIL, N8N_USER_PASSWORD, N8N_FIRST_NAME');
+    }
 
     try {
         // Check if owner exists first
@@ -28,7 +34,7 @@ async function createN8NUser() {
         }
 
         if (ownerResponse && ownerResponse.data?.hasOwner) {
-            console.log('ℹ️  Owner already exists, skipping user creation');
+            console.log('ℹ️  Owner already exists, checking credentials...');
             
             // Try to verify login works
             try {
@@ -74,6 +80,7 @@ async function createN8NUser() {
         if (setupResponse.status === 200 || setupResponse.status === 201) {
             console.log('✅ N8N owner account created successfully');
             console.log(`📧 Email: ${email}`);
+            console.log(`👤 Name: ${firstName} ${lastName}`);
             console.log(`🔑 Password: ${password}`);
             
             // Verify the account by trying to login
