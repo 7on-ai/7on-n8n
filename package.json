@@ -1,11 +1,13 @@
 {
-  "name": "n8n-setup",
+  "name": "n8n-setup-scripts",
   "version": "1.0.0",
-  "description": "Automated N8N instance setup with user creation and workflow import",
+  "description": "N8N setup and configuration scripts for Northflank deployment",
   "main": "scripts/setup.sh",
   "scripts": {
-    "test": "echo \"No tests specified\" && exit 0",
-    "lint": "echo \"No linting configured\" && exit 0"
+    "start": "./scripts/setup.sh",
+    "create-user": "node scripts/create-user.js",
+    "import-workflows": "node scripts/import-workflows.js",
+    "send-notification": "node scripts/webhook-notify.js"
   },
   "dependencies": {
     "axios": "^1.6.0"
@@ -13,17 +15,6 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": [
-    "n8n",
-    "automation",
-    "workflow",
-    "setup",
-    "docker"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/your-username/n8n-setup.git"
-  }
+  "author": "N8N Setup Team",
+  "license": "MIT"
 }
