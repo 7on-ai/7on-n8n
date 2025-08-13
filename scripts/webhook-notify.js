@@ -1,15 +1,21 @@
 const axios = require('axios');
 
 async function sendNotification() {
-    const webhookUrl = process.env.WEBHOOK_URL;
-    const userId = process.env.N8N_USER_ID;
+    // ใช้ตัวแปรที่ตรงกับ template n8n-secrets
+    const webhookUrl = process.env.SETUP_WEBHOOK_URL;
     const email = process.env.N8N_USER_EMAIL;
     const password = process.env.N8N_USER_PASSWORD;
-    const n8nUrl = process.env.N8N_BASE_URL;
-    const userName = process.env.N8N_USER_NAME;
+    const n8nUrl = process.env.N8N_EDITOR_BASE_URL;
+    const firstName = process.env.N8N_FIRST_NAME;
+    const lastName = process.env.N8N_LAST_NAME;
+    const fullName = `${firstName} ${lastName}`.trim();
+    const projectId = process.env.NORTHFLANK_PROJECT_ID;
+    const projectName = process.env.NORTHFLANK_PROJECT_NAME;
 
     console.log('📬 Preparing success notification...');
     console.log(`🔗 Webhook URL: ${webhookUrl ? 'Configured' : 'Not provided'}`);
+    console.log(`👤 User: ${fullName} (${email})`);
+    console.log(`🔗 N8N URL: ${n8nUrl}`);
 
     if (!webhookUrl) {
         console.log('ℹ️  No webhook URL provided, skipping notification');
@@ -21,13 +27,16 @@ async function sendNotification() {
         message: 'N8N setup completed successfully',
         timestamp: new Date().toISOString(),
         data: {
-            userId,
             email,
-            userName,
+            firstName,
+            lastName,
+            fullName,
             password,
             n8nUrl,
+            projectId,
+            projectName,
             setupCompletedAt: new Date().toISOString(),
-            version: '1.103.2'
+            n8nVersion: '1.103.2'
         }
     };
 
@@ -73,7 +82,7 @@ sendNotification()
         process.exit(0);
     })
     .catch(error => {
-        console.error('�� Notification process failed:', error.message);
+        console.error('❌ Notification process failed:', error.message);
         // Don't exit with error code for notification failures
         process.exit(0);
     });
