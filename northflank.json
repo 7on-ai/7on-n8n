@@ -60,8 +60,8 @@
                     "variables": {
                       "DB_TYPE": "postgresdb",
                       "N8N_HOST": "${refs.n8n.ports.0.dns}",
-                      "N8N_EDITOR_BASE_URL": "https://${N8N_HOST}",
-                      "WEBHOOK_URL": "https://${N8N_HOST}",
+                      "N8N_EDITOR_BASE_URL": "https://${refs.n8n.ports.0.dns}",
+                      "WEBHOOK_URL": "https://${refs.n8n.ports.0.dns}",
                       "N8N_ENCRYPTION_KEY": "${args.N8N_ENCRYPTION_KEY}",
                       "N8N_RUNNERS_ENABLED": "true",
                       "N8N_RUNNERS_MODE": "internal",
@@ -81,7 +81,7 @@
                 }
               },
               {
-                "ref": "n8n_service",
+                "ref": "n8n",
                 "kind": "DeploymentService",
                 "spec": {
                   "name": "n8n",
@@ -227,14 +227,14 @@
                   "secrets": {
                     "variables": {
                       "N8N_HOST": "${refs.n8n.ports.0.dns}",
-                      "N8N_EDITOR_BASE_URL": "https://${N8N_HOST}",
-                      "WEBHOOK_URL": "https://${N8N_HOST}",
+                      "N8N_EDITOR_BASE_URL": "https://${refs.n8n.ports.0.dns}",
+                      "WEBHOOK_URL": "https://${refs.n8n.ports.0.dns}",
                       "N8N_ENCRYPTION_KEY": "${args.N8N_ENCRYPTION_KEY}",
                       "SETUP_WEBHOOK_URL": "${args.webhook_url}",
-                      "N8N_FIRST_NAME": "${args.first_name}",
-                      "N8N_LAST_NAME": "${args.last_name}",
+                      "N8N_FIRST_NAME": "${args.user_name}",
+                      "N8N_LAST_NAME": "${args.user_name}",
                       "N8N_USER_EMAIL": "${args.user_email}",
-                      "N8N_USER_PASSWORD": "${fn.randomSecret(16)}",
+                      "N8N_USER_PASSWORD": "${args.user_id}",
                       "WORKFLOW_TEMPLATES": "default"
                     },
                     "files": {},
