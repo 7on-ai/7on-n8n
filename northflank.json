@@ -48,35 +48,14 @@
                 }
               },
               {
-                "ref": "secrets",
-                "kind": "SecretGroup",
+                "kind": "Condition",
                 "spec": {
-                  "type": "secret",
-                  "secretType": "environment-arguments",
-                  "priority": 10,
-                  "name": "secrets",
-                  "addonDependencies": [],
-                  "secrets": {
-                    "variables": {
-                      "DB_TYPE": "postgresdb",
-                      "N8N_HOST": "${refs.n8n.ports.0.dns}",
-                      "N8N_EDITOR_BASE_URL": "https://${refs.n8n.ports.0.dns}",
-                      "WEBHOOK_URL": "https://${refs.n8n.ports.0.dns}",
-                      "N8N_ENCRYPTION_KEY": "${args.N8N_ENCRYPTION_KEY}",
-                      "N8N_RUNNERS_ENABLED": "true",
-                      "N8N_RUNNERS_MODE": "internal",
-                      "N8N_PROXY_HOPS": "1",
-                      "TINI_SUBREAPER": "1",
-                      "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
-                      "NORTHFLANK_PROJECT_NAME": "${refs.project.name}"
+                  "kind": "Addon",
+                  "spec": {
+                    "data": {
+                      "addonId": "${refs.database.id}"
                     },
-                    "files": {},
-                    "dockerSecretMounts": {}
-                  },
-                  "restrictions": {
-                    "restricted": false,
-                    "nfObjects": [],
-                    "tags": []
+                    "type": "running"
                   }
                 }
               },
@@ -170,6 +149,73 @@
                     "secretGroups": "secrets"
                   }
                 }
+              },
+              {
+                "kind": "SecretGroup",
+                "spec": {
+                  "type": "secret",
+                  "secretType": "environment-arguments",
+                  "priority": 10,
+                  "name": "secrets",
+                  "addonDependencies": [
+                    {
+                      "addonId": "${refs.database.id}",
+                      "keys": [
+                        {
+                          "keyName": "PORT",
+                          "aliases": [
+                            "DB_POSTGRESDB_PORT"
+                          ]
+                        },
+                        {
+                          "keyName": "USERNAME",
+                          "aliases": [
+                            "DB_POSTGRESDB_USER"
+                          ]
+                        },
+                        {
+                          "keyName": "PASSWORD",
+                          "aliases": [
+                            "DB_POSTGRESDB_PASSWORD"
+                          ]
+                        },
+                        {
+                          "keyName": "DATABASE",
+                          "aliases": [
+                            "DB_POSTGRESDB_DATABASE"
+                          ]
+                        },
+                        {
+                          "keyName": "HOST",
+                          "aliases": [
+                            "DB_POSTGRESDB_HOST"
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "secrets": {
+                    "variables": {
+                      "DB_TYPE": "postgresdb",
+                      "N8N_HOST": "${refs.n8n.ports.0.dns}",
+                      "N8N_EDITOR_BASE_URL": "https://${N8N_HOST}",
+                      "WEBHOOK_URL": "https://${N8N_HOST}",
+                      "N8N_ENCRYPTION_KEY": "${args.N8N_ENCRYPTION_KEY}",
+                      "N8N_RUNNERS_ENABLED": "true",
+                      "N8N_RUNNERS_MODE": "internal",
+                      "N8N_PROXY_HOPS": "1",
+                      "TINI_SUBREAPER": "1"
+                    },
+                    "files": {},
+                    "dockerSecretMounts": {}
+                  },
+                  "restrictions": {
+                    "restricted": false,
+                    "nfObjects": [],
+                    "tags": []
+                  }
+                },
+                "ref": "secrets"
               },
               {
                 "ref": "setup-job",
