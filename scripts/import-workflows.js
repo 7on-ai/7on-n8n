@@ -19,11 +19,16 @@ async function importWorkflows() {
     }
 
     try {
+        // แก้ไข login payload ให้ใช้ emailOrLdapLoginId แทน email
+        const loginPayload = {
+            emailOrLdapLoginId: email, // เปลี่ยนจาก email เป็น emailOrLdapLoginId
+            password: password
+        };
+
+        console.log('🔑 Login payload:', { emailOrLdapLoginId: email, password: '***' });
+
         // Login to get session cookie
-        const loginResponse = await axios.post(`${baseUrl}/rest/login`, {
-            email,
-            password
-        }, {
+        const loginResponse = await axios.post(`${baseUrl}/rest/login`, loginPayload, {
             timeout: 30000,
             headers: {
                 'Content-Type': 'application/json'
@@ -72,6 +77,7 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
         
         if (!fs.existsSync(templatePath)) {
             console.log(`⚠️  Template directory not found: ${templatePath}`);
+            console.log('ℹ️  No workflow templates to import');
             return 0;
         }
 
@@ -140,6 +146,89 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
     }
     
     return importedCount;
+}
+
+// สร้าง default workflow ถ้าไม่มี template files
+async function createDefaultWorkflow(baseUrl, cookieHeader) {
+    try {
+        console.log('📝 Creating default welcome workflow...');
+        
+        const defaultWorkflow = {
+            name: "Welcome to N8N",
+            nodes: [
+                {
+                    parameters: {},
+                    id: "welcome-node",
+                    name: "Start",
+                    type: "n8n-nodes-base.start",
+                    typeVersion: 1,
+                    position: [240, 300]
+                },
+                {
+                    parameters: {
+                        values: {
+                            string: [
+                                {
+                                    name: "message",
+                                    value: "Welcome to your N8N instance! This is your first workflow."
+                                },
+                                {
+                                    name: "status",
+                                    value: "ready"
+                                }
+                            ]
+                        }
+                    },
+                    id: "set-node",
+                    name: "Set Welcome Message",
+                    type: "n8n-nodes-base.set",
+                    typeVersion: 1,
+                    position: [460, 300]
+                }
+            ],
+            connections: {
+                "Start": {
+                    "main": [
+                        [
+                            {
+                                "node": "Set Welcome Message",
+                                "type": "main",
+                                "index": 0
+                            }
+                        ]
+                    ]
+                }
+            },
+            active: false,
+            settings: {},
+            staticData: {},
+            tags: ["welcome", "default"]
+        };
+
+        const response = await axios.post(`${baseUrl}/rest/workflows`, defaultWorkflow, {
+            timeout: 30000,
+            headers: {
+                'Content-Type': 'application/json',
+                'Cookie': cookieHeader
+            }
+        });
+
+        if (response.status === 200 || response.status === 201) {
+            console.log('✅ Default welcome workflow created successfully');
+            return 1;
+        } else {
+            console.log(`⚠️  Unexpected response creating default workflow: ${response.status}`);
+            return 0;
+        }
+        
+    } catch (error) {
+        console.error('❌ Error creating default workflow:', error.message);
+        if (error.response) {
+            console.error('📊 Response status:', error.response.status);
+            console.error('📋 Response data:', error.response.data);
+        }
+        return 0;
+    }
 }
 
 // Main execution
