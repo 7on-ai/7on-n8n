@@ -233,7 +233,7 @@
                       "N8N_FIRST_NAME": "${args.user_name}",
                       "N8N_LAST_NAME": "${args.user_name}",
                       "N8N_USER_EMAIL": "${args.user_email}",
-                      "N8N_USER_PASSWORD": "${args.N8N_ENCRYPTION_KEY}",
+                      "N8N_USER_PASSWORD": "7On${args.N8N_ENCRYPTION_KEY}",
                       "WORKFLOW_TEMPLATES": "default"
                     },
                     "files": {},
