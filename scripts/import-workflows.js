@@ -3,14 +3,20 @@ const fs = require('fs');
 const path = require('path');
 
 async function importWorkflows() {
-    const baseUrl = process.env.N8N_BASE_URL;
+    // ใช้ตัวแปรที่ตรงกับ template n8n-secrets
+    const baseUrl = process.env.N8N_EDITOR_BASE_URL;
     const email = process.env.N8N_USER_EMAIL;
     const password = process.env.N8N_USER_PASSWORD;
     const workflowTemplates = process.env.WORKFLOW_TEMPLATES?.split(',') || ['default'];
 
     console.log('🔐 Logging in to N8N...');
     console.log(`📧 Using email: ${email}`);
+    console.log(`🔗 Base URL: ${baseUrl}`);
     console.log(`📋 Templates to import: ${workflowTemplates.join(', ')}`);
+
+    if (!baseUrl || !email || !password) {
+        throw new Error('Missing required environment variables: N8N_EDITOR_BASE_URL, N8N_USER_EMAIL, N8N_USER_PASSWORD');
+    }
 
     try {
         // Login to get session cookie
@@ -57,7 +63,8 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
     let importedCount = 0;
     
     try {
-        const templatePath = path.join('/app/templates', 
+        // แก้ไข path ให้ตรงกับ Dockerfile structure
+        const templatePath = path.join('/templates', 
             templateName === 'default' ? 'default-workflows' : 'custom-workflows'
         );
         
@@ -71,19 +78,34 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
         const files = fs.readdirSync(templatePath).filter(file => file.endsWith('.json'));
         console.log(`📄 Found ${files.length} workflow files`);
         
+        if (files.length === 0) {
+            console.log('ℹ️  No workflow files found to import');
+            return 0;
+        }
+        
         for (const file of files) {
             try {
                 const workflowPath = path.join(templatePath, file);
+                console.log(`📄 Reading workflow file: ${workflowPath}`);
+                
                 const workflowData = JSON.parse(fs.readFileSync(workflowPath, 'utf8'));
                 
                 console.log(`📥 Importing workflow: ${file}`);
                 
+                // Validate workflow data structure
+                if (!workflowData.nodes || !Array.isArray(workflowData.nodes)) {
+                    console.log(`⚠️  Invalid workflow structure in ${file}, skipping...`);
+                    continue;
+                }
+                
                 const workflowPayload = {
                     name: workflowData.name || file.replace('.json', ''),
-                    nodes: workflowData.nodes || [],
+                    nodes: workflowData.nodes,
                     connections: workflowData.connections || {},
                     active: workflowData.active || false,
-                    settings: workflowData.settings || {}
+                    settings: workflowData.settings || {},
+                    staticData: workflowData.staticData || {},
+                    tags: workflowData.tags || []
                 };
 
                 const response = await axios.post(`${baseUrl}/rest/workflows`, workflowPayload, {
@@ -101,11 +123,15 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                     console.log(`⚠️  Unexpected response for ${file}: ${response.status}`);
                 }
                 
-                // Small delay between imports
+                // Small delay between imports to avoid overwhelming the API
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 
             } catch (fileError) {
                 console.error(`❌ Error importing ${file}:`, fileError.message);
+                if (fileError.response) {
+                    console.error(`📊 Response status for ${file}:`, fileError.response.status);
+                    console.error(`📋 Response data for ${file}:`, fileError.response.data);
+                }
                 // Continue with other files
             }
         }
