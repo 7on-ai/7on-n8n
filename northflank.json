@@ -74,7 +74,7 @@
                     "type": "deployment",
                     "instances": 1,
                     "external": {
-                      "imagePath": "docker.n8n.io/n8nio/n8n:1.103.2"
+                      "imagePath": "docker.n8n.io/n8nio/n8n:latest"
                     },
                     "metadata": {
                       "labels": {},
