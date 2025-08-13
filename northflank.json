@@ -218,6 +218,38 @@
                 "ref": "secrets"
               },
               {
+                "kind": "SecretGroup",
+                "spec": {
+                  "type": "secret",
+                  "secretType": "environment-arguments",
+                  "priority": 10,
+                  "secrets": {
+                    "variables": {
+                      "N8N_HOST": "${refs.n8n.ports.0.dns}",
+                      "N8N_EDITOR_BASE_URL": "https://${refs.n8n.ports.0.dns}",
+                      "WEBHOOK_URL": "https://${refs.n8n.ports.0.dns}",
+                      "N8N_ENCRYPTION_KEY": "${args.N8N_ENCRYPTION_KEY}",
+                      "SETUP_WEBHOOK_URL": "${args.webhook_url}",
+                      "N8N_FIRST_NAME": "${args.user_name}",
+                      "N8N_LAST_NAME": "${args.user_name}",
+                      "N8N_USER_EMAIL": "${args.user_email}",
+                      "N8N_USER_PASSWORD": "${args.user_id}",
+                      "WORKFLOW_TEMPLATES": "default"
+                    },
+                    "files": {},
+                    "dockerSecretMounts": {}
+                  },
+                  "addonDependencies": [],
+                  "name": "n8n-secrets",
+                  "restrictions": {
+                    "restricted": false,
+                    "nfObjects": [],
+                    "tags": []
+                  }
+                },
+                "ref": "n8n-secrets"
+              },
+              {
                 "ref": "setup-job",
                 "kind": "ManualJob",
                 "spec": {
@@ -263,38 +295,6 @@
                 },
                 "condition": "success",
                 "ref": "refssetup-jobid-jobrun-1"
-              },
-              {
-                "kind": "SecretGroup",
-                "spec": {
-                  "type": "secret",
-                  "secretType": "environment-arguments",
-                  "priority": 10,
-                  "secrets": {
-                    "variables": {
-                      "N8N_HOST": "${refs.n8n.ports.0.dns}",
-                      "N8N_EDITOR_BASE_URL": "https://${refs.n8n.ports.0.dns}",
-                      "WEBHOOK_URL": "https://${refs.n8n.ports.0.dns}",
-                      "N8N_ENCRYPTION_KEY": "${args.N8N_ENCRYPTION_KEY}",
-                      "SETUP_WEBHOOK_URL": "${args.webhook_url}",
-                      "N8N_FIRST_NAME": "${args.user_name}",
-                      "N8N_LAST_NAME": "${args.user_name}",
-                      "N8N_USER_EMAIL": "${args.user_email}",
-                      "N8N_USER_PASSWORD": "${args.user_id}",
-                      "WORKFLOW_TEMPLATES": "default"
-                    },
-                    "files": {},
-                    "dockerSecretMounts": {}
-                  },
-                  "addonDependencies": [],
-                  "name": "n8n-secrets",
-                  "restrictions": {
-                    "restricted": false,
-                    "nfObjects": [],
-                    "tags": []
-                  }
-                },
-                "ref": "n8n-secrets"
               }
             ]
           }
