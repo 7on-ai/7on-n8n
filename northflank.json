@@ -198,8 +198,8 @@
                     "variables": {
                       "DB_TYPE": "postgresdb",
                       "N8N_HOST": "${refs.n8n.ports.0.dns}",
-                      "N8N_EDITOR_BASE_URL": "https://${N8N_HOST}",
-                      "WEBHOOK_URL": "https://${N8N_HOST}",
+                      "N8N_EDITOR_BASE_URL": "https://${refs.n8n.ports.0.dns}",
+                      "WEBHOOK_URL": "https://${refs.n8n.ports.0.dns}",
                       "N8N_ENCRYPTION_KEY": "${args.N8N_ENCRYPTION_KEY}",
                       "N8N_RUNNERS_ENABLED": "true",
                       "N8N_RUNNERS_MODE": "internal",
@@ -274,11 +274,11 @@
                       "configType": "default"
                     },
                     "external": {
-                      "imagePath": "ghcr.io/7on-ai/7on-n8n:latest"
+                      "imagePath": "curlimages/curl:latest"
                     }
                   },
                   "runtimeEnvironment": {
-                    "secretGroups": "secrets"
+                    "secretGroups": "n8n-secrets"
                   },
                   "buildConfiguration": {
                     "pathIgnoreRules": [],
@@ -294,7 +294,7 @@
                   "jobId": "${refs.setup-job.id}"
                 },
                 "condition": "success",
-                "ref": "refssetup-jobid-jobrun-1"
+                "ref": "setup-jobrun"
               }
             ]
           }
