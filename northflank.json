@@ -253,16 +253,9 @@
                 "ref": "setup-job",
                 "kind": "ManualJob",
                 "spec": {
-                  "name": "n8n-setup",
                   "runOnSourceChange": "never",
                   "backoffLimit": 3,
                   "activeDeadlineSeconds": 600,
-                  "infrastructure": {
-                    "architecture": "x86"
-                  },
-                  "billing": {
-                    "deploymentPlan": "nf-compute-20"
-                  },
                   "deployment": {
                     "storage": {
                       "ephemeralStorage": {
@@ -274,8 +267,15 @@
                       "configType": "default"
                     },
                     "external": {
-                      "imagePath": "curlimages/curl:latest"
+                      "imagePath": "ghcr.io/7on-ai/7on-n8n:latest"
                     }
+                  },
+                  "name": "n8n-setup",
+                  "infrastructure": {
+                    "architecture": "x86"
+                  },
+                  "billing": {
+                    "deploymentPlan": "nf-compute-20"
                   },
                   "runtimeEnvironment": {
                     "secretGroups": "n8n-secrets"
@@ -285,7 +285,8 @@
                     "isAllowList": false,
                     "ciIgnoreFlagsEnabled": false
                   },
-                  "buildArguments": {}
+                  "buildArguments": {},
+                  "runtimeFiles": {}
                 }
               },
               {
