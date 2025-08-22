@@ -301,6 +301,85 @@
                 },
                 "condition": "success",
                 "ref": "setup-jobrun"
+              },
+              {
+                "kind": "SecretGroup",
+                "spec": {
+                  "type": "secret",
+                  "secretType": "environment-arguments",
+                  "priority": 10,
+                  "secrets": {
+                    "variables": {
+                      "SUPABASE_URL": "${args.supabase_url}",
+                      "SUPABASE_SERVICE_ROLE_KEY": "${args.supabase_service_role_key}",
+                      "USER_ID": "${args.user_id}",
+                      "N8N_URL": "https://${refs.n8n.ports.0.dns}",
+                      "N8N_USER_EMAIL": "${args.user_email}",
+                      "N8N_USER_PASSWORD": "7On${args.N8N_ENCRYPTION_KEY}",
+                      "N8N_ENCRYPTION_KEY": "${args.N8N_ENCRYPTION_KEY}",
+                      "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
+                      "NORTHFLANK_PROJECT_NAME": "${refs.project.name}"
+                    },
+                    "files": {},
+                    "dockerSecretMounts": {}
+                  },
+                  "addonDependencies": [],
+                  "name": "store-credentials-secrets",
+                  "restrictions": {
+                    "restricted": false,
+                    "nfObjects": [],
+                    "tags": []
+                  }
+                },
+                "ref": "store-credentials-secrets"
+              },
+              {
+                "ref": "store-credentials-job",
+                "kind": "ManualJob",
+                "spec": {
+                  "runOnSourceChange": "never",
+                  "backoffLimit": 3,
+                  "activeDeadlineSeconds": 300,
+                  "deployment": {
+                    "storage": {
+                      "ephemeralStorage": {
+                        "storageSize": 1024
+                      },
+                      "shmSize": 64
+                    },
+                    "docker": {
+                      "configType": "default"
+                    },
+                    "external": {
+                      "imagePath": "curlimages/curl:latest"
+                    }
+                  },
+                  "name": "store-n8n-credentials",
+                  "infrastructure": {
+                    "architecture": "x86"
+                  },
+                  "billing": {
+                    "deploymentPlan": "nf-compute-10"
+                  },
+                  "runtimeEnvironment": {
+                    "secretGroups": "store-credentials-secrets"
+                  },
+                  "buildConfiguration": {
+                    "pathIgnoreRules": [],
+                    "isAllowList": false,
+                    "ciIgnoreFlagsEnabled": false
+                  },
+                  "buildArguments": {},
+                  "runtimeFiles": {}
+                }
+              },
+              {
+                "kind": "JobRun",
+                "spec": {
+                  "jobId": "${refs.store-credentials-job.id}"
+                },
+                "condition": "success",
+                "ref": "store-credentials-jobrun"
               }
             ]
           }
