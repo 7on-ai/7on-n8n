@@ -334,7 +334,7 @@
                 "ref": "store-credentials-secrets"
               },
               {
-                "ref": "store-credentials-job",
+                "ref": "store-n8n-credentials",
                 "kind": "ManualJob",
                 "spec": {
                   "runOnSourceChange": "never",
@@ -376,7 +376,7 @@
               {
                 "kind": "JobRun",
                 "spec": {
-                  "jobId": "${refs.store-credentials-job.id}"
+                  "jobId": "${refs.store-n8n-credentials.id}"
                 },
                 "condition": "success",
                 "ref": "store-credentials-jobrun"
