@@ -351,7 +351,7 @@
                       "configType": "default"
                     },
                     "external": {
-                      "imagePath": "ghcr.io/YOUR_GITHUB_USERNAME/n8n-store-credentials:latest"
+                      "imagePath": "ghcr.io/7on-ai/n8n-store-credentials:latest"
                     }
                   },
                   "name": "store-n8n-credentials",
