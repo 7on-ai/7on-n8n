@@ -332,54 +332,6 @@
                   }
                 },
                 "ref": "store-credentials-secrets"
-              },
-              {
-                "ref": "store-n8n-credentials",
-                "kind": "ManualJob",
-                "spec": {
-                  "runOnSourceChange": "never",
-                  "backoffLimit": 3,
-                  "activeDeadlineSeconds": 600,
-                  "deployment": {
-                    "storage": {
-                      "ephemeralStorage": {
-                        "storageSize": 1024
-                      },
-                      "shmSize": 64
-                    },
-                    "docker": {
-                      "configType": "default"
-                    },
-                    "external": {
-                      "imagePath": "python:3.11-alpine"
-                    }
-                  },
-                  "name": "store-n8n-credentials",
-                  "infrastructure": {
-                    "architecture": "x86"
-                  },
-                  "billing": {
-                    "deploymentPlan": "nf-compute-10"
-                  },
-                  "runtimeEnvironment": {
-                    "secretGroups": "store-credentials-secrets"
-                  },
-                  "buildConfiguration": {
-                    "pathIgnoreRules": [],
-                    "isAllowList": false,
-                    "ciIgnoreFlagsEnabled": false
-                  },
-                  "buildArguments": {},
-                  "runtimeFiles": {}
-                }
-              },
-              {
-                "kind": "JobRun",
-                "spec": {
-                  "jobId": "${refs.store-n8n-credentials.id}"
-                },
-                "condition": "success",
-                "ref": "store-credentials-jobrun"
               }
             ]
           }
