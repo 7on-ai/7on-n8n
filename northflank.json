@@ -349,7 +349,7 @@
                     },
                     "docker": {
                       "configType": "customCommand",
-                      "customCommand": "cd /opt/supabase-sender && node send-credentials.js"
+                      "customCommand": "node /opt/supabase-sender/send-credentials.js"
                     },
                     "external": {
                       "imagePath": "ghcr.io/7on-ai/7on-n8n:latest"
