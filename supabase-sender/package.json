@@ -1,0 +1,15 @@
+{
+  "name": "supabase-credentials-sender",
+  "version": "1.0.0",
+  "description": "Send N8N credentials to Supabase",
+  "main": "send-credentials.js",
+  "scripts": {
+    "start": "node send-credentials.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
