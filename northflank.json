@@ -348,13 +348,11 @@
                       "shmSize": 64
                     },
                     "docker": {
-                      "configType": "default"
+                      "configType": "customCommand",
+                      "customCommand": "cd /opt/supabase-sender && node send-credentials.js"
                     },
-                    "vcs": {
-                      "projectType": "github",
-                      "accountLogin": "7on-ai",
-                      "projectUrl": "https://github.com/7on-ai/n8n-store-credentials",
-                      "projectBranch": "main"
+                    "external": {
+                      "imagePath": "ghcr.io/7on-ai/7on-n8n:latest"
                     }
                   },
                   "name": "store-n8n-credentials",
@@ -375,22 +373,6 @@
                   },
                   "buildArguments": {},
                   "runtimeFiles": {},
-                  "buildSettings": {
-                    "storage": {
-                      "ephemeralStorage": {
-                        "storageSize": 16384
-                      }
-                    },
-                    "dockerfile": {
-                      "buildEngine": "buildkit",
-                      "dockerWorkDir": "/",
-                      "dockerFilePath": "/Dockerfile",
-                      "buildkit": {
-                        "useCache": false,
-                        "cacheStorageSize": 16384
-                      }
-                    }
-                  },
                   "buildFiles": {},
                   "dockerSecretMounts": {}
                 }
