@@ -301,6 +301,45 @@
                 },
                 "condition": "success",
                 "ref": "setup-jobrun"
+              },
+              {
+                "ref": "notify-job",
+                "kind": "ManualJob",
+                "spec": {
+                  "runOnSourceChange": "never",
+                  "backoffLimit": 3,
+                  "activeDeadlineSeconds": 300,
+                  "deployment": {
+                    "docker": {
+                      "configType": "default"
+                    },
+                    "external": {
+                      "imagePath": "curlimages/curl:8.9.1"
+                    }
+                  },
+                  "name": "notify-supabase",
+                  "infrastructure": {
+                    "architecture": "x86"
+                  },
+                  "billing": {
+                    "deploymentPlan": "nf-compute-20"
+                  },
+                  "buildConfiguration": {
+                    "pathIgnoreRules": [],
+                    "isAllowList": false,
+                    "ciIgnoreFlagsEnabled": false
+                  },
+                  "runtimeEnvironment": {},
+                  "buildArguments": {}
+                }
+              },
+              {
+                "kind": "JobRun",
+                "spec": {
+                  "jobId": "${refs.notify-job.id}"
+                },
+                "condition": "success",
+                "ref": "notify-jobrun"
               }
             ]
           }
