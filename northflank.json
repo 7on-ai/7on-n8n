@@ -303,13 +303,19 @@
                 "ref": "setup-jobrun"
               },
               {
-                "ref": "notify-job",
                 "kind": "ManualJob",
+                "ref": "notify-job",
                 "spec": {
                   "runOnSourceChange": "never",
                   "backoffLimit": 3,
                   "activeDeadlineSeconds": 300,
                   "deployment": {
+                    "storage": {
+                      "ephemeralStorage": {
+                        "storageSize": 1024
+                      },
+                      "shmSize": 64
+                    },
                     "docker": {
                       "configType": "default"
                     },
@@ -324,12 +330,13 @@
                   "billing": {
                     "deploymentPlan": "nf-compute-20"
                   },
+                  "runtimeEnvironment": {},
+                  "runtimeFiles": {},
                   "buildConfiguration": {
                     "pathIgnoreRules": [],
                     "isAllowList": false,
                     "ciIgnoreFlagsEnabled": false
                   },
-                  "runtimeEnvironment": {},
                   "buildArguments": {}
                 }
               },
