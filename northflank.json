@@ -320,7 +320,7 @@
                       "configType": "default"
                     },
                     "external": {
-                      "imagePath": "curlimages/curl:8.9.1"
+                      "imagePath": "alpine:3.19"
                     }
                   },
                   "name": "notify-supabase",
