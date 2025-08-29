@@ -301,52 +301,6 @@
                 },
                 "condition": "success",
                 "ref": "setup-jobrun"
-              },
-              {
-                "kind": "ManualJob",
-                "ref": "notify-job",
-                "spec": {
-                  "runOnSourceChange": "never",
-                  "backoffLimit": 3,
-                  "activeDeadlineSeconds": 300,
-                  "deployment": {
-                    "storage": {
-                      "ephemeralStorage": {
-                        "storageSize": 1024
-                      },
-                      "shmSize": 64
-                    },
-                    "docker": {
-                      "configType": "default"
-                    },
-                    "external": {
-                      "imagePath": "alpine:3.19"
-                    }
-                  },
-                  "name": "notify-supabase",
-                  "infrastructure": {
-                    "architecture": "x86"
-                  },
-                  "billing": {
-                    "deploymentPlan": "nf-compute-20"
-                  },
-                  "runtimeEnvironment": {},
-                  "runtimeFiles": {},
-                  "buildConfiguration": {
-                    "pathIgnoreRules": [],
-                    "isAllowList": false,
-                    "ciIgnoreFlagsEnabled": false
-                  },
-                  "buildArguments": {}
-                }
-              },
-              {
-                "kind": "JobRun",
-                "spec": {
-                  "jobId": "${refs.notify-job.id}"
-                },
-                "condition": "success",
-                "ref": "notify-jobrun"
               }
             ]
           }
