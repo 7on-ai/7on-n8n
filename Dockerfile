@@ -29,7 +29,7 @@ WORKDIR /opt/supabase-sender
 
 # Copy supabase-sender package.json and install dependencies
 COPY supabase-sender/package.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev --no-cache
 
 # Copy supabase-sender files
 COPY supabase-sender/send-credentials.js ./
