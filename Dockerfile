@@ -12,7 +12,7 @@ WORKDIR /app
 COPY package.json ./
 
 # Install main Node.js dependencies
-RUN npm install --only=production --no-cache
+RUN npm install --omit=dev --no-cache
 
 # Copy scripts and templates to correct paths
 COPY scripts/ /scripts/
@@ -29,7 +29,7 @@ WORKDIR /opt/supabase-sender
 
 # Copy supabase-sender package.json and install dependencies
 COPY supabase-sender/package.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy supabase-sender files
 COPY supabase-sender/send-credentials.js ./
