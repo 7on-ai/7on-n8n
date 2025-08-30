@@ -146,7 +146,7 @@
                     }
                   ],
                   "runtimeEnvironment": {
-                    "secretGroups": "secrets"
+                    "secretGroups": "secrets,supabase-secrets"
                   }
                 }
               },
@@ -255,6 +255,31 @@
                 "ref": "n8n-secrets"
               },
               {
+                "kind": "SecretGroup",
+                "spec": {
+                  "type": "secret",
+                  "secretType": "environment-arguments",
+                  "priority": 10,
+                  "secrets": {
+                    "variables": {
+                      "SUPABASE_URL": "${args.supabase_url}",
+                      "SUPABASE_SERVICE_KEY": "${args.supabase_service_key}",
+                      "SUPABASE_ANON_KEY": "${args.supabase_anon_key}"
+                    },
+                    "files": {},
+                    "dockerSecretMounts": {}
+                  },
+                  "addonDependencies": [],
+                  "name": "supabase-secrets",
+                  "restrictions": {
+                    "restricted": false,
+                    "nfObjects": [],
+                    "tags": []
+                  }
+                },
+                "ref": "supabase-secrets"
+              },
+              {
                 "ref": "setup-job",
                 "kind": "ManualJob",
                 "spec": {
@@ -283,7 +308,7 @@
                     "deploymentPlan": "nf-compute-20"
                   },
                   "runtimeEnvironment": {
-                    "secretGroups": "n8n-secrets"
+                    "secretGroups": "n8n-secrets,supabase-secrets"
                   },
                   "buildConfiguration": {
                     "pathIgnoreRules": [],
