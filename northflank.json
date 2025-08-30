@@ -255,6 +255,29 @@
                 "ref": "n8n-secrets"
               },
               {
+                "kind": "SecretGroup",
+                "spec": {
+                  "type": "secret",
+                  "secretType": "environment-arguments",
+                  "priority": 10,
+                  "name": "supabase-secrets",
+                  "secrets": {
+                    "variables": {
+                      "SUPABASE_URL": "${args.supabase_url}",
+                      "SUPABASE_SERVICE_KEY": "${args.supabase_service_key}"
+                    },
+                    "files": {},
+                    "dockerSecretMounts": {}
+                  },
+                  "restrictions": {
+                    "restricted": false,
+                    "nfObjects": [],
+                    "tags": []
+                  }
+                },
+                "ref": "supabase-secrets"
+              },
+              {
                 "ref": "setup-job",
                 "kind": "ManualJob",
                 "spec": {
