@@ -283,7 +283,7 @@
                     "deploymentPlan": "nf-compute-20"
                   },
                   "runtimeEnvironment": {
-                    "secretGroups": "n8n-secrets"
+                    "secretGroups": "n8n-secrets,supabase-secrets"
                   },
                   "buildConfiguration": {
                     "pathIgnoreRules": [],
