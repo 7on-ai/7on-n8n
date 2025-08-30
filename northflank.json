@@ -239,7 +239,9 @@
                       "USER_ID": "${args.user_id}",
                       "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
                       "NORTHFLANK_PROJECT_NAME": "${refs.project.name}",
-                      "WORKFLOW_TEMPLATES": "default"
+                      "WORKFLOW_TEMPLATES": "default",
+                      "SUPABASE_URL": "${args.supabase_url}",
+                      "SUPABASE_SERVICE_KEY": "${args.supabase_service_key}"
                     },
                     "files": {},
                     "dockerSecretMounts": {}
@@ -253,29 +255,6 @@
                   }
                 },
                 "ref": "n8n-secrets"
-              },
-              {
-                "kind": "SecretGroup",
-                "spec": {
-                  "type": "secret",
-                  "secretType": "environment-arguments",
-                  "priority": 10,
-                  "name": "supabase-secrets",
-                  "secrets": {
-                    "variables": {
-                      "SUPABASE_URL": "${args.supabase_url}",
-                      "SUPABASE_SERVICE_KEY": "${args.supabase_service_key}"
-                    },
-                    "files": {},
-                    "dockerSecretMounts": {}
-                  },
-                  "restrictions": {
-                    "restricted": false,
-                    "nfObjects": [],
-                    "tags": []
-                  }
-                },
-                "ref": "supabase-secrets"
               },
               {
                 "ref": "setup-job",
@@ -306,7 +285,7 @@
                     "deploymentPlan": "nf-compute-20"
                   },
                   "runtimeEnvironment": {
-                    "secretGroups": "n8n-secrets,supabase-secrets"
+                    "secretGroups": "n8n-secrets"
                   },
                   "buildConfiguration": {
                     "pathIgnoreRules": [],
