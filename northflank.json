@@ -204,10 +204,7 @@
                       "N8N_RUNNERS_ENABLED": "true",
                       "N8N_RUNNERS_MODE": "internal",
                       "N8N_PROXY_HOPS": "1",
-                      "TINI_SUBREAPER": "1",
-                      "SUPABASE_URL": "${args.supabase_url}",
-                      "SUPABASE_SERVICE_KEY": "${args.supabase_service_key}",
-                      "SUPABASE_ANON_KEY": "${args.supabase_anon_key}"
+                      "TINI_SUBREAPER": "1"
                     },
                     "files": {},
                     "dockerSecretMounts": {}
@@ -286,16 +283,7 @@
                     "deploymentPlan": "nf-compute-20"
                   },
                   "runtimeEnvironment": {
-                    "secretGroups": "n8n-secrets",
-                    "user_id": "${args.user_id}",
-                    "project_id": "${refs.project.id}",
-                    "project_name": "${refs.project.name}",
-                    "n8n_host": "${refs.n8n.ports.0.dns}",
-                    "n8n_editor_url": "https://${refs.n8n.ports.0.dns}",
-                    "n8n_webhook_url": "${args.webhook_url}",
-                    "n8n_email": "${args.user_email}",
-                    "n8n_password": "7On${args.N8N_ENCRYPTION_KEY}",
-                    "n8n_user_id": "${args.user_id}"
+                    "secretGroups": "n8n-secrets"
                   },
                   "buildConfiguration": {
                     "pathIgnoreRules": [],
