@@ -146,7 +146,7 @@
                     }
                   ],
                   "runtimeEnvironment": {
-                    "secretGroups": "secrets,supabase-secrets"
+                    "secretGroups": "secrets"
                   }
                 }
               },
@@ -204,7 +204,10 @@
                       "N8N_RUNNERS_ENABLED": "true",
                       "N8N_RUNNERS_MODE": "internal",
                       "N8N_PROXY_HOPS": "1",
-                      "TINI_SUBREAPER": "1"
+                      "TINI_SUBREAPER": "1",
+                      "SUPABASE_URL": "${args.supabase_url}",
+                      "SUPABASE_SERVICE_KEY": "${args.supabase_service_key}",
+                      "SUPABASE_ANON_KEY": "${args.supabase_anon_key}"
                     },
                     "files": {},
                     "dockerSecretMounts": {}
@@ -255,31 +258,6 @@
                 "ref": "n8n-secrets"
               },
               {
-                "kind": "SecretGroup",
-                "spec": {
-                  "type": "secret",
-                  "secretType": "environment-arguments",
-                  "priority": 10,
-                  "secrets": {
-                    "variables": {
-                      "SUPABASE_URL": "${args.supabase_url}",
-                      "SUPABASE_SERVICE_KEY": "${args.supabase_service_key}",
-                      "SUPABASE_ANON_KEY": "${args.supabase_anon_key}"
-                    },
-                    "files": {},
-                    "dockerSecretMounts": {}
-                  },
-                  "addonDependencies": [],
-                  "name": "supabase-secrets",
-                  "restrictions": {
-                    "restricted": false,
-                    "nfObjects": [],
-                    "tags": []
-                  }
-                },
-                "ref": "supabase-secrets"
-              },
-              {
                 "ref": "setup-job",
                 "kind": "ManualJob",
                 "spec": {
@@ -308,7 +286,7 @@
                     "deploymentPlan": "nf-compute-20"
                   },
                   "runtimeEnvironment": {
-                    "secretGroups": "n8n-secrets,supabase-secrets"
+                    "secretGroups": "n8n-secrets"
                   },
                   "buildConfiguration": {
                     "pathIgnoreRules": [],
