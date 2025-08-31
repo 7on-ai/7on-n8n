@@ -239,9 +239,7 @@
                       "USER_ID": "${args.user_id}",
                       "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
                       "NORTHFLANK_PROJECT_NAME": "${refs.project.name}",
-                      "WORKFLOW_TEMPLATES": "default",
-                      "SUPABASE_URL": "${args.supabase_url}",
-                      "SUPABASE_SERVICE_KEY": "${args.supabase_service_key}"
+                      "WORKFLOW_TEMPLATES": "default"
                     },
                     "files": {},
                     "dockerSecretMounts": {}
