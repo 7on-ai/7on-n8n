@@ -1,21 +1,19 @@
 #!/bin/bash
-# setup.sh - แก้ไขให้สอดคล้องกับ template variables
+# setup.sh - Complete N8N Setup with Neon Database
 set -e
 
 echo "=========================================="
-echo "Starting N8N Setup Process"
+echo "Starting N8N Setup Process (Neon Version)"
 echo "=========================================="
-# ใช้ตัวแปรที่ตรงกับ template n8n-secrets
 echo "N8N Host: $N8N_HOST"
 echo "N8N Base URL: $N8N_EDITOR_BASE_URL"
 echo "User Email: $N8N_USER_EMAIL"
-echo "User Password: $N8N_USER_PASSWORD"
 echo "First Name: $N8N_FIRST_NAME"
 echo "Last Name: $N8N_LAST_NAME"
 echo "Workflow Templates: $WORKFLOW_TEMPLATES"
 echo "Project ID: $NORTHFLANK_PROJECT_ID"
 echo "Project Name: $NORTHFLANK_PROJECT_NAME"
-echo "Setup Webhook URL: $SETUP_WEBHOOK_URL"
+echo "Database: Neon PostgreSQL"
 echo "=========================================="
 
 # Wait for N8N to be fully ready
@@ -41,8 +39,9 @@ fi
 echo "⏳ Waiting for database initialization..."
 sleep 30
 
-# Create N8N user
-echo "👤 Creating N8N user..."
+# Step 1: Create N8N user
+echo ""
+echo "=== STEP 1: CREATE N8N USER ==="
 if node /scripts/create-user.js; then
     echo "✅ N8N user created successfully"
 else
@@ -50,23 +49,26 @@ else
     exit 1
 fi
 
-# Import workflow templates
-echo "📋 Importing workflow templates..."
+# Step 2: Import workflow templates
+echo ""
+echo "=== STEP 2: IMPORT WORKFLOW TEMPLATES ==="
 if node /scripts/import-workflows.js; then
     echo "✅ Workflow templates imported successfully"
 else
-    echo "❌ Failed to import workflow templates"
+    echo "⚠️  Failed to import workflow templates (continuing...)"
+fi
+
+# Step 3: Store credentials to Neon
+echo ""
+echo "=== STEP 3: STORE CREDENTIALS TO NEON ==="
+if node /scripts/neon-store.js; then
+    echo "✅ Credentials stored in Neon database"
+else
+    echo "❌ Failed to store credentials in Neon"
     exit 1
 fi
 
-# Send success notification to Supabase webhook
-echo "📬 Sending success notification..."
-if node /scripts/webhook-notify.js; then
-    echo "✅ Success notification sent"
-else
-    echo "⚠️ Failed to send notification (but setup was successful)"
-fi
-
+echo ""
 echo "=========================================="
 echo "🎉 N8N Setup Completed Successfully!"
 echo "=========================================="
@@ -75,4 +77,5 @@ echo "Email: $N8N_USER_EMAIL"
 echo "Password: $N8N_USER_PASSWORD"
 echo "Name: $N8N_FIRST_NAME $N8N_LAST_NAME"
 echo "Project: $NORTHFLANK_PROJECT_NAME ($NORTHFLANK_PROJECT_ID)"
+echo "Database: Neon PostgreSQL"
 echo "=========================================="
