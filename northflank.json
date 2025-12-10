@@ -44,6 +44,12 @@
                     "storageClass": "ssd",
                     "storage": 4096,
                     "replicas": 1
+                  },
+                  "tlsEnabled": true,
+                  "externalAccessEnabled": true,
+                  "typeSpecificSettings": {
+                    "postgresqlConnectionPoolerReplicas": 2,
+                    "postgresqlReadConnectionPoolerReplicas": 2
                   }
                 }
               },
@@ -73,6 +79,15 @@
                   "deployment": {
                     "type": "deployment",
                     "instances": 1,
+                    "storage": {
+                      "ephemeralStorage": {
+                        "storageSize": 1024
+                      },
+                      "shmSize": 64
+                    },
+                    "docker": {
+                      "configType": "default"
+                    },
                     "external": {
                       "imagePath": "docker.n8n.io/n8nio/n8n:latest"
                     },
@@ -118,17 +133,17 @@
                       "type": "startupProbe",
                       "port": 5678,
                       "path": "/healthz",
-                      "initialDelaySeconds": 30,
+                      "initialDelaySeconds": 45,
                       "periodSeconds": 15,
                       "timeoutSeconds": 10,
-                      "failureThreshold": 10
+                      "failureThreshold": 15
                     },
                     {
                       "protocol": "HTTP",
                       "type": "livenessProbe",
                       "port": 5678,
                       "path": "/healthz",
-                      "initialDelaySeconds": 30,
+                      "initialDelaySeconds": 60,
                       "periodSeconds": 60,
                       "timeoutSeconds": 10,
                       "failureThreshold": 3
@@ -138,8 +153,8 @@
                       "type": "readinessProbe",
                       "port": 5678,
                       "path": "/healthz/readiness",
-                      "initialDelaySeconds": 30,
-                      "periodSeconds": 60,
+                      "initialDelaySeconds": 45,
+                      "periodSeconds": 30,
                       "timeoutSeconds": 10,
                       "failureThreshold": 3,
                       "successThreshold": 1
@@ -147,6 +162,19 @@
                   ],
                   "runtimeEnvironment": {
                     "secretGroups": "secrets"
+                  },
+                  "runtimeFiles": {}
+                }
+              },
+              {
+                "kind": "Condition",
+                "spec": {
+                  "kind": "Service",
+                  "spec": {
+                    "data": {
+                      "serviceId": "${refs.n8n.id}"
+                    },
+                    "type": "running"
                   }
                 }
               },
@@ -163,33 +191,23 @@
                       "keys": [
                         {
                           "keyName": "PORT",
-                          "aliases": [
-                            "DB_POSTGRESDB_PORT"
-                          ]
+                          "aliases": ["DB_POSTGRESDB_PORT"]
                         },
                         {
                           "keyName": "USERNAME",
-                          "aliases": [
-                            "DB_POSTGRESDB_USER"
-                          ]
+                          "aliases": ["DB_POSTGRESDB_USER"]
                         },
                         {
                           "keyName": "PASSWORD",
-                          "aliases": [
-                            "DB_POSTGRESDB_PASSWORD"
-                          ]
+                          "aliases": ["DB_POSTGRESDB_PASSWORD"]
                         },
                         {
                           "keyName": "DATABASE",
-                          "aliases": [
-                            "DB_POSTGRESDB_DATABASE"
-                          ]
+                          "aliases": ["DB_POSTGRESDB_DATABASE"]
                         },
                         {
                           "keyName": "HOST",
-                          "aliases": [
-                            "DB_POSTGRESDB_HOST"
-                          ]
+                          "aliases": ["DB_POSTGRESDB_HOST"]
                         }
                       ]
                     }
@@ -197,14 +215,22 @@
                   "secrets": {
                     "variables": {
                       "DB_TYPE": "postgresdb",
+                      "DB_POSTGRESDB_SSL": "true",
+                      "DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED": "false",
                       "N8N_HOST": "${refs.n8n.ports.0.dns}",
                       "N8N_EDITOR_BASE_URL": "https://${refs.n8n.ports.0.dns}",
                       "WEBHOOK_URL": "https://${refs.n8n.ports.0.dns}",
                       "N8N_ENCRYPTION_KEY": "${args.N8N_ENCRYPTION_KEY}",
+                      "N8N_USER_MANAGEMENT_JWT_SECRET": "${args.N8N_ENCRYPTION_KEY}",
+                      "N8N_USER_MANAGEMENT_DISABLED": "false",
                       "N8N_RUNNERS_ENABLED": "true",
                       "N8N_RUNNERS_MODE": "internal",
                       "N8N_PROXY_HOPS": "1",
-                      "TINI_SUBREAPER": "1"
+                      "N8N_DIAGNOSTICS_ENABLED": "false",
+                      "N8N_PERSONALIZATION_ENABLED": "false",
+                      "TINI_SUBREAPER": "1",
+                      "N8N_LOG_LEVEL": "info",
+                      "N8N_LOG_OUTPUT": "console"
                     },
                     "files": {},
                     "dockerSecretMounts": {}
@@ -237,14 +263,32 @@
                       "N8N_USER_PASSWORD": "7On${args.N8N_ENCRYPTION_KEY}",
                       "N8N_USER_ID": "${args.user_id}",
                       "USER_ID": "${args.user_id}",
+                      "CLERK_USER_ID": "${args.clerk_user_id}",
+                      "USER_EMAIL": "${args.user_email}",
+                      "DATABASE_URL": "${args.neon_database_url}",
+                      "DB_TYPE": "postgresdb",
+                      "DB_POSTGRESDB_SSL": "true",
+                      "N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS": "false",
                       "NORTHFLANK_PROJECT_ID": "${refs.project.id}",
                       "NORTHFLANK_PROJECT_NAME": "${refs.project.name}",
-                      "WORKFLOW_TEMPLATES": "default"
+                      "WORKFLOW_TEMPLATES": "default",
+                      "OUTPUT_PATH": "/models/adapters",
+                      "PYTHONUNBUFFERED": "1"
                     },
                     "files": {},
                     "dockerSecretMounts": {}
                   },
-                  "addonDependencies": [],
+                  "addonDependencies": [
+                    {
+                      "addonId": "${refs.database.id}",
+                      "keys": [
+                        {
+                          "keyName": "EXTERNAL_POSTGRES_URI_ADMIN",
+                          "aliases": ["POSTGRES_URI"]
+                        }
+                      ]
+                    }
+                  ],
                   "name": "n8n-secrets",
                   "restrictions": {
                     "restricted": false,
@@ -309,11 +353,73 @@
     }
   },
   "name": "Sunday",
-  "description": "n8n Version 1.103.2",
+  "description": "n8n Version 1.103.2 with Auto DB Schema Init",
   "options": {
     "autorun": false,
     "concurrencyPolicy": "allow",
     "runOnUpdate": false
+  },
+  "arguments": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the project",
+      "required": true
+    },
+    "clerk_user_id": {
+      "type": "string",
+      "description": "Clerk User ID (e.g., user_xxxxx)",
+      "required": true,
+      "validation": {
+        "pattern": "^user_[a-zA-Z0-9]+$"
+      }
+    },
+    "user_id": {
+      "type": "string",
+      "description": "User ID from your application",
+      "required": true
+    },
+    "user_name": {
+      "type": "string",
+      "description": "User's name for N8N setup",
+      "required": true
+    },
+    "user_email": {
+      "type": "string",
+      "description": "User's email for N8N login",
+      "required": true,
+      "validation": {
+        "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+      }
+    },
+    "N8N_ENCRYPTION_KEY": {
+      "type": "string",
+      "description": "N8N encryption key (min 32 characters)",
+      "required": true,
+      "sensitive": true,
+      "validation": {
+        "minLength": 32
+      }
+    },
+    "neon_database_url": {
+      "type": "string",
+      "description": "Neon PostgreSQL connection string",
+      "required": true,
+      "sensitive": true,
+      "validation": {
+        "pattern": "^postgresql://.+"
+      }
+    },
+    "webhook_url": {
+      "type": "string",
+      "description": "Webhook callback URL (optional)",
+      "required": false
+    },
+    "webhook_token": {
+      "type": "string",
+      "description": "Webhook authentication token (optional)",
+      "required": false,
+      "sensitive": true
+    }
   },
   "gitops": {
     "repoUrl": "https://github.com/7on-ai/7on-n8n",
