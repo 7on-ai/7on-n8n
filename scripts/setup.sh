@@ -1,5 +1,4 @@
 #!/bin/bash
-# setup.sh - Complete N8N Setup with Neon Database
 set -e
 
 echo "=========================================="
@@ -33,6 +32,15 @@ done
 if [ $counter -ge $timeout ]; then
     echo "❌ Timeout waiting for N8N to be ready"
     exit 1
+fi
+
+# เพิ่ม Step 0: Initialize Database Schema
+echo ""
+echo "=== STEP 0: INITIALIZE DATABASE SCHEMA ==="
+if bash /scripts/init-db.sh; then
+    echo "✅ Database schema initialized successfully"
+else
+    echo "⚠️  Database initialization failed (continuing...)"
 fi
 
 # Additional wait for database initialization
