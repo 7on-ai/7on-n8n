@@ -3,26 +3,51 @@ set -e
 
 echo "📊 Initializing PostgreSQL database schema..."
 
-# ตรวจสอบว่ามี POSTGRES_URI
-if [ -z "$POSTGRES_URI" ]; then
-  echo "⚠️  POSTGRES_URI not set, skipping database initialization"
+# แก้จาก POSTGRES_URI เป็น NF_DATABASE_EXTERNAL_POSTGRES_URI_ADMIN
+DB_URI="${NF_DATABASE_EXTERNAL_POSTGRES_URI_ADMIN:-${POSTGRES_URI:-}}"
+
+if [ -z "$DB_URI" ]; then
+  echo "⚠️  Database URI not set, skipping database initialization"
   exit 0
 fi
 
+# แสดง connection string (ซ่อน password)
+SAFE_URI=$(echo "$DB_URI" | sed 's/:\/\/[^:]*:[^@]*@/:\/\/***:***@/')
+echo "🔗 Using: $SAFE_URI"
+
+# ทดสอบ connection
 echo "🔌 Testing database connection..."
-if ! psql "$POSTGRES_URI" -c 'SELECT version();' 2>/dev/null; then
+if ! psql "$DB_URI" -c 'SELECT current_user, current_database();' 2>&1; then
   echo "❌ Cannot connect to database"
   exit 1
 fi
 
+# ตรวจสอบ permissions
+echo "🔐 Checking permissions..."
+psql "$DB_URI" -c "
+  SELECT 
+    has_database_privilege(current_database(), 'CREATE') as can_create_schema,
+    has_database_privilege(current_database(), 'CONNECT') as can_connect;
+" || {
+  echo "❌ Insufficient permissions!"
+  echo "📋 User: $(psql "$DB_URI" -tAc 'SELECT current_user;')"
+  echo "📋 Database: $(psql "$DB_URI" -tAc 'SELECT current_database();')"
+  exit 1
+}
+
 echo "🧩 Installing pgvector extension..."
-psql "$POSTGRES_URI" -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+psql "$DB_URI" -c 'CREATE EXTENSION IF NOT EXISTS vector;' || {
+  echo "⚠️  Could not create vector extension (may already exist or need superuser)"
+}
 
 echo "📂 Creating schema..."
-psql "$POSTGRES_URI" -c 'CREATE SCHEMA IF NOT EXISTS user_data_schema;'
+psql "$DB_URI" -c 'CREATE SCHEMA IF NOT EXISTS user_data_schema;' || {
+  echo "❌ Failed to create schema!"
+  exit 1
+}
 
 echo "📋 Creating tables..."
-psql "$POSTGRES_URI" << 'EOSQL'
+psql "$DB_URI" << 'EOSQL'
 CREATE TABLE IF NOT EXISTS user_data_schema.ethical_profiles (
   user_id TEXT PRIMARY KEY,
   self_awareness FLOAT DEFAULT 0.3,
@@ -143,7 +168,7 @@ CREATE TABLE IF NOT EXISTS user_data_schema.gating_logs (
 EOSQL
 
 echo "🔍 Creating indexes..."
-psql "$POSTGRES_URI" << 'EOSQL'
+psql "$DB_URI" << 'EOSQL'
 CREATE INDEX IF NOT EXISTS idx_interaction_user ON user_data_schema.interaction_memories(user_id);
 CREATE INDEX IF NOT EXISTS idx_interaction_classification ON user_data_schema.interaction_memories(classification);
 CREATE INDEX IF NOT EXISTS idx_interaction_embedding ON user_data_schema.interaction_memories USING hnsw (embedding vector_cosine_ops);
@@ -154,7 +179,7 @@ CREATE INDEX IF NOT EXISTS idx_raw_messages_user_time ON user_data_schema.raw_me
 EOSQL
 
 echo "🔗 Creating foreign keys..."
-psql "$POSTGRES_URI" << 'EOSQL'
+psql "$DB_URI" << 'EOSQL'
 DO $$ 
 BEGIN 
   IF NOT EXISTS (
@@ -170,7 +195,7 @@ END $$;
 EOSQL
 
 echo "🔐 Granting permissions..."
-psql "$POSTGRES_URI" << 'EOSQL'
+psql "$DB_URI" << 'EOSQL'
 GRANT USAGE ON SCHEMA user_data_schema TO current_user;
 GRANT ALL ON ALL TABLES IN SCHEMA user_data_schema TO current_user;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA user_data_schema TO current_user;
