@@ -1,5 +1,4 @@
 {
-  "name": "Chat Webhook Handler",
   "nodes": [
     {
       "parameters": {
@@ -12,54 +11,18 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [240, 300],
+      "position": [240, 304],
       "webhookId": "chat-webhook-handler"
     },
     {
       "parameters": {
-        "content": "# 💬 Chat Webhook Endpoint\n\nThis workflow handles incoming chat messages from the frontend.\n\n## Expected Input\n```json\n{\n  \"userId\": \"user_123\",\n  \"chatInput\": \"Hello!\",\n  \"databaseUrl\": \"postgresql://...\",\n  \"sessionId\": \"sess_abc123\"\n}\n```\n\n## Response\n```json\n{\n  \"output\": \"AI response here\",\n  \"classification\": \"neutral\",\n  \"ethical_scores\": {...},\n  \"growth_stage\": 2\n}\n```"
-      },
-      "id": "info-note",
-      "name": "Workflow Info",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [240, 80]
-    },
-    {
-      "parameters": {
-        "values": {
-          "string": [
-            {
-              "name": "userId",
-              "value": "={{ $json.body.userId }}"
-            },
-            {
-              "name": "message",
-              "value": "={{ $json.body.chatInput }}"
-            },
-            {
-              "name": "sessionId",
-              "value": "={{ $json.body.sessionId }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "extract-data",
-      "name": "Extract Input",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.2,
-      "position": [460, 300]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Simple echo response\nconst userId = $input.item.json.userId;\nconst message = $input.item.json.message;\nconst sessionId = $input.item.json.sessionId;\n\n// Create a simple response\nconst response = {\n  output: `Echo: ${message}`,\n  classification: 'neutral_interaction',\n  ethical_scores: {\n    self_awareness: 0.5,\n    emotional_regulation: 0.5,\n    compassion: 0.5\n  },\n  growth_stage: 2,\n  sessionId: sessionId,\n  timestamp: new Date().toISOString()\n};\n\nreturn response;"
+        "jsCode": "// ✅ Read directly from webhook body\nconst body = $input.item.json.body || $input.item.json;\n\nconst userId = body.userId || 'unknown';\nconst message = body.message || '';\nconst sessionId = body.sessionId || '';\n\n// Log for debugging\nconsole.log('Received data:', { userId, message, sessionId });\n\n// Process message\nconst aiResponse = message ? `Echo: ${message}` : 'No message received';\n\n// Create response\nconst response = {\n  success: true,\n  response: aiResponse,\n  sessionId: sessionId,\n  metadata: {\n    classification: 'neutral_interaction',\n    ethical_scores: {\n      self_awareness: 0.5,\n      emotional_regulation: 0.5,\n      compassion: 0.5\n    },\n    growth_stage: 2,\n    timestamp: new Date().toISOString(),\n    userId: userId\n  }\n};\n\nreturn response;"
       },
       "id": "process-message",
       "name": "Process Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [464, 304]
     },
     {
       "parameters": {
@@ -71,22 +34,11 @@
       "name": "Send Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [900, 300]
+      "position": [688, 304]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [
-        [
-          {
-            "node": "Extract Input",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract Input": {
       "main": [
         [
           {
@@ -109,12 +61,10 @@
       ]
     }
   },
-  "active": true,
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "versionId": "1",
+  "pinData": {},
   "meta": {
-    "templateCredsSetupCompleted": true
-  }
+    "instanceId": "67ba5ddb62e569b8e74a52ebb7268831f7fa62f29153828135238c32f4cae0fc"
+  },
+  "name": "Chat Webhook Handler",
+  "active": true
 }
