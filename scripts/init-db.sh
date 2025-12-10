@@ -3,11 +3,12 @@ set -e
 
 echo "📊 Initializing PostgreSQL database schema..."
 
-# แก้จาก POSTGRES_URI เป็น NF_DATABASE_EXTERNAL_POSTGRES_URI_ADMIN
-DB_URI="${NF_DATABASE_EXTERNAL_POSTGRES_URI_ADMIN:-${POSTGRES_URI:-}}"
+# ✅ FIX: รับ connection string จาก argument แทน environment variable
+DB_URI="$1"
 
 if [ -z "$DB_URI" ]; then
-  echo "⚠️  Database URI not set, skipping database initialization"
+  echo "⚠️  Usage: $0 <database_uri>"
+  echo "⚠️  Database URI not provided, skipping initialization"
   exit 0
 fi
 
