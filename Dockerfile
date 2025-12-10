@@ -1,7 +1,7 @@
 # Dockerfile - N8N Setup with Neon Database
 FROM node:18-alpine
 
-# Install system dependencies
+# Install system dependencies (เพิ่ม postgresql-client)
 RUN apk add --no-cache curl bash postgresql-client
 
 # Create app directory
@@ -15,7 +15,7 @@ RUN npm install --omit=dev --no-cache
 COPY scripts/ /scripts/
 COPY templates/ /templates/
 
-# Make scripts executable
+# Make scripts executable (รวม init-db.sh)
 RUN chmod +x /scripts/*.sh
 RUN chmod +x /scripts/*.js
 
