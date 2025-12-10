@@ -34,22 +34,49 @@ if [ $counter -ge $timeout ]; then
     exit 1
 fi
 
-# เพิ่ม Step 0: Initialize Database Schema
+# ===== ✅ FIX: Get Postgres connection FIRST =====
 echo ""
-echo "=== STEP 0: INITIALIZE DATABASE SCHEMA ==="
-if bash /scripts/init-db.sh; then
+echo "=== STEP 0: GET DATABASE CONNECTION ==="
+
+# Try EXTERNAL_POSTGRES_URI_ADMIN first (from addon credentials)
+if [ -n "$EXTERNAL_POSTGRES_URI_ADMIN" ]; then
+    POSTGRES_URI="$EXTERNAL_POSTGRES_URI_ADMIN"
+    echo "✅ Using EXTERNAL_POSTGRES_URI_ADMIN"
+elif [ -n "$POSTGRES_URI_ADMIN" ]; then
+    POSTGRES_URI="$POSTGRES_URI_ADMIN"
+    echo "✅ Using POSTGRES_URI_ADMIN"
+elif [ -n "$DATABASE_URL" ]; then
+    POSTGRES_URI="$DATABASE_URL"
+    echo "✅ Using DATABASE_URL (Neon)"
+else
+    echo "❌ No database connection string found!"
+    echo "Available env vars:"
+    env | grep -i postgres || echo "  (none)"
+    env | grep -i database || echo "  (none)"
+    exit 1
+fi
+
+# Show connection (hide password)
+SAFE_URI=$(echo "$POSTGRES_URI" | sed 's/:\/\/[^:]*:[^@]*@/:\/\/***:***@/')
+echo "📝 Database: $SAFE_URI"
+
+# ===== Initialize Database Schema =====
+echo ""
+echo "=== STEP 1: INITIALIZE DATABASE SCHEMA ==="
+if bash /scripts/init-db.sh "$POSTGRES_URI"; then
     echo "✅ Database schema initialized successfully"
 else
-    echo "⚠️  Database initialization failed (continuing...)"
+    echo "⚠️  Database initialization failed"
+    echo "⚠️  Continuing anyway..."
 fi
 
 # Additional wait for database initialization
-echo "⏳ Waiting for database initialization..."
-sleep 30
+echo "⏳ Waiting for database to settle..."
+sleep 10
 
-# Step 1: Create N8N user
+# Step 2: Create N8N user
 echo ""
-echo "=== STEP 1: CREATE N8N USER ==="
+echo "=== STEP 2: CREATE N8N USER ==="
 if node /scripts/create-user.js; then
     echo "✅ N8N user created successfully"
 else
@@ -57,18 +84,18 @@ else
     exit 1
 fi
 
-# Step 2: Import workflow templates
+# Step 3: Import workflow templates
 echo ""
-echo "=== STEP 2: IMPORT WORKFLOW TEMPLATES ==="
+echo "=== STEP 3: IMPORT WORKFLOW TEMPLATES ==="
 if node /scripts/import-workflows.js; then
     echo "✅ Workflow templates imported successfully"
 else
     echo "⚠️  Failed to import workflow templates (continuing...)"
 fi
 
-# Step 3: Store credentials to Neon
+# Step 4: Store credentials to Neon
 echo ""
-echo "=== STEP 3: STORE CREDENTIALS TO NEON ==="
+echo "=== STEP 4: STORE CREDENTIALS TO NEON ==="
 if node /scripts/neon-store.js; then
     echo "✅ Credentials stored in Neon database"
 else
