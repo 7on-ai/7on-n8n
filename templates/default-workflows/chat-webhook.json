@@ -1,0 +1,120 @@
+{
+  "name": "Chat Webhook Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-chat",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "chat-webhook-handler"
+    },
+    {
+      "parameters": {
+        "content": "# 💬 Chat Webhook Endpoint\n\nThis workflow handles incoming chat messages from the frontend.\n\n## Expected Input\n```json\n{\n  \"userId\": \"user_123\",\n  \"chatInput\": \"Hello!\",\n  \"databaseUrl\": \"postgresql://...\",\n  \"sessionId\": \"sess_abc123\"\n}\n```\n\n## Response\n```json\n{\n  \"output\": \"AI response here\",\n  \"classification\": \"neutral\",\n  \"ethical_scores\": {...},\n  \"growth_stage\": 2\n}\n```"
+      },
+      "id": "info-note",
+      "name": "Workflow Info",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [240, 80]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "userId",
+              "value": "={{ $json.body.userId }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.body.chatInput }}"
+            },
+            {
+              "name": "sessionId",
+              "value": "={{ $json.body.sessionId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-data",
+      "name": "Extract Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simple echo response\nconst userId = $input.item.json.userId;\nconst message = $input.item.json.message;\nconst sessionId = $input.item.json.sessionId;\n\n// Create a simple response\nconst response = {\n  output: `Echo: ${message}`,\n  classification: 'neutral_interaction',\n  ethical_scores: {\n    self_awareness: 0.5,\n    emotional_regulation: 0.5,\n    compassion: 0.5\n  },\n  growth_stage: 2,\n  sessionId: sessionId,\n  timestamp: new Date().toISOString()\n};\n\nreturn response;"
+      },
+      "id": "process-message",
+      "name": "Process Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "send-response",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Input": {
+      "main": [
+        [
+          {
+            "node": "Process Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Message": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
