@@ -12,7 +12,6 @@
           ]
         }
       },
-      "id": "schedule_trigger_001",
       "name": "Schedule Every 5min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -20,17 +19,14 @@
     },
     {
       "parameters": {
-        "url": "={{$env.NEXT_PUBLIC_APP_URL || $env.VERCEL_APP_URL || 'https://sun.7on.ai'}}/api/cron/process-sessions?userId={{$env.USER_ID}}",
+        "url": "={{$env.APP_URL || $env.NEXT_PUBLIC_APP_URL || $env.VERCEL_APP_URL || 'https://sun.7on.ai'}}/api/cron/process-sessions?userId={{$env.USER_ID}}",
+        "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "={{$env.CRON_SECRET}}"
-            },
-            {
-              "name": "X-User-ID",
-              "value": "={{$env.USER_ID}}"
+              "value": "={{$env.CLERK_SECRET_KEY}}"
             }
           ]
         },
@@ -38,7 +34,6 @@
           "timeout": 30000
         }
       },
-      "id": "http_request_001",
       "name": "Process Sessions",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -54,7 +49,6 @@
           },
           "conditions": [
             {
-              "id": "success_condition",
               "leftValue": "={{$json.statusCode}}",
               "rightValue": 200,
               "operator": {
@@ -67,30 +61,23 @@
         },
         "options": {}
       },
-      "id": "if_node_001",
       "name": "Check Response",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [650, 300]
     },
     {
-      "parameters": {
-        "jsCode": "console.log('✅ Sessions processed successfully');\nreturn [{ success: true, timestamp: new Date().toISOString() }];"
-      },
-      "id": "log_success_001",
+      "parameters": {},
       "name": "Log Success",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [850, 200]
     },
     {
-      "parameters": {
-        "jsCode": "console.error('❌ Failed to process sessions');\nreturn [{ success: false, timestamp: new Date().toISOString() }];"
-      },
-      "id": "log_error_001",
+      "parameters": {},
       "name": "Log Error",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [850, 400]
     }
   ],
@@ -140,9 +127,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "staticData": null,
-  "tags": ["cron", "session-processing", "auto-generated"],
-  "triggerCount": 0,
-  "updatedAt": "2024-12-13T00:00:00.000Z",
-  "versionId": "1"
+  "tags": ["cron", "session-processing", "auto-generated"]
 }
