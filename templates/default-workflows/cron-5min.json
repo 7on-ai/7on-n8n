@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "url": "={{$env.NEXT_PUBLIC_APP_URL}}/api/cron/process-sessions?userId={{$env.USER_ID}}",
+        "url": "={{$env.NEXT_PUBLIC_APP_URL || $env.VERCEL_APP_URL || 'https://sun.7on.ai'}}/api/cron/process-sessions?userId={{$env.USER_ID}}",
         "authentication": "none",
         "options": {
           "timeout": 30000
