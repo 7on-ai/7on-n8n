@@ -21,7 +21,19 @@
     {
       "parameters": {
         "url": "={{$env.NEXT_PUBLIC_APP_URL || $env.VERCEL_APP_URL || 'https://sun.7on.ai'}}/api/cron/process-sessions?userId={{$env.USER_ID}}",
-        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{$env.CRON_SECRET}}"
+            },
+            {
+              "name": "X-User-ID",
+              "value": "={{$env.USER_ID}}"
+            }
+          ]
+        },
         "options": {
           "timeout": 30000
         }
@@ -131,6 +143,6 @@
   "staticData": null,
   "tags": ["cron", "session-processing", "auto-generated"],
   "triggerCount": 0,
-  "updatedAt": "2024-12-12T00:00:00.000Z",
+  "updatedAt": "2024-12-13T00:00:00.000Z",
   "versionId": "1"
 }
