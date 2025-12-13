@@ -12,6 +12,7 @@
           ]
         }
       },
+      "id": "schedule_trigger_001",
       "name": "Schedule Every 5min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -19,25 +20,24 @@
     },
     {
       "parameters": {
-        "url": "={{$env.APP_URL || $env.NEXT_PUBLIC_APP_URL || $env.VERCEL_APP_URL || 'https://sun.7on.ai'}}/api/cron/process-sessions?userId={{$env.USER_ID}}",
-        "authentication": "none",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "={{$env.CLERK_SECRET_KEY}}"
-            }
-          ]
-        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "url": "https://sun.7on.ai/api/cron/process-sessions",
         "options": {
           "timeout": 30000
         }
       },
+      "id": "http_request_001",
       "name": "Process Sessions",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [450, 300]
+      "position": [450, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "n8n_api_key_credential",
+          "name": "N8N API Key"
+        }
+      }
     },
     {
       "parameters": {
@@ -49,6 +49,7 @@
           },
           "conditions": [
             {
+              "id": "success_condition",
               "leftValue": "={{$json.statusCode}}",
               "rightValue": 200,
               "operator": {
@@ -61,23 +62,30 @@
         },
         "options": {}
       },
+      "id": "if_node_001",
       "name": "Check Response",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [650, 300]
     },
     {
-      "parameters": {},
+      "parameters": {
+        "jsCode": "console.log('✅ Sessions processed successfully');\nconsole.log('Response:', $input.item.json);\nreturn $input.item;"
+      },
+      "id": "log_success_001",
       "name": "Log Success",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [850, 200]
     },
     {
-      "parameters": {},
+      "parameters": {
+        "jsCode": "console.error('❌ Failed to process sessions');\nconsole.error('Error:', $input.item.json);\nreturn $input.item;"
+      },
+      "id": "log_error_001",
       "name": "Log Error",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [850, 400]
     }
   ],
@@ -123,9 +131,14 @@
       ]
     }
   },
-  "active": true,
+  "pinData": {},
   "settings": {
     "executionOrder": "v1"
   },
-  "tags": ["cron", "session-processing", "auto-generated"]
+  "staticData": null,
+  "tags": ["cron", "session-processing", "auto-generated"],
+  "triggerCount": 0,
+  "updatedAt": "2024-12-13T00:00:00.000Z",
+  "versionId": "1",
+  "active": true
 }
