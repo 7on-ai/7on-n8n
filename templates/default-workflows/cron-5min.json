@@ -21,17 +21,27 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "=https://sun.7on.ai/api/cron/process-sessions?userId={{$env.USER_ID}}",
+        "url": "https://sun.7on.ai/api/cron/process-sessions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
         "options": {
           "timeout": 30000
         }
       },
       "id": "http_request_001",
-      "name": "Process Sessions",
+      "name": "Process Sessions1",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [450, 300]
+      "position": [
+        464,
+        704
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "17KuXN7CxLjVXbtk",
+          "name": "N8N API Key"
+        }
+      }
     },
     {
       "parameters": {
