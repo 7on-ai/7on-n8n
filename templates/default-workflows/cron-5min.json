@@ -10,7 +10,8 @@
               "minutesInterval": 5
             }
           ]
-        }
+        },
+        "timezone": "Asia/Bangkok"
       },
       "id": "schedule_trigger_001",
       "name": "Schedule Every 5min",
@@ -20,9 +21,8 @@
     },
     {
       "parameters": {
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpHeaderAuth",
-        "url": "https://sun.7on.ai/api/cron/process-sessions",
+        "method": "GET",
+        "url": "=https://sun.7on.ai/api/cron/process-sessions?userId={{$env.USER_ID}}",
         "options": {
           "timeout": 30000
         }
@@ -31,13 +31,7 @@
       "name": "Process Sessions",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [450, 300],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "n8n_api_key_credential",
-          "name": "N8N API Key"
-        }
-      }
+      "position": [450, 300]
     },
     {
       "parameters": {
@@ -70,7 +64,7 @@
     },
     {
       "parameters": {
-        "jsCode": "console.log('✅ Sessions processed successfully');\nconsole.log('Response:', $input.item.json);\nreturn $input.item;"
+        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.log(`✅ [${now}] Sessions processed successfully`);\nconsole.log('Response:', $input.item.json);\nreturn $input.item;"
       },
       "id": "log_success_001",
       "name": "Log Success",
@@ -80,7 +74,7 @@
     },
     {
       "parameters": {
-        "jsCode": "console.error('❌ Failed to process sessions');\nconsole.error('Error:', $input.item.json);\nreturn $input.item;"
+        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.error(`❌ [${now}] Failed to process sessions`);\nconsole.error('Error:', $input.item.json);\nreturn $input.item;"
       },
       "id": "log_error_001",
       "name": "Log Error",
@@ -138,7 +132,7 @@
   "staticData": null,
   "tags": ["cron", "session-processing", "auto-generated"],
   "triggerCount": 0,
-  "updatedAt": "2024-12-13T00:00:00.000Z",
-  "versionId": "1",
+  "updatedAt": "2024-12-14T00:00:00.000Z",
+  "versionId": "2",
   "active": true
 }
