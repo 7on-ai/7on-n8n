@@ -21,7 +21,7 @@
     },
     {
       "parameters": {
-        "url": "https://sun.7on.ai/api/cron/process-sessions",
+        "url": "https://sun.7on.ai/api/cron/process-sessions?userId={{$env.USER_ID}}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "options": {
