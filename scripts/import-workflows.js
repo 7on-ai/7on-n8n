@@ -19,9 +19,9 @@ async function importWorkflows() {
     }
 
     try {
-        // แก้ไข login payload ให้ใช้ emailOrLdapLoginId แทน email
+        // ✅ ใช้ emailOrLdapLoginId แทน email (สำคัญ!)
         const loginPayload = {
-            emailOrLdapLoginId: email, // เปลี่ยนจาก email เป็น emailOrLdapLoginId
+            emailOrLdapLoginId: email,
             password: password
         };
 
@@ -104,11 +104,17 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                     continue;
                 }
                 
+                // ✅ NEW: Check if this is a cron workflow
+                const isCronWorkflow = file.includes('cron') || 
+                                     workflowData.tags?.includes('cron') ||
+                                     workflowData.tags?.includes('session-processing') ||
+                                     workflowData.nodes.some(n => n.type === 'n8n-nodes-base.scheduleTrigger');
+                
                 const workflowPayload = {
                     name: workflowData.name || file.replace('.json', ''),
                     nodes: workflowData.nodes,
                     connections: workflowData.connections || {},
-                    active: workflowData.active || false,
+                    active: false, // ✅ สร้างเป็น inactive ก่อน
                     settings: workflowData.settings || {},
                     staticData: workflowData.staticData || {},
                     tags: workflowData.tags || []
@@ -123,7 +129,38 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                 });
 
                 if (response.status === 200 || response.status === 201) {
-                    console.log(`✅ Successfully imported: ${file}`);
+                    const workflowId = response.data.data?.id || response.data.id;
+                    console.log(`✅ Successfully imported: ${file} (ID: ${workflowId})`);
+                    
+                    // ✅ NEW: Auto-activate cron workflows
+                    if (isCronWorkflow && workflowId) {
+                        console.log(`🔄 Activating cron workflow: ${file}`);
+                        
+                        try {
+                            const activateResponse = await axios.patch(
+                                `${baseUrl}/rest/workflows/${workflowId}`,
+                                { active: true },
+                                {
+                                    timeout: 10000,
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Cookie': cookieHeader
+                                    }
+                                }
+                            );
+                            
+                            if (activateResponse.status === 200) {
+                                console.log(`✅ Cron workflow activated: ${file}`);
+                            }
+                        } catch (activateError) {
+                            console.error(`⚠️  Failed to activate ${file}:`, activateError.message);
+                            if (activateError.response) {
+                                console.error(`   Status: ${activateError.response.status}`);
+                                console.error(`   Data:`, activateError.response.data);
+                            }
+                        }
+                    }
+                    
                     importedCount++;
                 } else {
                     console.log(`⚠️  Unexpected response for ${file}: ${response.status}`);
