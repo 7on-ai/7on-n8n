@@ -1,5 +1,5 @@
 // scripts/import-workflows.js
-// ✅ FIXED: Import cron workflows WITHOUT credentials
+// ✅ FIXED: Import workflows and respect active status from template
 // Credentials will be injected later via API
 
 const axios = require('axios');
@@ -44,13 +44,22 @@ async function importWorkflows() {
 
         // Import each template category
         let totalImported = 0;
+        const workflowIdMap = {}; // Store workflow IDs for later credential injection
+        
         for (const template of workflowTemplates) {
             console.log(`📂 Processing template category: ${template}`);
-            const imported = await importWorkflowTemplate(baseUrl, template, cookieHeader);
-            totalImported += imported;
+            const result = await importWorkflowTemplate(baseUrl, template, cookieHeader);
+            totalImported += result.count;
+            Object.assign(workflowIdMap, result.workflowIds);
         }
 
         console.log(`🎉 Successfully imported ${totalImported} workflows`);
+        
+        // Save workflow IDs for later credential injection
+        if (Object.keys(workflowIdMap).length > 0) {
+            console.log('\n📋 Workflow IDs for credential injection:');
+            console.log(JSON.stringify(workflowIdMap, null, 2));
+        }
 
     } catch (error) {
         console.error('❌ Error in workflow import process:', error.message);
@@ -64,6 +73,7 @@ async function importWorkflows() {
 
 async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
     let importedCount = 0;
+    const workflowIds = {};
     
     try {
         const templatePath = path.join('/templates', 
@@ -74,7 +84,7 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
         
         if (!fs.existsSync(templatePath)) {
             console.log(`⚠️  Template directory not found: ${templatePath}`);
-            return 0;
+            return { count: 0, workflowIds: {} };
         }
 
         const files = fs.readdirSync(templatePath).filter(file => file.endsWith('.json'));
@@ -82,7 +92,7 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
         
         if (files.length === 0) {
             console.log('ℹ️  No workflow files found to import');
-            return 0;
+            return { count: 0, workflowIds: {} };
         }
         
         for (const file of files) {
@@ -103,8 +113,12 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                                      workflowData.tags?.includes('cron') ||
                                      workflowData.tags?.includes('session-processing');
                 
+                // ✅ Store original active status from template
+                const shouldBeActive = workflowData.active === true;
+                
                 if (isCronWorkflow) {
                     console.log(`🔧 Processing cron workflow: ${file}`);
+                    console.log(`   📌 Template active status: ${shouldBeActive}`);
                     
                     // ✅ Remove credentials from nodes before import
                     workflowData.nodes = workflowData.nodes.map(node => {
@@ -133,11 +147,13 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                 
                 console.log(`📥 Importing workflow: ${file}`);
                 
+                // ✅ IMPORTANT: Import as INACTIVE first (even if template says active)
+                // We'll activate it after credential injection
                 const workflowPayload = {
                     name: workflowData.name || file.replace('.json', ''),
                     nodes: workflowData.nodes,
                     connections: workflowData.connections || {},
-                    active: false, // Import as inactive
+                    active: false, // Always import as inactive first
                     settings: workflowData.settings || {},
                     staticData: workflowData.staticData || {},
                     tags: workflowData.tags || []
@@ -155,9 +171,38 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                     const workflowId = response.data.data?.id || response.data.id;
                     console.log(`✅ Successfully imported: ${file} (ID: ${workflowId})`);
                     
+                    // Store workflow info for later credential injection
+                    workflowIds[file] = {
+                        id: workflowId,
+                        name: workflowData.name,
+                        needsCredentials: isCronWorkflow,
+                        shouldBeActive: shouldBeActive,
+                        originalActiveStatus: workflowData.active
+                    };
+                    
                     if (isCronWorkflow) {
                         console.log(`   ℹ️  Cron workflow imported (inactive)`);
-                        console.log(`   ℹ️  Credentials will be added when user connects`);
+                        console.log(`   📌 Will be activated after credentials are connected`);
+                        console.log(`   📌 Original template active status: ${shouldBeActive}`);
+                    } else if (shouldBeActive) {
+                        // ✅ For non-cron workflows that should be active, activate immediately
+                        try {
+                            console.log(`   🔄 Activating workflow: ${file}`);
+                            await axios.patch(
+                                `${baseUrl}/rest/workflows/${workflowId}`,
+                                { active: true },
+                                {
+                                    timeout: 30000,
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Cookie': cookieHeader
+                                    }
+                                }
+                            );
+                            console.log(`   ✅ Workflow activated successfully`);
+                        } catch (activateError) {
+                            console.log(`   ⚠️  Could not activate workflow: ${activateError.message}`);
+                        }
                     }
                     
                     importedCount++;
@@ -181,14 +226,17 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
         console.error(`❌ Error processing template ${templateName}:`, error.message);
     }
     
-    return importedCount;
+    return { count: importedCount, workflowIds };
 }
 
 // Main execution
 importWorkflows()
     .then(() => {
         console.log('🎉 Workflow import process completed');
-        console.log('ℹ️  Cron workflows imported (credentials will be added via API)');
+        console.log('\n📌 Next Steps:');
+        console.log('   1. User will create HTTP credentials via UI');
+        console.log('   2. Call API to inject credentials into cron workflows');
+        console.log('   3. Call API to activate cron workflows');
         process.exit(0);
     })
     .catch(error => {
