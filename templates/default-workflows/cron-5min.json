@@ -32,13 +32,7 @@
       "name": "Process Sessions",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [464, 300],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "17KuXN7CxLjVXbtk",
-          "name": "N8N API Key"
-        }
-      }
+      "position": [464, 300]
     },
     {
       "parameters": {
@@ -71,7 +65,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.log✅ [${now}] Sessions processed successfully);\nconsole.log('Response:', $input.item.json);\nreturn $input.item;"
+        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.log(`✅ [${now}] Sessions processed successfully`);\nconsole.log('Response:', $input.item.json);\nreturn $input.item;"
       },
       "id": "log_success_001",
       "name": "Log Success",
@@ -81,7 +75,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.error❌ [${now}] Failed to process sessions);\nconsole.error('Error:', $input.item.json);\nreturn $input.item;"
+        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.error(`❌ [${now}] Failed to process sessions`);\nconsole.error('Error:', $input.item.json);\nreturn $input.item;"
       },
       "id": "log_error_001",
       "name": "Log Error",
