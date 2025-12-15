@@ -29,13 +29,10 @@
         }
       },
       "id": "http_request_001",
-      "name": "Process Sessions1",
+      "name": "Process Sessions",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        464,
-        704
-      ],
+      "position": [464, 300],
       "credentials": {
         "httpHeaderAuth": {
           "id": "17KuXN7CxLjVXbtk",
