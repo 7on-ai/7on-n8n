@@ -11,6 +11,7 @@
             }
           ]
         },
+        "timezone": "Asia/Bangkok"
       },
       "id": "schedule_trigger_001",
       "name": "Schedule Every 5min",
@@ -34,7 +35,8 @@
       "position": [464, 300],
       "credentials": {
         "httpHeaderAuth": {
-          "name": "X-N8N-API-KEY"
+          "id": "17KuXN7CxLjVXbtk",
+          "name": "N8N API Key"
         }
       }
     },
@@ -69,7 +71,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.log(`✅ [${now}] Sessions processed successfully`);\nconsole.log('Response:', $input.item.json);\nreturn $input.item;"
+        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.log✅ [${now}] Sessions processed successfully);\nconsole.log('Response:', $input.item.json);\nreturn $input.item;"
       },
       "id": "log_success_001",
       "name": "Log Success",
@@ -79,7 +81,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.error(`❌ [${now}] Failed to process sessions`);\nconsole.error('Error:', $input.item.json);\nreturn $input.item;"
+        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.error❌ [${now}] Failed to process sessions);\nconsole.error('Error:', $input.item.json);\nreturn $input.item;"
       },
       "id": "log_error_001",
       "name": "Log Error",
