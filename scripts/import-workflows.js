@@ -1,6 +1,6 @@
 // scripts/import-workflows.js
-// ✅ FIXED: Skip cron templates during import
-// Cron workflows will be created via API with correct credentials
+// ✅ FIXED: Import cron workflows WITHOUT credentials
+// Credentials will be injected later via API
 
 const axios = require('axios');
 const fs = require('fs');
@@ -18,7 +18,7 @@ async function importWorkflows() {
     console.log(`📋 Templates to import: ${workflowTemplates.join(', ')}`);
 
     if (!baseUrl || !email || !password) {
-        throw new Error('Missing required environment variables: N8N_EDITOR_BASE_URL, N8N_USER_EMAIL, N8N_USER_PASSWORD');
+        throw new Error('Missing required environment variables');
     }
 
     try {
@@ -27,14 +27,10 @@ async function importWorkflows() {
             password: password
         };
 
-        console.log('🔑 Login payload:', { emailOrLdapLoginId: email, password: '***' });
-
         // Login to get session cookie
         const loginResponse = await axios.post(`${baseUrl}/rest/login`, loginPayload, {
             timeout: 30000,
-            headers: {
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
 
         if (loginResponse.status !== 200) {
@@ -78,7 +74,6 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
         
         if (!fs.existsSync(templatePath)) {
             console.log(`⚠️  Template directory not found: ${templatePath}`);
-            console.log('ℹ️  No workflow templates to import');
             return 0;
         }
 
@@ -92,39 +87,57 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
         
         for (const file of files) {
             try {
-                // ✅ SKIP CRON TEMPLATES - will be created via API
-                if (file.includes('cron') || file.includes('process-session')) {
-                    console.log(`⏭️  Skipping cron template: ${file} (will be created via API)`);
-                    continue;
-                }
-
                 const workflowPath = path.join(templatePath, file);
                 console.log(`📄 Reading workflow file: ${workflowPath}`);
                 
                 const workflowData = JSON.parse(fs.readFileSync(workflowPath, 'utf8'));
                 
-                console.log(`📥 Importing workflow: ${file}`);
-                
-                // Validate workflow data structure
+                // Validate workflow structure
                 if (!workflowData.nodes || !Array.isArray(workflowData.nodes)) {
                     console.log(`⚠️  Invalid workflow structure in ${file}, skipping...`);
                     continue;
                 }
                 
-                // Check if workflow has credentials that need to be skipped
-                const hasCredentials = workflowData.nodes.some(node => 
-                    node.credentials && Object.keys(node.credentials).length > 0
-                );
-
-                if (hasCredentials) {
-                    console.log(`⚠️  Workflow ${file} has credentials - may need manual setup`);
+                // ✅ Check if this is a cron workflow
+                const isCronWorkflow = file.includes('cron') || 
+                                     workflowData.tags?.includes('cron') ||
+                                     workflowData.tags?.includes('session-processing');
+                
+                if (isCronWorkflow) {
+                    console.log(`🔧 Processing cron workflow: ${file}`);
+                    
+                    // ✅ Remove credentials from nodes before import
+                    workflowData.nodes = workflowData.nodes.map(node => {
+                        if (node.credentials) {
+                            console.log(`   ⚠️  Removing credentials from node: ${node.name}`);
+                            const { credentials, ...nodeWithoutCreds } = node;
+                            return nodeWithoutCreds;
+                        }
+                        return node;
+                    });
+                    
+                    // ✅ Replace userId placeholder with environment variable reference
+                    workflowData.nodes = workflowData.nodes.map(node => {
+                        if (node.parameters?.url) {
+                            const originalUrl = node.parameters.url;
+                            // Replace hardcoded userId with env var
+                            node.parameters.url = originalUrl.replace(
+                                /userId=[^&"'\s]+/,
+                                'userId={{$env.USER_ID}}'
+                            );
+                            console.log(`   🔄 Updated URL in node: ${node.name}`);
+                        }
+                        return node;
+                    });
                 }
-
+                
+                console.log(`📥 Importing workflow: ${file}`);
+                
                 const workflowPayload = {
                     name: workflowData.name || file.replace('.json', ''),
                     nodes: workflowData.nodes,
                     connections: workflowData.connections || {},
-                    active: false, // Always create as inactive
+                    active: false, // Import as inactive
                     settings: workflowData.settings || {},
                     staticData: workflowData.staticData || {},
                     tags: workflowData.tags || []
@@ -141,6 +154,12 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                 if (response.status === 200 || response.status === 201) {
                     const workflowId = response.data.data?.id || response.data.id;
                     console.log(`✅ Successfully imported: ${file} (ID: ${workflowId})`);
+                    
+                    if (isCronWorkflow) {
+                        console.log(`   ℹ️  Cron workflow imported (inactive)`);
+                        console.log(`   ℹ️  Credentials will be added when user connects`);
+                    }
+                    
                     importedCount++;
                 } else {
                     console.log(`⚠️  Unexpected response for ${file}: ${response.status}`);
@@ -152,8 +171,8 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
             } catch (fileError) {
                 console.error(`❌ Error importing ${file}:`, fileError.message);
                 if (fileError.response) {
-                    console.error(`📊 Response status for ${file}:`, fileError.response.status);
-                    console.error(`📋 Response data for ${file}:`, fileError.response.data);
+                    console.error(`📊 Response status:`, fileError.response.status);
+                    console.error(`📋 Response data:`, fileError.response.data);
                 }
                 // Continue with other files
             }
@@ -169,7 +188,7 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
 importWorkflows()
     .then(() => {
         console.log('🎉 Workflow import process completed');
-        console.log('ℹ️  Note: Cron workflows will be created via API when user connects');
+        console.log('ℹ️  Cron workflows imported (credentials will be added via API)');
         process.exit(0);
     })
     .catch(error => {
