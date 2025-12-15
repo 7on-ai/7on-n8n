@@ -1,9 +1,12 @@
+// scripts/import-workflows.js
+// ✅ FIXED: Skip cron templates during import
+// Cron workflows will be created via API with correct credentials
+
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
 async function importWorkflows() {
-    // ใช้ตัวแปรที่ตรงกับ template n8n-secrets
     const baseUrl = process.env.N8N_EDITOR_BASE_URL;
     const email = process.env.N8N_USER_EMAIL;
     const password = process.env.N8N_USER_PASSWORD;
@@ -19,7 +22,6 @@ async function importWorkflows() {
     }
 
     try {
-        // ✅ ใช้ emailOrLdapLoginId แทน email (สำคัญ!)
         const loginPayload = {
             emailOrLdapLoginId: email,
             password: password
@@ -68,7 +70,6 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
     let importedCount = 0;
     
     try {
-        // แก้ไข path ให้ตรงกับ Dockerfile structure
         const templatePath = path.join('/templates', 
             templateName === 'default' ? 'default-workflows' : 'custom-workflows'
         );
@@ -91,6 +92,12 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
         
         for (const file of files) {
             try {
+                // ✅ SKIP CRON TEMPLATES - will be created via API
+                if (file.includes('cron') || file.includes('process-session')) {
+                    console.log(`⏭️  Skipping cron template: ${file} (will be created via API)`);
+                    continue;
+                }
+
                 const workflowPath = path.join(templatePath, file);
                 console.log(`📄 Reading workflow file: ${workflowPath}`);
                 
@@ -104,17 +111,20 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                     continue;
                 }
                 
-                // ✅ NEW: Check if this is a cron workflow
-                const isCronWorkflow = file.includes('cron') || 
-                                     workflowData.tags?.includes('cron') ||
-                                     workflowData.tags?.includes('session-processing') ||
-                                     workflowData.nodes.some(n => n.type === 'n8n-nodes-base.scheduleTrigger');
-                
+                // Check if workflow has credentials that need to be skipped
+                const hasCredentials = workflowData.nodes.some(node => 
+                    node.credentials && Object.keys(node.credentials).length > 0
+                );
+
+                if (hasCredentials) {
+                    console.log(`⚠️  Workflow ${file} has credentials - may need manual setup`);
+                }
+
                 const workflowPayload = {
                     name: workflowData.name || file.replace('.json', ''),
                     nodes: workflowData.nodes,
                     connections: workflowData.connections || {},
-                    active: false, // ✅ สร้างเป็น inactive ก่อน
+                    active: false, // Always create as inactive
                     settings: workflowData.settings || {},
                     staticData: workflowData.staticData || {},
                     tags: workflowData.tags || []
@@ -131,42 +141,12 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                 if (response.status === 200 || response.status === 201) {
                     const workflowId = response.data.data?.id || response.data.id;
                     console.log(`✅ Successfully imported: ${file} (ID: ${workflowId})`);
-                    
-                    // ✅ NEW: Auto-activate cron workflows
-                    if (isCronWorkflow && workflowId) {
-                        console.log(`🔄 Activating cron workflow: ${file}`);
-                        
-                        try {
-                            const activateResponse = await axios.patch(
-                                `${baseUrl}/rest/workflows/${workflowId}`,
-                                { active: true },
-                                {
-                                    timeout: 10000,
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Cookie': cookieHeader
-                                    }
-                                }
-                            );
-                            
-                            if (activateResponse.status === 200) {
-                                console.log(`✅ Cron workflow activated: ${file}`);
-                            }
-                        } catch (activateError) {
-                            console.error(`⚠️  Failed to activate ${file}:`, activateError.message);
-                            if (activateError.response) {
-                                console.error(`   Status: ${activateError.response.status}`);
-                                console.error(`   Data:`, activateError.response.data);
-                            }
-                        }
-                    }
-                    
                     importedCount++;
                 } else {
                     console.log(`⚠️  Unexpected response for ${file}: ${response.status}`);
                 }
                 
-                // Small delay between imports to avoid overwhelming the API
+                // Small delay between imports
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 
             } catch (fileError) {
@@ -185,93 +165,11 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
     return importedCount;
 }
 
-// สร้าง default workflow ถ้าไม่มี template files
-async function createDefaultWorkflow(baseUrl, cookieHeader) {
-    try {
-        console.log('📝 Creating default welcome workflow...');
-        
-        const defaultWorkflow = {
-            name: "Welcome to N8N",
-            nodes: [
-                {
-                    parameters: {},
-                    id: "welcome-node",
-                    name: "Start",
-                    type: "n8n-nodes-base.start",
-                    typeVersion: 1,
-                    position: [240, 300]
-                },
-                {
-                    parameters: {
-                        values: {
-                            string: [
-                                {
-                                    name: "message",
-                                    value: "Welcome to your N8N instance! This is your first workflow."
-                                },
-                                {
-                                    name: "status",
-                                    value: "ready"
-                                }
-                            ]
-                        }
-                    },
-                    id: "set-node",
-                    name: "Set Welcome Message",
-                    type: "n8n-nodes-base.set",
-                    typeVersion: 1,
-                    position: [460, 300]
-                }
-            ],
-            connections: {
-                "Start": {
-                    "main": [
-                        [
-                            {
-                                "node": "Set Welcome Message",
-                                "type": "main",
-                                "index": 0
-                            }
-                        ]
-                    ]
-                }
-            },
-            active: false,
-            settings: {},
-            staticData: {},
-            tags: ["welcome", "default"]
-        };
-
-        const response = await axios.post(`${baseUrl}/rest/workflows`, defaultWorkflow, {
-            timeout: 30000,
-            headers: {
-                'Content-Type': 'application/json',
-                'Cookie': cookieHeader
-            }
-        });
-
-        if (response.status === 200 || response.status === 201) {
-            console.log('✅ Default welcome workflow created successfully');
-            return 1;
-        } else {
-            console.log(`⚠️  Unexpected response creating default workflow: ${response.status}`);
-            return 0;
-        }
-        
-    } catch (error) {
-        console.error('❌ Error creating default workflow:', error.message);
-        if (error.response) {
-            console.error('📊 Response status:', error.response.status);
-            console.error('📋 Response data:', error.response.data);
-        }
-        return 0;
-    }
-}
-
 // Main execution
 importWorkflows()
     .then(() => {
         console.log('🎉 Workflow import process completed');
+        console.log('ℹ️  Note: Cron workflows will be created via API when user connects');
         process.exit(0);
     })
     .catch(error => {
