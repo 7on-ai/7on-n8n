@@ -137,7 +137,7 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                     name: workflowData.name || file.replace('.json', ''),
                     nodes: workflowData.nodes,
                     connections: workflowData.connections || {},
-                    active: false, // Import as inactive
+                    active: true, // Import as active
                     settings: workflowData.settings || {},
                     staticData: workflowData.staticData || {},
                     tags: workflowData.tags || []
