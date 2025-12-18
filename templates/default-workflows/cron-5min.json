@@ -21,7 +21,17 @@
     },
     {
       "parameters": {
-        "url": "https://sun.7on.ai/api/cron/process-sessions?userId={{$env.USER_ID}}",
+        "jsCode": "// Get USER_ID from workflow static data or settings\nconst userId = $workflow.staticData.userId || 'default-user-id';\nreturn { userId };"
+      },
+      "id": "get_user_id",
+      "name": "Get User ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://sun.7on.ai/api/cron/process-sessions?userId={{$json.userId}}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "options": {
@@ -32,7 +42,7 @@
       "name": "Process Sessions",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [464, 300]
+      "position": [600, 300]
     },
     {
       "parameters": {
@@ -61,7 +71,7 @@
       "name": "Check Response",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [650, 300]
+      "position": [800, 300]
     },
     {
       "parameters": {
@@ -71,7 +81,7 @@
       "name": "Log Success",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [850, 200]
+      "position": [1000, 200]
     },
     {
       "parameters": {
@@ -81,11 +91,22 @@
       "name": "Log Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [850, 400]
+      "position": [1000, 400]
     }
   ],
   "connections": {
     "Schedule Every 5min": {
+      "main": [
+        [
+          {
+            "node": "Get User ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User ID": {
       "main": [
         [
           {
@@ -130,7 +151,9 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "staticData": null,
+  "staticData": {
+    "userId": "your-user-id-here"
+  },
   "tags": ["cron", "session-processing", "auto-generated"],
   "triggerCount": 0,
   "updatedAt": "2024-12-14T00:00:00.000Z",

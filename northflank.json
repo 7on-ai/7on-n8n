@@ -230,7 +230,8 @@
                       "N8N_PERSONALIZATION_ENABLED": "false",
                       "TINI_SUBREAPER": "1",
                       "N8N_LOG_LEVEL": "info",
-                      "N8N_LOG_OUTPUT": "console"
+                      "N8N_LOG_OUTPUT": "console",
+                      "N8N_BLOCK_ENV_ACCESS_IN_NODE": ""
                     },
                     "files": {},
                     "dockerSecretMounts": {}
