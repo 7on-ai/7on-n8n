@@ -1,6 +1,5 @@
 // scripts/import-workflows.js
-// ✅ FIXED: Import workflows and respect active status from template
-// Credentials will be injected later via API
+// ✅ FIXED: Inject userId into staticData instead of URL
 
 const axios = require('axios');
 const fs = require('fs');
@@ -10,15 +9,21 @@ async function importWorkflows() {
     const baseUrl = process.env.N8N_EDITOR_BASE_URL;
     const email = process.env.N8N_USER_EMAIL;
     const password = process.env.N8N_USER_PASSWORD;
+    const userId = process.env.USER_ID; // ✅ Get userId from env
     const workflowTemplates = process.env.WORKFLOW_TEMPLATES?.split(',') || ['default'];
 
     console.log('🔐 Logging in to N8N...');
     console.log(`📧 Using email: ${email}`);
     console.log(`🔗 Base URL: ${baseUrl}`);
+    console.log(`👤 User ID: ${userId || 'NOT SET'}`); // ✅ Log userId
     console.log(`📋 Templates to import: ${workflowTemplates.join(', ')}`);
 
     if (!baseUrl || !email || !password) {
         throw new Error('Missing required environment variables');
+    }
+
+    if (!userId) {
+        throw new Error('Missing USER_ID environment variable');
     }
 
     try {
@@ -44,18 +49,17 @@ async function importWorkflows() {
 
         // Import each template category
         let totalImported = 0;
-        const workflowIdMap = {}; // Store workflow IDs for later credential injection
+        const workflowIdMap = {};
         
         for (const template of workflowTemplates) {
             console.log(`📂 Processing template category: ${template}`);
-            const result = await importWorkflowTemplate(baseUrl, template, cookieHeader);
+            const result = await importWorkflowTemplate(baseUrl, template, cookieHeader, userId);
             totalImported += result.count;
             Object.assign(workflowIdMap, result.workflowIds);
         }
 
         console.log(`🎉 Successfully imported ${totalImported} workflows`);
         
-        // Save workflow IDs for later credential injection
         if (Object.keys(workflowIdMap).length > 0) {
             console.log('\n📋 Workflow IDs for credential injection:');
             console.log(JSON.stringify(workflowIdMap, null, 2));
@@ -71,7 +75,7 @@ async function importWorkflows() {
     }
 }
 
-async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
+async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userId) {
     let importedCount = 0;
     const workflowIds = {};
     
@@ -130,19 +134,20 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                         return node;
                     });
                     
-                    // ✅ Replace userId placeholder with environment variable reference
-                    workflowData.nodes = workflowData.nodes.map(node => {
-                        if (node.parameters?.url) {
-                            const originalUrl = node.parameters.url;
-                            // Replace hardcoded userId with env var
-                            node.parameters.url = originalUrl.replace(
-                                /userId=[^&"'\s]+/,
-                                'userId={{$env.USER_ID}}'
-                            );
-                            console.log(`   🔄 Updated URL in node: ${node.name}`);
+                    // ✅ NEW: Inject userId into staticData
+                    if (workflowData.staticData) {
+                        if (workflowData.staticData.userId === "PLACEHOLDER_WILL_BE_REPLACED") {
+                            workflowData.staticData.userId = userId;
+                            console.log(`   ✅ Injected userId into staticData: ${userId}`);
                         }
-                        return node;
-                    });
+                    } else {
+                        // Create staticData if it doesn't exist
+                        workflowData.staticData = { userId: userId };
+                        console.log(`   ✅ Created staticData with userId: ${userId}`);
+                    }
+                    
+                    // ✅ REMOVED: Old URL replacement code (no longer needed)
+                    // The workflow now uses {{$workflow.staticData.userId}} which reads from staticData
                 }
                 
                 console.log(`📥 Importing workflow: ${file}`);
@@ -155,7 +160,7 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                     connections: workflowData.connections || {},
                     active: false, // Always import as inactive first
                     settings: workflowData.settings || {},
-                    staticData: workflowData.staticData || {},
+                    staticData: workflowData.staticData || {}, // ✅ Include staticData
                     tags: workflowData.tags || []
                 };
 
@@ -177,13 +182,15 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader) {
                         name: workflowData.name,
                         needsCredentials: isCronWorkflow,
                         shouldBeActive: shouldBeActive,
-                        originalActiveStatus: workflowData.active
+                        originalActiveStatus: workflowData.active,
+                        hasUserId: !!workflowData.staticData?.userId // ✅ Track if userId is set
                     };
                     
                     if (isCronWorkflow) {
                         console.log(`   ℹ️  Cron workflow imported (inactive)`);
                         console.log(`   📌 Will be activated after credentials are connected`);
                         console.log(`   📌 Original template active status: ${shouldBeActive}`);
+                        console.log(`   📌 Static data userId: ${workflowData.staticData?.userId || 'NOT SET'}`);
                     } else if (shouldBeActive) {
                         // ✅ For non-cron workflows that should be active, activate immediately
                         try {

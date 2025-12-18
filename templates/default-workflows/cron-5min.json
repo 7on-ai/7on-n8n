@@ -21,17 +21,8 @@
     },
     {
       "parameters": {
-        "jsCode": "// Get USER_ID from workflow static data or settings\nconst userId = $workflow.staticData.userId || 'default-user-id';\nreturn { userId };"
-      },
-      "id": "get_user_id",
-      "name": "Get User ID",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [400, 300]
-    },
-    {
-      "parameters": {
-        "url": "=https://sun.7on.ai/api/cron/process-sessions?userId={{$json.userId}}",
+        "method": "GET",
+        "url": "=https://sun.7on.ai/api/cron/process-sessions?userId={{$workflow.staticData.userId}}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "options": {
@@ -42,7 +33,7 @@
       "name": "Process Sessions",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [600, 300]
+      "position": [450, 300]
     },
     {
       "parameters": {
@@ -71,42 +62,31 @@
       "name": "Check Response",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [800, 300]
+      "position": [650, 300]
     },
     {
       "parameters": {
-        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.log(`✅ [${now}] Sessions processed successfully`);\nconsole.log('Response:', $input.item.json);\nreturn $input.item;"
+        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconst data = $input.item.json;\n\nconsole.log(`✅ [${now}] Sessions processed successfully`);\nconsole.log('User ID:', data.userId);\nconsole.log('Processed:', data.processed);\nconsole.log('Milestones:', data.milestones);\nconsole.log('Consolidated:', data.consolidated);\n\nreturn $input.item;"
       },
       "id": "log_success_001",
       "name": "Log Success",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1000, 200]
+      "position": [850, 200]
     },
     {
       "parameters": {
-        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconsole.error(`❌ [${now}] Failed to process sessions`);\nconsole.error('Error:', $input.item.json);\nreturn $input.item;"
+        "jsCode": "const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });\nconst error = $input.item.json;\n\nconsole.error(`❌ [${now}] Failed to process sessions`);\nconsole.error('Status:', error.statusCode);\nconsole.error('Error:', error.error || error.message);\n\nreturn $input.item;"
       },
       "id": "log_error_001",
       "name": "Log Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1000, 400]
+      "position": [850, 400]
     }
   ],
   "connections": {
     "Schedule Every 5min": {
-      "main": [
-        [
-          {
-            "node": "Get User ID",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get User ID": {
       "main": [
         [
           {
@@ -152,11 +132,11 @@
     "executionOrder": "v1"
   },
   "staticData": {
-    "userId": "your-user-id-here"
+    "userId": "PLACEHOLDER_WILL_BE_REPLACED"
   },
   "tags": ["cron", "session-processing", "auto-generated"],
   "triggerCount": 0,
-  "updatedAt": "2024-12-14T00:00:00.000Z",
+  "updatedAt": "2024-12-18T00:00:00.000Z",
   "versionId": "2",
-  "active": true
+  "active": false
 }
