@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// ✅ อ่านข้อมูลจาก webhook\nconst body = $input.item.json.body || $input.item.json;\nconst userId = body.userId;\nconst message = body.message;\nconst sessionId = body.sessionId;\nconst databaseUrl = body.databaseUrl;\n\nconsole.log('📥 Received:', { userId, sessionId, messageLength: message?.length });\n\nif (!userId || !message) {\n  throw new Error('Missing userId or message');\n}\n\n// ส่งต่อไปยัง Gating Service\nreturn {\n  json: {\n    userId,\n    message,\n    sessionId,\n    databaseUrl\n  }\n};"
+        "jsCode": "// ✅ Validate and extract data\nconst body = $input.item.json.body || $input.item.json;\n\nconst userId = body.userId;\nconst message = body.message;\nconst sessionId = body.sessionId;\nconst databaseUrl = body.databaseUrl;\n\nconsole.log('📥 Webhook received:', {\n  userId: userId?.substring(0, 8),\n  sessionId: sessionId?.substring(0, 20),\n  messageLength: message?.length,\n  hasDatabaseUrl: !!databaseUrl\n});\n\nif (!userId || !message) {\n  throw new Error('Missing required fields: userId or message');\n}\n\nif (!databaseUrl) {\n  throw new Error('Missing databaseUrl');\n}\n\n// ✅ Return prepared data\nreturn {\n  json: {\n    userId: userId,\n    message: message,\n    sessionId: sessionId || 'unknown',\n    databaseUrl: databaseUrl\n  }\n};"
       },
       "id": "validate-input",
       "name": "Validate Input",
@@ -28,31 +28,18 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://gating-service:8080/gating/ethical-route",
+        "url": "https://sun--gating-service--fsyfcjtb6qdm.code.run/gating/ethical-route",
         "authentication": "none",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "user_id",
-              "value": "={{ $json.userId }}"
-            },
-            {
-              "name": "text",
-              "value": "={{ $json.message }}"
-            },
-            {
-              "name": "database_url",
-              "value": "={{ $json.databaseUrl }}"
-            },
-            {
-              "name": "metadata",
-              "value": "={{ { session_id: $json.sessionId, source: 'n8n_chat' } }}"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"user_id\": \"{{ $json.userId }}\",\n  \"text\": \"{{ $json.message }}\",\n  \"database_url\": \"{{ $json.databaseUrl }}\",\n  \"metadata\": {\n    \"session_id\": \"{{ $json.sessionId }}\",\n    \"source\": \"n8n_chat\"\n  }\n}",
         "options": {
-          "timeout": 40000
+          "timeout": 60000,
+          "retry": {
+            "enabled": true,
+            "maxRetries": 2,
+            "retryDelay": 1000
+          }
         }
       },
       "id": "call-gating",
@@ -63,7 +50,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const gatingResult = $input.item.json;\n\n// ตรวจสอบว่าเป็น wisdom_moment หรือ needs_support\nconst isSpecial = ['wisdom_moment', 'needs_support'].includes(gatingResult.routing);\n\n// สร้าง response\nconst response = {\n  success: true,\n  message: gatingResult.response || gatingResult.output || 'คำตอบจาก AI',\n  sessionId: $('Validate Input').item.json.sessionId,\n  classification: gatingResult.routing,\n  ethicalScores: gatingResult.ethical_scores,\n  growthStage: gatingResult.growth_stage,\n  detectedLanguage: gatingResult.detected_language,\n  reflectionPrompt: gatingResult.reflection_prompt,\n  gentleGuidance: gatingResult.gentle_guidance,\n  isSpecialMoment: isSpecial\n};\n\nconsole.log('✅ Response prepared:', { classification: response.classification });\n\nreturn { json: response };"
+        "jsCode": "// ✅ Extract gating result\nconst gatingResult = $input.item.json;\n\nconsole.log('🛡️ Gating result:', {\n  routing: gatingResult.routing,\n  hasResponse: !!gatingResult.response,\n  language: gatingResult.detected_language\n});\n\n// ✅ Determine if special moment\nconst isSpecial = ['wisdom_moment', 'needs_support'].includes(gatingResult.routing);\n\n// ✅ Build response\nconst response = {\n  success: true,\n  message: gatingResult.response || gatingResult.output || 'ได้รับคำตอบแล้ว',\n  sessionId: $('Validate Input').item.json.sessionId,\n  classification: gatingResult.routing || 'neutral_interaction',\n  ethicalScores: gatingResult.ethical_scores || {},\n  growthStage: gatingResult.growth_stage || 2,\n  detectedLanguage: gatingResult.detected_language || 'th',\n  reflectionPrompt: gatingResult.reflection_prompt || null,\n  gentleGuidance: gatingResult.gentle_guidance || null,\n  isSpecialMoment: isSpecial\n};\n\nconsole.log('✅ Response prepared');\n\nreturn { json: response };"
       },
       "id": "format-response",
       "name": "Format Response",
@@ -85,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Error Handler\nconst error = $input.item.json.error || $input.item.json;\n\nconsole.error('❌ Workflow error:', error);\n\nreturn {\n  json: {\n    success: false,\n    error: 'เกิดข้อผิดพลาดในการประมวลผล',\n    details: error.message || 'Unknown error',\n    classification: 'error'\n  }\n};"
+        "jsCode": "// ✅ Error Handler with detailed logging\nconst error = $input.item.json;\n\nconsole.error('❌ Workflow error:', {\n  message: error.message,\n  httpCode: error.httpCode,\n  nodeName: error.node?.name,\n  details: error\n});\n\n// ✅ Return user-friendly error\nreturn {\n  json: {\n    success: false,\n    message: 'ขออภัย ระบบไม่สามารถประมวลผลได้ในขณะนี้',\n    error: error.message || 'Unknown error',\n    classification: 'error',\n    hint: 'Gating Service อาจกำลังเริ่มต้น กรุณาลองใหม่อีกครั้ง'\n  }\n};"
       },
       "id": "error-handler",
       "name": "Error Handler",
@@ -140,13 +127,14 @@
       ]
     }
   },
-  "active": true,
   "settings": {
     "executionOrder": "v1",
     "saveExecutionProgress": true,
     "saveManualExecutions": true,
-    "executionTimeout": 60,
-    "timezone": "Asia/Bangkok"
+    "executionTimeout": 90,
+    "timezone": "Asia/Bangkok",
+    "errorWorkflow": ""
   },
+  "active": true,
   "tags": ["chat", "production", "webhook"]
 }
