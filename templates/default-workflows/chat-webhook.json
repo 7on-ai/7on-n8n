@@ -1,4 +1,5 @@
 {
+  "name": "Chat Webhook Handler",
   "nodes": [
     {
       "parameters": {
@@ -16,13 +17,59 @@
     },
     {
       "parameters": {
-        "jsCode": "// ✅ Read directly from webhook body\nconst body = $input.item.json.body || $input.item.json;\n\nconst userId = body.userId || 'unknown';\nconst message = body.message || '';\nconst sessionId = body.sessionId || '';\n\n// Log for debugging\nconsole.log('Received data:', { userId, message, sessionId });\n\n// Process message\nconst aiResponse = message ? `Echo: ${message}` : 'No message received';\n\n// Create response\nconst response = {\n  success: true,\n  response: aiResponse,\n  sessionId: sessionId,\n  metadata: {\n    classification: 'neutral_interaction',\n    ethical_scores: {\n      self_awareness: 0.5,\n      emotional_regulation: 0.5,\n      compassion: 0.5\n    },\n    growth_stage: 2,\n    timestamp: new Date().toISOString(),\n    userId: userId\n  }\n};\n\nreturn response;"
+        "jsCode": "// ✅ อ่านข้อมูลจาก webhook\nconst body = $input.item.json.body || $input.item.json;\nconst userId = body.userId;\nconst message = body.message;\nconst sessionId = body.sessionId;\nconst databaseUrl = body.databaseUrl;\n\nconsole.log('📥 Received:', { userId, sessionId, messageLength: message?.length });\n\nif (!userId || !message) {\n  throw new Error('Missing userId or message');\n}\n\n// ส่งต่อไปยัง Gating Service\nreturn {\n  json: {\n    userId,\n    message,\n    sessionId,\n    databaseUrl\n  }\n};"
       },
-      "id": "process-message",
-      "name": "Process Message",
+      "id": "validate-input",
+      "name": "Validate Input",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [464, 304]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://gating-service:8080/gating/ethical-route",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{ $json.userId }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.message }}"
+            },
+            {
+              "name": "database_url",
+              "value": "={{ $json.databaseUrl }}"
+            },
+            {
+              "name": "metadata",
+              "value": "={{ { session_id: $json.sessionId, source: 'n8n_chat' } }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 40000
+        }
+      },
+      "id": "call-gating",
+      "name": "Call Gating Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [688, 304]
+    },
+    {
+      "parameters": {
+        "jsCode": "const gatingResult = $input.item.json;\n\n// ตรวจสอบว่าเป็น wisdom_moment หรือ needs_support\nconst isSpecial = ['wisdom_moment', 'needs_support'].includes(gatingResult.routing);\n\n// สร้าง response\nconst response = {\n  success: true,\n  message: gatingResult.response || gatingResult.output || 'คำตอบจาก AI',\n  sessionId: $('Validate Input').item.json.sessionId,\n  classification: gatingResult.routing,\n  ethicalScores: gatingResult.ethical_scores,\n  growthStage: gatingResult.growth_stage,\n  detectedLanguage: gatingResult.detected_language,\n  reflectionPrompt: gatingResult.reflection_prompt,\n  gentleGuidance: gatingResult.gentle_guidance,\n  isSpecialMoment: isSpecial\n};\n\nconsole.log('✅ Response prepared:', { classification: response.classification });\n\nreturn { json: response };"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [912, 304]
     },
     {
       "parameters": {
@@ -34,7 +81,17 @@
       "name": "Send Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [688, 304]
+      "position": [1136, 304]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Error Handler\nconst error = $input.item.json.error || $input.item.json;\n\nconsole.error('❌ Workflow error:', error);\n\nreturn {\n  json: {\n    success: false,\n    error: 'เกิดข้อผิดพลาดในการประมวลผล',\n    details: error.message || 'Unknown error',\n    classification: 'error'\n  }\n};"
+      },
+      "id": "error-handler",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [912, 504]
     }
   ],
   "connections": {
@@ -42,14 +99,36 @@
       "main": [
         [
           {
-            "node": "Process Message",
+            "node": "Validate Input",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Process Message": {
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Call Gating Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Gating Service": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
       "main": [
         [
           {
@@ -61,10 +140,13 @@
       ]
     }
   },
-  "pinData": {},
-  "meta": {
-    "instanceId": "67ba5ddb62e569b8e74a52ebb7268831f7fa62f29153828135238c32f4cae0fc"
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "executionTimeout": 60,
+    "timezone": "Asia/Bangkok"
   },
-  "name": "Chat Webhook Handler",
-  "active": true
+  "tags": ["chat", "production", "webhook"]
 }

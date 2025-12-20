@@ -112,10 +112,12 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                     continue;
                 }
                 
-                // ✅ Check if this is a cron workflow
+                // ✅ Check if this is a cron workflow or chat webhook
                 const isCronWorkflow = file.includes('cron') || 
                                      workflowData.tags?.includes('cron') ||
                                      workflowData.tags?.includes('session-processing');
+                
+                const isChatWebhook = file.includes('chat-webhook');
                 
                 // ✅ Store original active status from template
                 const shouldBeActive = workflowData.active === true;
@@ -207,8 +209,44 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                                 }
                             );
                             console.log(`   ✅ Workflow activated successfully`);
+                            
+                            // ✅ NEW: Verify Chat Webhook activation
+                            if (isChatWebhook) {
+                                console.log('🔍 Verifying Chat Webhook activation...');
+                                
+                                // Wait 5 seconds for workflow to fully activate
+                                await new Promise(resolve => setTimeout(resolve, 5000));
+                                
+                                const verifyResponse = await axios.get(
+                                    `${baseUrl}/rest/workflows/${workflowId}`,
+                                    {
+                                        timeout: 30000,
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Cookie': cookieHeader
+                                        }
+                                    }
+                                );
+                                
+                                if (verifyResponse.status === 200) {
+                                    const verifiedWorkflow = verifyResponse.data.data || verifyResponse.data;
+                                    if (verifiedWorkflow.active === true) {
+                                        console.log('   ✅ Chat Webhook is ACTIVE and verified');
+                                    } else {
+                                        console.warn('   ⚠️  Chat Webhook imported but NOT ACTIVE after verification');
+                                        console.warn('   📋 Verification response:', JSON.stringify(verifiedWorkflow, null, 2));
+                                    }
+                                } else {
+                                    console.warn('   ⚠️  Could not verify Chat Webhook status');
+                                }
+                            }
+                            
                         } catch (activateError) {
                             console.log(`   ⚠️  Could not activate workflow: ${activateError.message}`);
+                            if (activateError.response) {
+                                console.error('   📊 Response status:', activateError.response.status);
+                                console.error('   📋 Response data:', activateError.response.data);
+                            }
                         }
                     }
                     
