@@ -1,5 +1,5 @@
 // scripts/import-workflows.js
-// ✅ ULTIMATE FIX: Activate IMMEDIATELY after each import
+// ✅ FIXED: Import workflows with active: true directly
 
 const axios = require('axios');
 const fs = require('fs');
@@ -27,6 +27,7 @@ async function importWorkflows() {
     }
 
     try {
+        // Login to N8N
         const loginPayload = {
             emailOrLdapLoginId: email,
             password: password
@@ -49,8 +50,9 @@ async function importWorkflows() {
         let totalImported = 0;
         const workflowIdMap = {};
         
+        // Import workflows from templates
         for (const template of workflowTemplates) {
-            console.log(`\n📂 Processing template category: ${template}`);
+            console.log(`📂 Processing template category: ${template}`);
             const result = await importWorkflowTemplate(baseUrl, template, cookieHeader, userId);
             totalImported += result.count;
             Object.assign(workflowIdMap, result.workflowIds);
@@ -60,12 +62,7 @@ async function importWorkflows() {
         
         if (Object.keys(workflowIdMap).length > 0) {
             console.log('\n📋 Workflow Summary:');
-            for (const [filename, info] of Object.entries(workflowIdMap)) {
-                const statusIcon = info.active ? '🟢' : '⏸️';
-                console.log(`   ${statusIcon} ${info.name} (${info.id})`);
-                console.log(`      - Status: ${info.active ? 'ACTIVE/PUBLISHED' : 'INACTIVE'}`);
-                console.log(`      - Needs Credentials: ${info.needsCredentials ? 'Yes' : 'No'}`);
-            }
+            console.log(JSON.stringify(workflowIdMap, null, 2));
         }
 
     } catch (error) {
@@ -105,12 +102,12 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
         for (const file of files) {
             try {
                 const workflowPath = path.join(templatePath, file);
-                console.log(`\n📄 Processing: ${file}`);
+                console.log(`📄 Reading workflow file: ${workflowPath}`);
                 
                 const workflowData = JSON.parse(fs.readFileSync(workflowPath, 'utf8'));
                 
                 if (!workflowData.nodes || !Array.isArray(workflowData.nodes)) {
-                    console.log(`⚠️  Invalid workflow structure, skipping...`);
+                    console.log(`⚠️  Invalid workflow structure in ${file}, skipping...`);
                     continue;
                 }
                 
@@ -118,47 +115,51 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                                      workflowData.tags?.includes('cron') ||
                                      workflowData.tags?.includes('session-processing');
                 
-                // ✅ Get original active status
+                // ✅ FIX: Get original active status from template
                 const shouldBeActive = workflowData.active === true;
                 
                 if (isCronWorkflow) {
-                    console.log(`   🔧 Cron workflow detected`);
+                    console.log(`🔧 Processing cron workflow: ${file}`);
+                    console.log(`   📌 Will be imported as: ${shouldBeActive ? 'ACTIVE' : 'INACTIVE'}`);
                     
                     // Remove credentials
                     workflowData.nodes = workflowData.nodes.map(node => {
                         if (node.credentials) {
+                            console.log(`   ⚠️  Removing credentials from node: ${node.name}`);
                             const { credentials, ...nodeWithoutCreds } = node;
                             return nodeWithoutCreds;
                         }
                         return node;
                     });
                     
-                    // Inject userId
+                    // Inject userId into staticData
                     if (workflowData.staticData) {
                         if (workflowData.staticData.userId === "PLACEHOLDER_WILL_BE_REPLACED") {
                             workflowData.staticData.userId = userId;
+                            console.log(`   ✅ Injected userId into staticData: ${userId}`);
                         }
                     } else {
                         workflowData.staticData = { userId: userId };
+                        console.log(`   ✅ Created staticData with userId: ${userId}`);
                     }
-                    
-                    console.log(`   ✅ Injected userId: ${userId}`);
                 }
                 
-                // ✅ STEP 1: Import as INACTIVE first
-                console.log(`   📥 Importing workflow...`);
+                console.log(`📥 Importing workflow: ${file}`);
                 
+                // ✅ KEY FIX: Import with correct active status from template
                 const workflowPayload = {
                     name: workflowData.name || file.replace('.json', ''),
                     nodes: workflowData.nodes,
                     connections: workflowData.connections || {},
-                    active: false, // ← Always import inactive first
+                    active: shouldBeActive, // ✅ Use original active status
                     settings: workflowData.settings || {},
                     staticData: workflowData.staticData || {},
                     tags: workflowData.tags || []
                 };
 
-                const importResponse = await axios.post(`${baseUrl}/rest/workflows`, workflowPayload, {
+                console.log(`   📌 Importing as: ${shouldBeActive ? 'ACTIVE ✅' : 'INACTIVE ⏸️'}`);
+
+                const response = await axios.post(`${baseUrl}/rest/workflows`, workflowPayload, {
                     timeout: 30000,
                     headers: {
                         'Content-Type': 'application/json',
@@ -166,83 +167,38 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                     }
                 });
 
-                if (importResponse.status !== 200 && importResponse.status !== 201) {
-                    console.log(`⚠️  Unexpected response: ${importResponse.status}`);
-                    continue;
-                }
-
-                const workflowId = importResponse.data.data?.id || importResponse.data.id;
-                
-                if (!workflowId) {
-                    console.log(`❌ No workflow ID returned`);
-                    continue;
-                }
-                
-                console.log(`   ✅ Imported: ID ${workflowId}`);
-
-                let isActive = false;
-
-                // ✅ STEP 2: Activate immediately if should be active
-                if (shouldBeActive) {
-                    console.log(`   🔄 Activating workflow...`);
+                if (response.status === 200 || response.status === 201) {
+                    const workflowId = response.data.data?.id || response.data.id;
+                    console.log(`✅ Successfully imported: ${file} (ID: ${workflowId})`);
+                    console.log(`   📍 Status: ${shouldBeActive ? 'ACTIVE ✅' : 'INACTIVE ⏸️'}`);
                     
-                    try {
-                        // Small delay to ensure workflow is saved
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                        
-                        const activateResponse = await axios.patch(
-                            `${baseUrl}/rest/workflows/${workflowId}`,
-                            { active: true },
-                            {
-                                timeout: 30000,
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Cookie': cookieHeader
-                                }
-                            }
-                        );
-
-                        if (activateResponse.status === 200) {
-                            console.log(`   ✅ ACTIVATED & PUBLISHED! 🎉`);
-                            isActive = true;
-                        } else {
-                            console.log(`   ⚠️  Activation response: ${activateResponse.status}`);
-                        }
-                    } catch (activateError) {
-                        console.error(`   ❌ Activation failed:`, activateError.message);
-                        if (activateError.response) {
-                            console.error(`      Status: ${activateError.response.status}`);
-                            console.error(`      Data:`, activateError.response.data);
-                        }
-                    }
+                    workflowIds[file] = {
+                        id: workflowId,
+                        name: workflowData.name,
+                        needsCredentials: isCronWorkflow,
+                        active: shouldBeActive,
+                        originalActiveStatus: workflowData.active,
+                        hasUserId: !!workflowData.staticData?.userId
+                    };
+                    
+                    importedCount++;
                 } else {
-                    console.log(`   ℹ️  Workflow set to remain inactive`);
+                    console.log(`⚠️  Unexpected response for ${file}: ${response.status}`);
                 }
-                
-                workflowIds[file] = {
-                    id: workflowId,
-                    name: workflowData.name,
-                    needsCredentials: isCronWorkflow,
-                    active: isActive,
-                    originalActiveStatus: workflowData.active,
-                    hasUserId: !!workflowData.staticData?.userId
-                };
-                
-                importedCount++;
                 
                 // Small delay between imports
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                await new Promise(resolve => setTimeout(resolve, 1000));
                 
             } catch (fileError) {
-                console.error(`❌ Error with ${file}:`, fileError.message);
+                console.error(`❌ Error importing ${file}:`, fileError.message);
                 if (fileError.response) {
-                    console.error(`   Status:`, fileError.response.status);
-                    console.error(`   Data:`, fileError.response.data);
+                    console.error(`📊 Response status:`, fileError.response.status);
+                    console.error(`📋 Response data:`, fileError.response.data);
                 }
             }
         }
     } catch (error) {
-        console.error(`❌ Template processing error:`, error.message);
+        console.error(`❌ Error processing template ${templateName}:`, error.message);
     }
     
     return { count: importedCount, workflowIds };
@@ -251,11 +207,13 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
 // Main execution
 importWorkflows()
     .then(() => {
-        console.log('\n🎉 Workflow import & activation completed!');
-        console.log('📌 All workflows with active:true are now PUBLISHED');
+        console.log('🎉 Workflow import process completed');
+        console.log('\n📌 Workflows imported with their original active status!');
+        console.log('   ℹ️  Active workflows will run automatically');
+        console.log('   ℹ️  Inactive workflows can be activated via API or UI later');
         process.exit(0);
     })
     .catch(error => {
-        console.error('\n💥 Import failed:', error.message);
+        console.error('💥 Failed to import workflows:', error.message);
         process.exit(1);
     });
