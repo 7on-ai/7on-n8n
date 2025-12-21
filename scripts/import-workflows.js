@@ -1,5 +1,5 @@
 // scripts/import-workflows.js
-// ✅ FIXED: Auto-activate workflows after import
+// ✅ FIXED: Import workflows with active: true directly
 
 const axios = require('axios');
 const fs = require('fs');
@@ -27,6 +27,7 @@ async function importWorkflows() {
     }
 
     try {
+        // Login to N8N
         const loginPayload = {
             emailOrLdapLoginId: email,
             password: password
@@ -49,6 +50,7 @@ async function importWorkflows() {
         let totalImported = 0;
         const workflowIdMap = {};
         
+        // Import workflows from templates
         for (const template of workflowTemplates) {
             console.log(`📂 Processing template category: ${template}`);
             const result = await importWorkflowTemplate(baseUrl, template, cookieHeader, userId);
@@ -56,46 +58,7 @@ async function importWorkflows() {
             Object.assign(workflowIdMap, result.workflowIds);
         }
 
-        console.log(`🎉 Successfully imported ${totalImported} workflows`);
-        
-        // ✅ NEW: Auto-activate all workflows
-        console.log('\n🔄 Auto-activating workflows...');
-        let activatedCount = 0;
-        
-        for (const [filename, info] of Object.entries(workflowIdMap)) {
-            try {
-                // ✅ Activate all workflows that should be active from template
-                if (info.shouldBeActive && info.id) {
-                    console.log(`   🔄 Activating: ${info.name} (${info.id})`);
-                    
-                    const activateResponse = await axios.patch(
-                        `${baseUrl}/rest/workflows/${info.id}`,
-                        { active: true },
-                        {
-                            timeout: 30000,
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Cookie': cookieHeader
-                            }
-                        }
-                    );
-
-                    if (activateResponse.status === 200) {
-                        console.log(`   ✅ Activated: ${info.name}`);
-                        activatedCount++;
-                    } else {
-                        console.log(`   ⚠️  Activation returned: ${activateResponse.status}`);
-                    }
-                    
-                    // Small delay between activations
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-            } catch (activateError) {
-                console.error(`   ❌ Failed to activate ${info.name}:`, activateError.message);
-            }
-        }
-        
-        console.log(`\n✅ Activated ${activatedCount} workflows`);
+        console.log(`\n🎉 Successfully imported ${totalImported} workflows`);
         
         if (Object.keys(workflowIdMap).length > 0) {
             console.log('\n📋 Workflow Summary:');
@@ -152,13 +115,14 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                                      workflowData.tags?.includes('cron') ||
                                      workflowData.tags?.includes('session-processing');
                 
-                // ✅ Store original active status from template
+                // ✅ FIX: Get original active status from template
                 const shouldBeActive = workflowData.active === true;
                 
                 if (isCronWorkflow) {
                     console.log(`🔧 Processing cron workflow: ${file}`);
-                    console.log(`   📌 Template active status: ${shouldBeActive}`);
+                    console.log(`   📌 Will be imported as: ${shouldBeActive ? 'ACTIVE' : 'INACTIVE'}`);
                     
+                    // Remove credentials
                     workflowData.nodes = workflowData.nodes.map(node => {
                         if (node.credentials) {
                             console.log(`   ⚠️  Removing credentials from node: ${node.name}`);
@@ -168,6 +132,7 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                         return node;
                     });
                     
+                    // Inject userId into staticData
                     if (workflowData.staticData) {
                         if (workflowData.staticData.userId === "PLACEHOLDER_WILL_BE_REPLACED") {
                             workflowData.staticData.userId = userId;
@@ -181,16 +146,18 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                 
                 console.log(`📥 Importing workflow: ${file}`);
                 
-                // ✅ Import as INACTIVE first (will activate later)
+                // ✅ KEY FIX: Import with correct active status from template
                 const workflowPayload = {
                     name: workflowData.name || file.replace('.json', ''),
                     nodes: workflowData.nodes,
                     connections: workflowData.connections || {},
-                    active: false, // Always import inactive
+                    active: shouldBeActive, // ✅ Use original active status
                     settings: workflowData.settings || {},
                     staticData: workflowData.staticData || {},
                     tags: workflowData.tags || []
                 };
+
+                console.log(`   📌 Importing as: ${shouldBeActive ? 'ACTIVE ✅' : 'INACTIVE ⏸️'}`);
 
                 const response = await axios.post(`${baseUrl}/rest/workflows`, workflowPayload, {
                     timeout: 30000,
@@ -203,13 +170,13 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                 if (response.status === 200 || response.status === 201) {
                     const workflowId = response.data.data?.id || response.data.id;
                     console.log(`✅ Successfully imported: ${file} (ID: ${workflowId})`);
+                    console.log(`   📍 Status: ${shouldBeActive ? 'ACTIVE ✅' : 'INACTIVE ⏸️'}`);
                     
-                    // ✅ Store workflow info with activation flag
                     workflowIds[file] = {
                         id: workflowId,
                         name: workflowData.name,
                         needsCredentials: isCronWorkflow,
-                        shouldBeActive: shouldBeActive, // Will be activated after all imports
+                        active: shouldBeActive,
                         originalActiveStatus: workflowData.active,
                         hasUserId: !!workflowData.staticData?.userId
                     };
@@ -241,7 +208,9 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
 importWorkflows()
     .then(() => {
         console.log('🎉 Workflow import process completed');
-        console.log('\n📌 All workflows imported and activated!');
+        console.log('\n📌 Workflows imported with their original active status!');
+        console.log('   ℹ️  Active workflows will run automatically');
+        console.log('   ℹ️  Inactive workflows can be activated via API or UI later');
         process.exit(0);
     })
     .catch(error => {
