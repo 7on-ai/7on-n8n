@@ -34,7 +34,11 @@ if [ $counter -ge $timeout ]; then
     exit 1
 fi
 
-# ===== ✅ FIX: Get Postgres connection FIRST =====
+# Additional stability wait
+echo "⏳ Waiting 15s for N8N to stabilize..."
+sleep 15
+
+# ===== Get Database Connection =====
 echo ""
 echo "=== STEP 0: GET DATABASE CONNECTION ==="
 
@@ -50,9 +54,6 @@ elif [ -n "$DATABASE_URL" ]; then
     echo "✅ Using DATABASE_URL (Neon)"
 else
     echo "❌ No database connection string found!"
-    echo "Available env vars:"
-    env | grep -i postgres || echo "  (none)"
-    env | grep -i database || echo "  (none)"
     exit 1
 fi
 
@@ -84,6 +85,10 @@ else
     exit 1
 fi
 
+# ✅ FIX: Wait before importing workflows
+echo "⏳ Waiting 10s before workflow import..."
+sleep 10
+
 # Step 3: Import workflow templates
 echo ""
 echo "=== STEP 3: IMPORT WORKFLOW TEMPLATES ==="
@@ -92,6 +97,11 @@ if node /scripts/import-workflows.js; then
 else
     echo "⚠️  Failed to import workflow templates (continuing...)"
 fi
+
+# ✅ NEW: Force activate all workflows via REST API
+echo ""
+echo "=== STEP 3.5: FORCE ACTIVATE WORKFLOWS ==="
+node /scripts/activate-workflows.js || echo "⚠️  Activation script had warnings"
 
 # Step 4: Store credentials to Neon
 echo ""
