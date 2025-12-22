@@ -1,5 +1,5 @@
 // scripts/activate-workflows.js
-// ✅ Force activate ALL workflows that should be active
+// ✅ FIXED: Use proper publish endpoint for n8n new version
 
 const axios = require('axios');
 
@@ -57,25 +57,55 @@ async function activateAllWorkflows() {
             return;
         }
 
-        let activatedCount = 0;
+        let publishedCount = 0;
         let alreadyActiveCount = 0;
         let failedCount = 0;
 
-        // Activate each workflow
+        // ✅ NEW: Publish each workflow using correct endpoint
         for (const workflow of workflows) {
             try {
                 console.log(`🔍 Checking: ${workflow.name} (ID: ${workflow.id})`);
                 
-                // Check current status
+                // Check if already active (published)
                 if (workflow.active === true) {
-                    console.log(`   ✅ Already active\n`);
+                    console.log(`   ✅ Already published and active\n`);
                     alreadyActiveCount++;
                     continue;
                 }
 
-                // ✅ Activate workflow
-                console.log(`   🔄 Activating...`);
-                const activateResponse = await axios.patch(
+                // ✅ METHOD 1: Try using /activate endpoint (most direct)
+                console.log(`   🔄 Publishing workflow...`);
+                
+                try {
+                    const activateResponse = await axios.post(
+                        `${baseUrl}/rest/workflows/${workflow.id}/activate`,
+                        {},
+                        {
+                            timeout: 30000,
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Cookie': cookieHeader
+                            }
+                        }
+                    );
+
+                    if (activateResponse.status === 200) {
+                        console.log(`   ✅ Published via /activate endpoint!\n`);
+                        publishedCount++;
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        continue;
+                    }
+                } catch (activateError) {
+                    // If /activate doesn't exist, try PATCH method
+                    if (activateError.response?.status === 404) {
+                        console.log(`   ⚠️  /activate endpoint not found, trying PATCH...`);
+                    } else {
+                        throw activateError;
+                    }
+                }
+
+                // ✅ METHOD 2: Use PATCH with active:true
+                const patchResponse = await axios.patch(
                     `${baseUrl}/rest/workflows/${workflow.id}`,
                     { active: true },
                     {
@@ -87,39 +117,48 @@ async function activateAllWorkflows() {
                     }
                 );
 
-                if (activateResponse.status === 200) {
-                    console.log(`   ✅ Successfully activated!\n`);
-                    activatedCount++;
+                if (patchResponse.status === 200) {
+                    console.log(`   ✅ Published via PATCH!\n`);
+                    publishedCount++;
                 } else {
-                    console.log(`   ⚠️  Activation returned: ${activateResponse.status}\n`);
+                    console.log(`   ⚠️  PATCH returned: ${patchResponse.status}\n`);
                     failedCount++;
                 }
                 
-                // Small delay between activations
+                // Small delay between operations
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 
-            } catch (activateError) {
-                console.error(`   ❌ Failed to activate:`, activateError.message);
-                console.error(`      ${activateError.response?.data || ''}\n`);
+            } catch (workflowError) {
+                console.error(`   ❌ Failed to publish:`, workflowError.message);
+                if (workflowError.response) {
+                    console.error(`      Status: ${workflowError.response.status}`);
+                    console.error(`      Data:`, workflowError.response.data);
+                }
+                console.error('');
                 failedCount++;
             }
         }
 
         console.log('\n========================================');
-        console.log('📊 Activation Summary:');
-        console.log(`   ✅ Activated: ${activatedCount}`);
+        console.log('📊 Publish Summary:');
+        console.log(`   ✅ Published: ${publishedCount}`);
         console.log(`   ℹ️  Already active: ${alreadyActiveCount}`);
         console.log(`   ❌ Failed: ${failedCount}`);
         console.log(`   📋 Total: ${workflows.length}`);
         console.log('========================================\n');
 
-        if (activatedCount > 0) {
-            console.log('🎉 Workflows activated successfully!');
-            console.log('   All active workflows are now published and ready to use.');
+        if (publishedCount > 0) {
+            console.log('🎉 Workflows published successfully!');
+            console.log('   All active workflows are now live.');
+        }
+
+        if (failedCount > 0) {
+            console.warn(`⚠️  ${failedCount} workflows failed to publish`);
+            console.warn('   You may need to publish them manually via UI');
         }
 
     } catch (error) {
-        console.error('❌ Error in activation process:', error.message);
+        console.error('❌ Error in publish process:', error.message);
         if (error.response) {
             console.error('📊 Response status:', error.response.status);
             console.error('📋 Response data:', JSON.stringify(error.response.data, null, 2));
@@ -131,10 +170,10 @@ async function activateAllWorkflows() {
 // Main execution
 activateAllWorkflows()
     .then(() => {
-        console.log('🎉 Activation process completed');
+        console.log('🎉 Publish process completed');
         process.exit(0);
     })
     .catch(error => {
-        console.error('💥 Failed to activate workflows:', error.message);
+        console.error('💥 Failed to publish workflows:', error.message);
         process.exit(1);
     });
