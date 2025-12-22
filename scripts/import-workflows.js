@@ -1,5 +1,5 @@
 // scripts/import-workflows.js
-// ✅ FIXED FOR n8n 2.0: Import และ PUBLISH workflow (ไม่ใช่แค่ activate)
+// ✅ FINAL FIX: ใช้ POST /activate เหมือน UI ทำ
 
 const axios = require('axios');
 const fs = require('fs');
@@ -12,7 +12,7 @@ async function importWorkflows() {
     const userId = process.env.USER_ID;
     const workflowTemplates = process.env.WORKFLOW_TEMPLATES?.split(',') || ['default'];
 
-    console.log('🔐 Logging in to N8N 2.0...');
+    console.log('🔐 Logging in to N8N...');
     console.log(`📧 Email: ${email}`);
     console.log(`🔗 Base URL: ${baseUrl}`);
 
@@ -37,7 +37,7 @@ async function importWorkflows() {
         const cookies = loginResponse.headers['set-cookie'];
         const cookieHeader = cookies?.join('; ') || '';
         
-        console.log('✅ Successfully logged in to N8N 2.0\n');
+        console.log('✅ Successfully logged in to N8N\n');
 
         let totalImported = 0;
         let totalPublished = 0;
@@ -53,7 +53,7 @@ async function importWorkflows() {
         }
 
         console.log(`\n========================================`);
-        console.log(`📊 Import Summary (n8n 2.0):`);
+        console.log(`📊 Import Summary:`);
         console.log(`   ✅ Imported: ${totalImported} workflows`);
         console.log(`   🚀 Published: ${totalPublished} workflows`);
         console.log(`========================================\n`);
@@ -126,14 +126,14 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                     console.log(`   ✅ Injected userId`);
                 }
                 
-                // ✅ STEP 1: Import workflow as DRAFT (n8n 2.0)
-                console.log(`   📥 Importing as draft...`);
+                // ✅ STEP 1: Import workflow as DRAFT
+                console.log(`   📥 Importing workflow...`);
                 
                 const importPayload = {
                     name: workflowData.name || file.replace('.json', ''),
                     nodes: workflowData.nodes,
                     connections: workflowData.connections || {},
-                    active: false, // ✅ Always import as draft first
+                    active: false, // ✅ Always import as draft
                     settings: workflowData.settings || {},
                     staticData: workflowData.staticData || {},
                     tags: workflowData.tags || []
@@ -157,10 +157,10 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                 }
 
                 const workflowId = importResponse.data.data?.id || importResponse.data.id;
-                console.log(`   ✅ Imported as draft (ID: ${workflowId})`);
+                console.log(`   ✅ Imported (ID: ${workflowId})`);
                 importedCount++;
                 
-                // ✅ STEP 2: PUBLISH workflow (n8n 2.0 required)
+                // ✅ STEP 2: PUBLISH using /activate endpoint (exactly like UI)
                 if (shouldPublish) {
                     console.log(`   🚀 Publishing workflow...`);
                     
@@ -168,28 +168,10 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                     await new Promise(resolve => setTimeout(resolve, 3000));
                     
                     try {
-                        // ✅ Get current workflow version first
-                        const getResponse = await axios.get(
-                            `${baseUrl}/rest/workflows/${workflowId}`,
-                            {
-                                timeout: 15000,
-                                headers: {
-                                    'Cookie': cookieHeader
-                                }
-                            }
-                        );
-
-                        const currentWorkflow = getResponse.data.data || getResponse.data;
-                        
-                        // ✅ PUBLISH by updating with active:true (n8n 2.0 way)
-                        const publishPayload = {
-                            ...currentWorkflow,
-                            active: true
-                        };
-
-                        const publishResponse = await axios.put(
-                            `${baseUrl}/rest/workflows/${workflowId}`,
-                            publishPayload,
+                        // ✅ USE POST /activate (same as UI does)
+                        const activateResponse = await axios.post(
+                            `${baseUrl}/rest/workflows/${workflowId}/activate`,
+                            {}, // Empty body
                             {
                                 timeout: 15000,
                                 headers: {
@@ -199,7 +181,7 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                             }
                         );
 
-                        if (publishResponse.status === 200) {
+                        if (activateResponse.status === 200) {
                             console.log(`   ✅ Published successfully!`);
                             publishedCount++;
                             
@@ -210,7 +192,7 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                                 active: true
                             };
                         } else {
-                            console.log(`   ⚠️  Publish returned: ${publishResponse.status}`);
+                            console.log(`   ⚠️  Publish returned: ${activateResponse.status}`);
                             workflowIds[file] = {
                                 id: workflowId,
                                 name: workflowData.name,
@@ -261,11 +243,10 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
 // Main execution
 importWorkflows()
     .then(() => {
-        console.log('🎉 n8n 2.0 workflow import completed');
+        console.log('🎉 Workflow import completed');
         process.exit(0);
     })
     .catch(error => {
         console.error('💥 Import failed:', error.message);
         process.exit(1);
     });
-    
