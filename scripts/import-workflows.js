@@ -1,252 +1,227 @@
+#!/usr/bin/env node
+
 // scripts/import-workflows.js
-// ✅ FINAL FIX: ใช้ POST /activate เหมือน UI ทำ
+// ✅ FINAL FIX: ตาม Network Inspector จริง - GET workflow → POST /activate
 
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
 async function importWorkflows() {
-    const baseUrl = process.env.N8N_EDITOR_BASE_URL;
-    const email = process.env.N8N_USER_EMAIL;
-    const password = process.env.N8N_USER_PASSWORD;
-    const userId = process.env.USER_ID;
-    const workflowTemplates = process.env.WORKFLOW_TEMPLATES?.split(',') || ['default'];
-
-    console.log('🔐 Logging in to N8N...');
-    console.log(`📧 Email: ${email}`);
-    console.log(`🔗 Base URL: ${baseUrl}`);
-
-    if (!baseUrl || !email || !password || !userId) {
-        throw new Error('Missing required environment variables');
-    }
-
-    try {
-        // Login to N8N
-        const loginResponse = await axios.post(`${baseUrl}/rest/login`, {
-            emailOrLdapLoginId: email,
-            password: password
-        }, {
-            timeout: 30000,
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        if (loginResponse.status !== 200) {
-            throw new Error(`Login failed with status: ${loginResponse.status}`);
-        }
-
-        const cookies = loginResponse.headers['set-cookie'];
-        const cookieHeader = cookies?.join('; ') || '';
-        
-        console.log('✅ Successfully logged in to N8N\n');
-
-        let totalImported = 0;
-        let totalPublished = 0;
-        const workflowIdMap = {};
-        
-        // Import workflows from templates
-        for (const template of workflowTemplates) {
-            console.log(`📂 Processing template: ${template}`);
-            const result = await importWorkflowTemplate(baseUrl, template, cookieHeader, userId);
-            totalImported += result.imported;
-            totalPublished += result.published;
-            Object.assign(workflowIdMap, result.workflowIds);
-        }
-
-        console.log(`\n========================================`);
-        console.log(`📊 Import Summary:`);
-        console.log(`   ✅ Imported: ${totalImported} workflows`);
-        console.log(`   🚀 Published: ${totalPublished} workflows`);
-        console.log(`========================================\n`);
-
-    } catch (error) {
-        console.error('❌ Error in workflow import:', error.message);
-        if (error.response) {
-            console.error('Response:', error.response.status, error.response.data);
-        }
-        throw error;
-    }
-}
-
-async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userId) {
-    let importedCount = 0;
-    let publishedCount = 0;
-    const workflowIds = {};
+    const baseUrl = process.env.N8N_EDITOR_BASE_URL || 'http://localhost:5678';
+    const templateSet = process.env.WORKFLOW_TEMPLATES || 'default';
     
-    try {
-        const templatePath = path.join('/templates', 
-            templateName === 'default' ? 'default-workflows' : 'custom-workflows'
-        );
-        
-        console.log(`📁 Template path: ${templatePath}`);
-        
-        if (!fs.existsSync(templatePath)) {
-            console.log(`⚠️  Directory not found: ${templatePath}`);
-            return { imported: 0, published: 0, workflowIds: {} };
-        }
+    console.log('========================================');
+    console.log('🔧 N8N Workflow Importer (n8n 2.0 Compatible)');
+    console.log('========================================');
+    console.log(`N8N URL: ${baseUrl}`);
+    console.log(`Template Set: ${templateSet}`);
+    console.log('');
 
-        const files = fs.readdirSync(templatePath).filter(file => file.endsWith('.json'));
-        console.log(`📄 Found ${files.length} workflow files`);
-        
-        for (const file of files) {
-            try {
-                const workflowPath = path.join(templatePath, file);
-                console.log(`\n📄 Processing: ${file}`);
-                
-                const workflowData = JSON.parse(fs.readFileSync(workflowPath, 'utf8'));
-                
-                if (!workflowData.nodes || !Array.isArray(workflowData.nodes)) {
-                    console.log(`   ⚠️  Invalid workflow, skipping...`);
-                    continue;
-                }
-                
-                // Check if workflow should be published
-                const shouldPublish = workflowData.active === true;
-                
-                // Handle cron workflows
-                const isCronWorkflow = file.includes('cron') || 
-                                     workflowData.tags?.includes('cron');
-                
-                if (isCronWorkflow) {
-                    console.log(`   🔧 Cron workflow detected`);
-                    
-                    // Remove credentials
-                    workflowData.nodes = workflowData.nodes.map(node => {
-                        if (node.credentials) {
-                            const { credentials, ...nodeWithoutCreds } = node;
-                            return nodeWithoutCreds;
-                        }
-                        return node;
-                    });
-                    
-                    // Inject userId
-                    if (!workflowData.staticData) {
-                        workflowData.staticData = {};
-                    }
-                    workflowData.staticData.userId = userId;
-                    console.log(`   ✅ Injected userId`);
-                }
-                
-                // ✅ STEP 1: Import workflow as DRAFT
-                console.log(`   📥 Importing workflow...`);
-                
-                const importPayload = {
-                    name: workflowData.name || file.replace('.json', ''),
-                    nodes: workflowData.nodes,
-                    connections: workflowData.connections || {},
-                    active: false, // ✅ Always import as draft
-                    settings: workflowData.settings || {},
-                    staticData: workflowData.staticData || {},
-                    tags: workflowData.tags || []
-                };
+    // Determine template directory
+    let templateDir;
+    if (templateSet === 'default') {
+        templateDir = '/templates/default-workflows';
+    } else {
+        templateDir = '/templates/custom-workflows';
+    }
 
-                const importResponse = await axios.post(
-                    `${baseUrl}/rest/workflows`,
-                    importPayload,
+    console.log(`📁 Looking for templates in: ${templateDir}`);
+
+    if (!fs.existsSync(templateDir)) {
+        console.log('⚠️  Template directory not found, skipping workflow import');
+        return { success: true, imported: 0, published: 0 };
+    }
+
+    const files = fs.readdirSync(templateDir).filter(f => f.endsWith('.json'));
+    
+    if (files.length === 0) {
+        console.log('⚠️  No workflow templates found');
+        return { success: true, imported: 0, published: 0 };
+    }
+
+    console.log(`📦 Found ${files.length} workflow template(s)\n`);
+
+    // Login to N8N to get cookies
+    console.log('🔐 Logging into N8N...');
+    const cookies = await loginToN8N(baseUrl);
+    if (!cookies) {
+        throw new Error('Failed to login to N8N');
+    }
+    console.log('✅ Login successful\n');
+
+    let imported = 0;
+    let published = 0;
+
+    for (const file of files) {
+        try {
+            const filePath = path.join(templateDir, file);
+            console.log(`\n📄 Processing: ${file}`);
+            console.log('─────────────────────────────');
+
+            const workflowData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+            const shouldActivate = workflowData.active === true;
+
+            console.log(`   Name: ${workflowData.name || 'Untitled'}`);
+            console.log(`   Should activate: ${shouldActivate ? 'Yes' : 'No'}`);
+
+            // Step 1: Import workflow (always as inactive/draft first)
+            console.log('   ⏳ Step 1: Importing workflow...');
+            const importPayload = {
+                ...workflowData,
+                active: false  // ✅ Always import as inactive first
+            };
+
+            const importResponse = await axios.post(
+                `${baseUrl}/rest/workflows`,
+                importPayload,
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cookie': cookies
+                    },
+                    validateStatus: () => true
+                }
+            );
+
+            if (importResponse.status !== 200 && importResponse.status !== 201) {
+                throw new Error(`Import failed: ${importResponse.status} ${JSON.stringify(importResponse.data)}`);
+            }
+
+            const workflowId = importResponse.data?.data?.id || importResponse.data?.id;
+            if (!workflowId) {
+                throw new Error('No workflow ID returned from import');
+            }
+
+            console.log(`   ✅ Imported successfully (ID: ${workflowId})`);
+            imported++;
+
+            // Step 2: If should activate, wait then activate
+            if (shouldActivate) {
+                console.log('   ⏳ Step 2: Waiting 3 seconds for workflow to be ready...');
+                await new Promise(resolve => setTimeout(resolve, 3000));
+
+                console.log('   ⏳ Step 3: Verifying workflow exists...');
+                // ✅ GET workflow first (like Network Inspector shows)
+                const getResponse = await axios.get(
+                    `${baseUrl}/rest/workflows/${workflowId}`,
                     {
-                        timeout: 30000,
                         headers: {
                             'Content-Type': 'application/json',
-                            'Cookie': cookieHeader
-                        }
+                            'Cookie': cookies
+                        },
+                        validateStatus: () => true
                     }
                 );
 
-                if (importResponse.status !== 200 && importResponse.status !== 201) {
-                    console.log(`   ⚠️  Import failed: ${importResponse.status}`);
-                    continue;
+                if (getResponse.status !== 200) {
+                    throw new Error(`Workflow verification failed: ${getResponse.status}`);
                 }
 
-                const workflowId = importResponse.data.data?.id || importResponse.data.id;
-                console.log(`   ✅ Imported (ID: ${workflowId})`);
-                importedCount++;
-                
-                // ✅ STEP 2: PUBLISH using /activate endpoint (exactly like UI)
-                if (shouldPublish) {
-                    console.log(`   🚀 Publishing workflow...`);
-                    
-                    // Wait for workflow to be ready
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-                    
-                    try {
-                        // ✅ USE POST /activate (same as UI does)
-                        const activateResponse = await axios.post(
-                            `${baseUrl}/rest/workflows/${workflowId}/activate`,
-                            {}, // Empty body
-                            {
-                                timeout: 15000,
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Cookie': cookieHeader
-                                }
-                            }
-                        );
+                console.log('   ✅ Workflow verified');
+                console.log('   ⏳ Step 4: Publishing workflow...');
 
-                        if (activateResponse.status === 200) {
-                            console.log(`   ✅ Published successfully!`);
-                            publishedCount++;
-                            
-                            workflowIds[file] = {
-                                id: workflowId,
-                                name: workflowData.name,
-                                published: true,
-                                active: true
-                            };
-                        } else {
-                            console.log(`   ⚠️  Publish returned: ${activateResponse.status}`);
-                            workflowIds[file] = {
-                                id: workflowId,
-                                name: workflowData.name,
-                                published: false,
-                                needsManualPublish: true
-                            };
-                        }
-                    } catch (publishError) {
-                        console.error(`   ❌ Publish failed:`, publishError.message);
-                        if (publishError.response) {
-                            console.error(`      Status:`, publishError.response.status);
-                            console.error(`      Data:`, JSON.stringify(publishError.response.data));
-                        }
-                        workflowIds[file] = {
-                            id: workflowId,
-                            name: workflowData.name,
-                            published: false,
-                            error: publishError.message
-                        };
+                // ✅ POST to /activate (like Network Inspector shows)
+                const activateResponse = await axios.post(
+                    `${baseUrl}/rest/workflows/${workflowId}/activate`,
+                    {},  // Empty body
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Cookie': cookies
+                        },
+                        validateStatus: () => true
                     }
+                );
+
+                if (activateResponse.status === 200) {
+                    console.log('   ✅ Published successfully!');
+                    published++;
                 } else {
-                    workflowIds[file] = {
-                        id: workflowId,
-                        name: workflowData.name,
-                        published: false,
-                        intentionallyDraft: true
-                    };
+                    console.log(`   ⚠️  Publish failed: ${activateResponse.status}`);
+                    console.log(`   Response:`, JSON.stringify(activateResponse.data, null, 2));
                 }
-                
-                // Delay between workflows
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-            } catch (fileError) {
-                console.error(`   ❌ Error:`, fileError.message);
+            } else {
+                console.log('   ℹ️  Workflow imported as draft (not set to activate)');
+            }
+
+        } catch (error) {
+            console.error(`   ❌ Error processing ${file}:`, error.message);
+            if (error.response) {
+                console.error('   Response data:', JSON.stringify(error.response.data, null, 2));
             }
         }
-    } catch (error) {
-        console.error(`❌ Template error:`, error.message);
     }
-    
-    return { 
-        imported: importedCount, 
-        published: publishedCount,
-        workflowIds 
-    };
+
+    console.log('\n========================================');
+    console.log('📊 Import Summary');
+    console.log('========================================');
+    console.log(`Total files processed: ${files.length}`);
+    console.log(`Successfully imported: ${imported}`);
+    console.log(`Successfully published: ${published}`);
+    console.log('========================================\n');
+
+    return { success: true, imported, published };
+}
+
+async function loginToN8N(baseUrl) {
+    const email = process.env.N8N_USER_EMAIL;
+    const password = process.env.N8N_USER_PASSWORD;
+
+    if (!email || !password) {
+        console.error('❌ Missing N8N credentials (N8N_USER_EMAIL or N8N_USER_PASSWORD)');
+        return null;
+    }
+
+    try {
+        const response = await axios.post(
+            `${baseUrl}/rest/login`,
+            {
+                emailOrLdapLoginId: email,
+                password: password
+            },
+            {
+                headers: { 'Content-Type': 'application/json' },
+                validateStatus: () => true,
+                maxRedirects: 0
+            }
+        );
+
+        if (response.status !== 200) {
+            console.error('❌ Login failed:', response.status);
+            return null;
+        }
+
+        const cookies = response.headers['set-cookie'];
+        if (!cookies || cookies.length === 0) {
+            console.error('❌ No cookies received from login');
+            return null;
+        }
+
+        // Join cookies properly
+        return cookies.join('; ');
+    } catch (error) {
+        console.error('❌ Login error:', error.message);
+        return null;
+    }
 }
 
 // Main execution
-importWorkflows()
-    .then(() => {
-        console.log('🎉 Workflow import completed');
-        process.exit(0);
-    })
-    .catch(error => {
-        console.error('💥 Import failed:', error.message);
-        process.exit(1);
-    });
+if (require.main === module) {
+    importWorkflows()
+        .then(result => {
+            if (result.success) {
+                console.log('✅ Workflow import completed successfully');
+                process.exit(0);
+            } else {
+                console.error('❌ Workflow import failed');
+                process.exit(1);
+            }
+        })
+        .catch(error => {
+            console.error('💥 Fatal error:', error);
+            process.exit(1);
+        });
+}
+
+module.exports = { importWorkflows };
