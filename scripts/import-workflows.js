@@ -1,5 +1,5 @@
 // scripts/import-workflows.js
-// ✅ FIXED: Import และ Publish workflow ในขั้นตอนเดียว
+// ✅ FIXED FOR n8n 2.0: Import และ PUBLISH workflow (ไม่ใช่แค่ activate)
 
 const axios = require('axios');
 const fs = require('fs');
@@ -12,8 +12,8 @@ async function importWorkflows() {
     const userId = process.env.USER_ID;
     const workflowTemplates = process.env.WORKFLOW_TEMPLATES?.split(',') || ['default'];
 
-    console.log('🔐 Logging in to N8N...');
-    console.log(`📧 Using email: ${email}`);
+    console.log('🔐 Logging in to N8N 2.0...');
+    console.log(`📧 Email: ${email}`);
     console.log(`🔗 Base URL: ${baseUrl}`);
 
     if (!baseUrl || !email || !password || !userId) {
@@ -37,7 +37,7 @@ async function importWorkflows() {
         const cookies = loginResponse.headers['set-cookie'];
         const cookieHeader = cookies?.join('; ') || '';
         
-        console.log('✅ Successfully logged in to N8N\n');
+        console.log('✅ Successfully logged in to N8N 2.0\n');
 
         let totalImported = 0;
         let totalPublished = 0;
@@ -45,7 +45,7 @@ async function importWorkflows() {
         
         // Import workflows from templates
         for (const template of workflowTemplates) {
-            console.log(`📂 Processing template category: ${template}`);
+            console.log(`📂 Processing template: ${template}`);
             const result = await importWorkflowTemplate(baseUrl, template, cookieHeader, userId);
             totalImported += result.imported;
             totalPublished += result.published;
@@ -53,7 +53,7 @@ async function importWorkflows() {
         }
 
         console.log(`\n========================================`);
-        console.log(`📊 Import Summary:`);
+        console.log(`📊 Import Summary (n8n 2.0):`);
         console.log(`   ✅ Imported: ${totalImported} workflows`);
         console.log(`   🚀 Published: ${totalPublished} workflows`);
         console.log(`========================================\n`);
@@ -77,19 +77,15 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
             templateName === 'default' ? 'default-workflows' : 'custom-workflows'
         );
         
-        console.log(`📁 Looking for templates in: ${templatePath}`);
+        console.log(`📁 Template path: ${templatePath}`);
         
         if (!fs.existsSync(templatePath)) {
-            console.log(`⚠️  Template directory not found: ${templatePath}`);
+            console.log(`⚠️  Directory not found: ${templatePath}`);
             return { imported: 0, published: 0, workflowIds: {} };
         }
 
         const files = fs.readdirSync(templatePath).filter(file => file.endsWith('.json'));
         console.log(`📄 Found ${files.length} workflow files`);
-        
-        if (files.length === 0) {
-            return { imported: 0, published: 0, workflowIds: {} };
-        }
         
         for (const file of files) {
             try {
@@ -99,16 +95,16 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                 const workflowData = JSON.parse(fs.readFileSync(workflowPath, 'utf8'));
                 
                 if (!workflowData.nodes || !Array.isArray(workflowData.nodes)) {
-                    console.log(`   ⚠️  Invalid workflow structure, skipping...`);
+                    console.log(`   ⚠️  Invalid workflow, skipping...`);
                     continue;
                 }
                 
-                const isCronWorkflow = file.includes('cron') || 
-                                     workflowData.tags?.includes('cron') ||
-                                     workflowData.tags?.includes('session-processing');
+                // Check if workflow should be published
+                const shouldPublish = workflowData.active === true;
                 
-                // ✅ สำคัญ: เก็บค่า active จาก workflow template
-                const shouldActivate = workflowData.active === true;
+                // Handle cron workflows
+                const isCronWorkflow = file.includes('cron') || 
+                                     workflowData.tags?.includes('cron');
                 
                 if (isCronWorkflow) {
                     console.log(`   🔧 Cron workflow detected`);
@@ -127,17 +123,17 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                         workflowData.staticData = {};
                     }
                     workflowData.staticData.userId = userId;
-                    console.log(`   ✅ Injected userId: ${userId}`);
+                    console.log(`   ✅ Injected userId`);
                 }
                 
-                // ✅ STEP 1: Import workflow (inactive first)
-                console.log(`   📥 Importing workflow...`);
+                // ✅ STEP 1: Import workflow as DRAFT (n8n 2.0)
+                console.log(`   📥 Importing as draft...`);
                 
                 const importPayload = {
                     name: workflowData.name || file.replace('.json', ''),
                     nodes: workflowData.nodes,
                     connections: workflowData.connections || {},
-                    active: false, // ✅ Import as inactive
+                    active: false, // ✅ Always import as draft first
                     settings: workflowData.settings || {},
                     staticData: workflowData.staticData || {},
                     tags: workflowData.tags || []
@@ -161,21 +157,39 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                 }
 
                 const workflowId = importResponse.data.data?.id || importResponse.data.id;
-                console.log(`   ✅ Imported (ID: ${workflowId})`);
+                console.log(`   ✅ Imported as draft (ID: ${workflowId})`);
                 importedCount++;
                 
-                // ✅ STEP 2: Activate workflow หาก template ระบุไว้
-                if (shouldActivate) {
-                    console.log(`   🚀 Activating workflow...`);
+                // ✅ STEP 2: PUBLISH workflow (n8n 2.0 required)
+                if (shouldPublish) {
+                    console.log(`   🚀 Publishing workflow...`);
                     
-                    // Wait ให้ workflow พร้อม
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    // Wait for workflow to be ready
+                    await new Promise(resolve => setTimeout(resolve, 3000));
                     
-                    // ✅ ใช้ PATCH เพื่อ activate
                     try {
-                        const activateResponse = await axios.patch(
+                        // ✅ Get current workflow version first
+                        const getResponse = await axios.get(
                             `${baseUrl}/rest/workflows/${workflowId}`,
-                            { active: true },
+                            {
+                                timeout: 15000,
+                                headers: {
+                                    'Cookie': cookieHeader
+                                }
+                            }
+                        );
+
+                        const currentWorkflow = getResponse.data.data || getResponse.data;
+                        
+                        // ✅ PUBLISH by updating with active:true (n8n 2.0 way)
+                        const publishPayload = {
+                            ...currentWorkflow,
+                            active: true
+                        };
+
+                        const publishResponse = await axios.put(
+                            `${baseUrl}/rest/workflows/${workflowId}`,
+                            publishPayload,
                             {
                                 timeout: 15000,
                                 headers: {
@@ -185,56 +199,56 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                             }
                         );
 
-                        if (activateResponse.status === 200) {
-                            console.log(`   ✅ Activated successfully!`);
+                        if (publishResponse.status === 200) {
+                            console.log(`   ✅ Published successfully!`);
                             publishedCount++;
                             
                             workflowIds[file] = {
                                 id: workflowId,
                                 name: workflowData.name,
-                                active: true,
-                                published: true
+                                published: true,
+                                active: true
                             };
                         } else {
-                            console.log(`   ⚠️  Activation returned: ${activateResponse.status}`);
+                            console.log(`   ⚠️  Publish returned: ${publishResponse.status}`);
                             workflowIds[file] = {
                                 id: workflowId,
                                 name: workflowData.name,
-                                active: false,
-                                needsManualActivation: true
+                                published: false,
+                                needsManualPublish: true
                             };
                         }
-                    } catch (activateError) {
-                        console.error(`   ❌ Activation failed:`, activateError.message);
-                        if (activateError.response) {
-                            console.error(`      Status:`, activateError.response.status);
-                            console.error(`      Data:`, activateError.response.data);
+                    } catch (publishError) {
+                        console.error(`   ❌ Publish failed:`, publishError.message);
+                        if (publishError.response) {
+                            console.error(`      Status:`, publishError.response.status);
+                            console.error(`      Data:`, JSON.stringify(publishError.response.data));
                         }
                         workflowIds[file] = {
                             id: workflowId,
                             name: workflowData.name,
-                            active: false,
-                            activationError: activateError.message
+                            published: false,
+                            error: publishError.message
                         };
                     }
                 } else {
                     workflowIds[file] = {
                         id: workflowId,
                         name: workflowData.name,
-                        active: false,
-                        intentionallyInactive: true
+                        published: false,
+                        intentionallyDraft: true
                     };
                 }
                 
                 // Delay between workflows
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                await new Promise(resolve => setTimeout(resolve, 2000));
                 
             } catch (fileError) {
-                console.error(`   ❌ Error processing ${file}:`, fileError.message);
+                console.error(`   ❌ Error:`, fileError.message);
             }
         }
     } catch (error) {
-        console.error(`❌ Error in template ${templateName}:`, error.message);
+        console.error(`❌ Template error:`, error.message);
     }
     
     return { 
@@ -247,10 +261,11 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
 // Main execution
 importWorkflows()
     .then(() => {
-        console.log('🎉 Workflow import completed');
+        console.log('🎉 n8n 2.0 workflow import completed');
         process.exit(0);
     })
     .catch(error => {
         console.error('💥 Import failed:', error.message);
         process.exit(1);
     });
+    
