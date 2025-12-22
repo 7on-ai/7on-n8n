@@ -1,5 +1,5 @@
 // scripts/import-workflows.js
-// ✅ IMPROVED: Import AND publish workflows immediately
+// ✅ FIXED: Import และ Publish workflow ในขั้นตอนเดียว
 
 const axios = require('axios');
 const fs = require('fs');
@@ -15,15 +15,9 @@ async function importWorkflows() {
     console.log('🔐 Logging in to N8N...');
     console.log(`📧 Using email: ${email}`);
     console.log(`🔗 Base URL: ${baseUrl}`);
-    console.log(`👤 User ID: ${userId || 'NOT SET'}`);
-    console.log(`📋 Templates to import: ${workflowTemplates.join(', ')}`);
 
-    if (!baseUrl || !email || !password) {
+    if (!baseUrl || !email || !password || !userId) {
         throw new Error('Missing required environment variables');
-    }
-
-    if (!userId) {
-        throw new Error('Missing USER_ID environment variable');
     }
 
     try {
@@ -43,7 +37,7 @@ async function importWorkflows() {
         const cookies = loginResponse.headers['set-cookie'];
         const cookieHeader = cookies?.join('; ') || '';
         
-        console.log('✅ Successfully logged in to N8N');
+        console.log('✅ Successfully logged in to N8N\n');
 
         let totalImported = 0;
         let totalPublished = 0;
@@ -63,68 +57,14 @@ async function importWorkflows() {
         console.log(`   ✅ Imported: ${totalImported} workflows`);
         console.log(`   🚀 Published: ${totalPublished} workflows`);
         console.log(`========================================\n`);
-        
-        if (Object.keys(workflowIdMap).length > 0) {
-            console.log('📋 Workflow Details:');
-            console.log(JSON.stringify(workflowIdMap, null, 2));
-        }
 
     } catch (error) {
-        console.error('❌ Error in workflow import process:', error.message);
+        console.error('❌ Error in workflow import:', error.message);
         if (error.response) {
-            console.error('📊 Response status:', error.response.status);
-            console.error('📋 Response data:', JSON.stringify(error.response.data, null, 2));
+            console.error('Response:', error.response.status, error.response.data);
         }
         throw error;
     }
-}
-
-async function publishWorkflow(baseUrl, workflowId, cookieHeader) {
-    try {
-        // ✅ Try /activate endpoint first
-        const activateResponse = await axios.post(
-            `${baseUrl}/rest/workflows/${workflowId}/activate`,
-            {},
-            {
-                timeout: 15000,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Cookie': cookieHeader
-                },
-                validateStatus: (status) => status < 500
-            }
-        );
-
-        if (activateResponse.status === 200) {
-            return { success: true, method: 'activate' };
-        }
-    } catch (error) {
-        // If /activate doesn't exist, continue to PATCH
-    }
-
-    // ✅ Fallback to PATCH method
-    try {
-        const patchResponse = await axios.patch(
-            `${baseUrl}/rest/workflows/${workflowId}`,
-            { active: true },
-            {
-                timeout: 15000,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Cookie': cookieHeader
-                }
-            }
-        );
-
-        if (patchResponse.status === 200) {
-            return { success: true, method: 'patch' };
-        }
-    } catch (error) {
-        console.error(`Failed to publish: ${error.message}`);
-        return { success: false, error: error.message };
-    }
-
-    return { success: false, error: 'All methods failed' };
 }
 
 async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userId) {
@@ -148,7 +88,6 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
         console.log(`📄 Found ${files.length} workflow files`);
         
         if (files.length === 0) {
-            console.log('ℹ️  No workflow files found to import');
             return { imported: 0, published: 0, workflowIds: {} };
         }
         
@@ -168,7 +107,8 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                                      workflowData.tags?.includes('cron') ||
                                      workflowData.tags?.includes('session-processing');
                 
-                const shouldPublish = workflowData.active === true;
+                // ✅ สำคัญ: เก็บค่า active จาก workflow template
+                const shouldActivate = workflowData.active === true;
                 
                 if (isCronWorkflow) {
                     console.log(`   🔧 Cron workflow detected`);
@@ -183,25 +123,21 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                     });
                     
                     // Inject userId
-                    if (workflowData.staticData) {
-                        if (workflowData.staticData.userId === "PLACEHOLDER_WILL_BE_REPLACED") {
-                            workflowData.staticData.userId = userId;
-                            console.log(`   ✅ Injected userId: ${userId}`);
-                        }
-                    } else {
-                        workflowData.staticData = { userId: userId };
-                        console.log(`   ✅ Created staticData with userId`);
+                    if (!workflowData.staticData) {
+                        workflowData.staticData = {};
                     }
+                    workflowData.staticData.userId = userId;
+                    console.log(`   ✅ Injected userId: ${userId}`);
                 }
                 
-                // ✅ Import workflow (always as inactive first)
-                console.log(`   📥 Importing...`);
+                // ✅ STEP 1: Import workflow (inactive first)
+                console.log(`   📥 Importing workflow...`);
                 
-                const workflowPayload = {
+                const importPayload = {
                     name: workflowData.name || file.replace('.json', ''),
                     nodes: workflowData.nodes,
                     connections: workflowData.connections || {},
-                    active: false, // ✅ Import as inactive first
+                    active: false, // ✅ Import as inactive
                     settings: workflowData.settings || {},
                     staticData: workflowData.staticData || {},
                     tags: workflowData.tags || []
@@ -209,7 +145,7 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
 
                 const importResponse = await axios.post(
                     `${baseUrl}/rest/workflows`,
-                    workflowPayload,
+                    importPayload,
                     {
                         timeout: 30000,
                         headers: {
@@ -219,65 +155,86 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
                     }
                 );
 
-                if (importResponse.status === 200 || importResponse.status === 201) {
-                    const workflowId = importResponse.data.data?.id || importResponse.data.id;
-                    console.log(`   ✅ Imported successfully (ID: ${workflowId})`);
-                    importedCount++;
+                if (importResponse.status !== 200 && importResponse.status !== 201) {
+                    console.log(`   ⚠️  Import failed: ${importResponse.status}`);
+                    continue;
+                }
+
+                const workflowId = importResponse.data.data?.id || importResponse.data.id;
+                console.log(`   ✅ Imported (ID: ${workflowId})`);
+                importedCount++;
+                
+                // ✅ STEP 2: Activate workflow หาก template ระบุไว้
+                if (shouldActivate) {
+                    console.log(`   🚀 Activating workflow...`);
                     
-                    // ✅ Now publish if needed
-                    if (shouldPublish) {
-                        console.log(`   🚀 Publishing workflow...`);
-                        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait before publish
-                        
-                        const publishResult = await publishWorkflow(baseUrl, workflowId, cookieHeader);
-                        
-                        if (publishResult.success) {
-                            console.log(`   ✅ Published via ${publishResult.method}!`);
+                    // Wait ให้ workflow พร้อม
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // ✅ ใช้ PATCH เพื่อ activate
+                    try {
+                        const activateResponse = await axios.patch(
+                            `${baseUrl}/rest/workflows/${workflowId}`,
+                            { active: true },
+                            {
+                                timeout: 15000,
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Cookie': cookieHeader
+                                }
+                            }
+                        );
+
+                        if (activateResponse.status === 200) {
+                            console.log(`   ✅ Activated successfully!`);
                             publishedCount++;
                             
                             workflowIds[file] = {
                                 id: workflowId,
                                 name: workflowData.name,
                                 active: true,
-                                published: true,
-                                publishMethod: publishResult.method
+                                published: true
                             };
                         } else {
-                            console.warn(`   ⚠️  Failed to publish: ${publishResult.error}`);
+                            console.log(`   ⚠️  Activation returned: ${activateResponse.status}`);
                             workflowIds[file] = {
                                 id: workflowId,
                                 name: workflowData.name,
                                 active: false,
-                                published: false,
-                                needsManualPublish: true
+                                needsManualActivation: true
                             };
                         }
-                    } else {
+                    } catch (activateError) {
+                        console.error(`   ❌ Activation failed:`, activateError.message);
+                        if (activateError.response) {
+                            console.error(`      Status:`, activateError.response.status);
+                            console.error(`      Data:`, activateError.response.data);
+                        }
                         workflowIds[file] = {
                             id: workflowId,
                             name: workflowData.name,
                             active: false,
-                            published: false,
-                            intentionallyInactive: true
+                            activationError: activateError.message
                         };
                     }
                 } else {
-                    console.log(`   ⚠️  Unexpected response: ${importResponse.status}`);
+                    workflowIds[file] = {
+                        id: workflowId,
+                        name: workflowData.name,
+                        active: false,
+                        intentionallyInactive: true
+                    };
                 }
                 
-                // Delay between imports
+                // Delay between workflows
                 await new Promise(resolve => setTimeout(resolve, 1500));
                 
             } catch (fileError) {
-                console.error(`   ❌ Error: ${fileError.message}`);
-                if (fileError.response) {
-                    console.error(`      Status:`, fileError.response.status);
-                    console.error(`      Data:`, fileError.response.data);
-                }
+                console.error(`   ❌ Error processing ${file}:`, fileError.message);
             }
         }
     } catch (error) {
-        console.error(`❌ Error processing template ${templateName}:`, error.message);
+        console.error(`❌ Error in template ${templateName}:`, error.message);
     }
     
     return { 
@@ -290,10 +247,10 @@ async function importWorkflowTemplate(baseUrl, templateName, cookieHeader, userI
 // Main execution
 importWorkflows()
     .then(() => {
-        console.log('🎉 Workflow import & publish process completed');
+        console.log('🎉 Workflow import completed');
         process.exit(0);
     })
     .catch(error => {
-        console.error('💥 Process failed:', error.message);
+        console.error('💥 Import failed:', error.message);
         process.exit(1);
     });

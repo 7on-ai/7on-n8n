@@ -2,17 +2,11 @@
 set -e
 
 echo "=========================================="
-echo "Starting N8N Setup Process (Neon Version)"
+echo "Starting N8N Setup Process"
 echo "=========================================="
 echo "N8N Host: $N8N_HOST"
 echo "N8N Base URL: $N8N_EDITOR_BASE_URL"
 echo "User Email: $N8N_USER_EMAIL"
-echo "First Name: $N8N_FIRST_NAME"
-echo "Last Name: $N8N_LAST_NAME"
-echo "Workflow Templates: $WORKFLOW_TEMPLATES"
-echo "Project ID: $NORTHFLANK_PROJECT_ID"
-echo "Project Name: $NORTHFLANK_PROJECT_NAME"
-echo "Database: Neon PostgreSQL"
 echo "=========================================="
 
 # Wait for N8N to be fully ready
@@ -30,7 +24,7 @@ while [ $counter -lt $timeout ]; do
 done
 
 if [ $counter -ge $timeout ]; then
-    echo "❌ Timeout waiting for N8N to be ready"
+    echo "❌ Timeout waiting for N8N"
     exit 1
 fi
 
@@ -42,7 +36,6 @@ sleep 15
 echo ""
 echo "=== STEP 0: GET DATABASE CONNECTION ==="
 
-# Try EXTERNAL_POSTGRES_URI_ADMIN first (from addon credentials)
 if [ -n "$EXTERNAL_POSTGRES_URI_ADMIN" ]; then
     POSTGRES_URI="$EXTERNAL_POSTGRES_URI_ADMIN"
     echo "✅ Using EXTERNAL_POSTGRES_URI_ADMIN"
@@ -57,7 +50,6 @@ else
     exit 1
 fi
 
-# Show connection (hide password)
 SAFE_URI=$(echo "$POSTGRES_URI" | sed 's/:\/\/[^:]*:[^@]*@/:\/\/***:***@/')
 echo "📝 Database: $SAFE_URI"
 
@@ -65,62 +57,54 @@ echo "📝 Database: $SAFE_URI"
 echo ""
 echo "=== STEP 1: INITIALIZE DATABASE SCHEMA ==="
 if bash /scripts/init-db.sh "$POSTGRES_URI"; then
-    echo "✅ Database schema initialized successfully"
+    echo "✅ Database schema initialized"
 else
     echo "⚠️  Database initialization failed"
-    echo "⚠️  Continuing anyway..."
 fi
 
-# Additional wait for database initialization
 echo "⏳ Waiting for database to settle..."
 sleep 10
 
-# Step 2: Create N8N user
+# ===== Create N8N User =====
 echo ""
 echo "=== STEP 2: CREATE N8N USER ==="
 if node /scripts/create-user.js; then
-    echo "✅ N8N user created successfully"
+    echo "✅ N8N user created"
 else
     echo "❌ Failed to create N8N user"
     exit 1
 fi
 
-# ✅ FIX: Wait before importing workflows
-echo "⏳ Waiting 10s before workflow import..."
+# ✅ สำคัญ: รอให้ user account พร้อมก่อน import
+echo "⏳ Waiting 10s for user account to be ready..."
 sleep 10
 
-# Step 3: Import workflow templates
+# ===== Import Workflow Templates =====
 echo ""
-echo "=== STEP 3: IMPORT WORKFLOW TEMPLATES ==="
+echo "=== STEP 3: IMPORT & ACTIVATE WORKFLOWS ==="
 if node /scripts/import-workflows.js; then
-    echo "✅ Workflow templates imported successfully"
+    echo "✅ Workflows imported and activated"
 else
-    echo "⚠️  Failed to import workflow templates (continuing...)"
+    echo "⚠️  Some workflows may need manual activation"
 fi
 
-# ✅ NEW: Force activate all workflows via REST API
-echo ""
-echo "=== STEP 3.5: FORCE ACTIVATE WORKFLOWS ==="
-node /scripts/activate-workflows.js || echo "⚠️  Activation script had warnings"
+# ✅ ไม่ต้องใช้ activate-workflows.js อีกแล้ว เพราะทำใน import แล้ว
 
-# Step 4: Store credentials to Neon
+# ===== Store to Neon =====
 echo ""
 echo "=== STEP 4: STORE CREDENTIALS TO NEON ==="
 if node /scripts/neon-store.js; then
     echo "✅ Credentials stored in Neon database"
 else
-    echo "❌ Failed to store credentials in Neon"
+    echo "❌ Failed to store credentials"
     exit 1
 fi
 
 echo ""
 echo "=========================================="
-echo "🎉 N8N Setup Completed Successfully!"
+echo "🎉 N8N Setup Completed!"
 echo "=========================================="
 echo "N8N URL: $N8N_EDITOR_BASE_URL"
 echo "Email: $N8N_USER_EMAIL"
 echo "Password: $N8N_USER_PASSWORD"
-echo "Name: $N8N_FIRST_NAME $N8N_LAST_NAME"
-echo "Project: $NORTHFLANK_PROJECT_NAME ($NORTHFLANK_PROJECT_ID)"
-echo "Database: Neon PostgreSQL"
 echo "=========================================="
