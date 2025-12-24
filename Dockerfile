@@ -1,38 +1,67 @@
-# Dockerfile - N8N Setup with Neon Database
+# Dockerfile - N8N Setup with Enhanced Import System
+# Base: Node 18 Alpine for lightweight container
 FROM node:18-alpine
 
-# Install system dependencies (เพิ่ม postgresql-client)
-RUN apk add --no-cache curl bash postgresql-client
+# ===== Install System Dependencies =====
+RUN apk add --no-cache \
+    curl \
+    bash \
+    postgresql-client \
+    ca-certificates
 
-# Create app directory
+# ===== Setup Working Directory =====
 WORKDIR /app
 
-# Copy package.json and install dependencies
-COPY package.json ./
-RUN npm install --omit=dev --no-cache
+# ===== Copy Package Files First (for better caching) =====
+COPY package*.json ./
 
-# Copy scripts and templates
+# ===== Install Node Dependencies =====
+RUN npm install --omit=dev --no-cache && \
+    npm cache clean --force
+
+# ===== Copy Scripts and Templates =====
 COPY scripts/ /scripts/
 COPY templates/ /templates/
 
-# Make scripts executable (รวม init-db.sh)
-RUN chmod +x /scripts/*.sh
-RUN chmod +x /scripts/*.js
+# ===== Make Scripts Executable =====
+RUN chmod +x /scripts/*.sh && \
+    chmod +x /scripts/*.js
 
-# Create non-root user for security
+# ===== Create Non-Root User (Security Best Practice) =====
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S n8nsetup -u 1001
+    adduser -S n8nsetup -u 1001 -G nodejs
 
-# Change ownership
+# ===== Set Correct Permissions =====
 RUN chown -R n8nsetup:nodejs /scripts && \
     chown -R n8nsetup:nodejs /templates && \
     chown -R n8nsetup:nodejs /app
 
-# Switch to non-root user
+# ===== Switch to Non-Root User =====
 USER n8nsetup
 
-# Set environment variables
-ENV NODE_PATH=/app/node_modules
+# ===== Environment Variables =====
+ENV NODE_PATH=/app/node_modules \
+    NODE_ENV=production \
+    PATH="/app/node_modules/.bin:$PATH"
 
-# Default entrypoint
+# Environment variables that will be set at runtime:
+# - N8N_EDITOR_BASE_URL
+# - N8N_HOST
+# - N8N_USER_EMAIL
+# - N8N_USER_PASSWORD
+# - N8N_ENCRYPTION_KEY
+# - DATABASE_URL or POSTGRES_URI_ADMIN
+# - WORKFLOW_TEMPLATES (default/custom)
+
+# ===== Health Check =====
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f "${N8N_EDITOR_BASE_URL:-http://localhost:5678}/healthz" || exit 1
+
+# ===== Default Entrypoint =====
 ENTRYPOINT ["/scripts/setup.sh"]
+
+# ===== Labels =====
+LABEL maintainer="Your Team" \
+      version="2.0.0" \
+      description="N8N Setup Container with Enhanced Workflow Import" \
+      org.opencontainers.image.source="https://github.com/yourusername/n8n-deployment"

@@ -132,9 +132,14 @@
     "saveExecutionProgress": true,
     "saveManualExecutions": true,
     "executionTimeout": 90,
-    "timezone": "Asia/Bangkok",
-    "errorWorkflow": ""
+    "timezone": "Asia/Bangkok"
   },
-  "active": true,
-  "tags": ["chat", "production", "webhook"]
+  "active": false,
+  "tags": ["chat", "production", "webhook"],
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "autoActivate": true
+  },
+  "pinData": {},
+  "staticData": null
 }

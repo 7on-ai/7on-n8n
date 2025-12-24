@@ -176,12 +176,15 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "1",
+  "active": false,
+  "tags": [],
   "meta": {
-    "templateCredsSetupCompleted": true
-  }
+    "templateCredsSetupCompleted": true,
+    "autoActivate": false
+  },
+  "pinData": {},
+  "staticData": null
 }

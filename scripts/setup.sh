@@ -2,7 +2,7 @@
 set -e
 
 echo "=========================================="
-echo "Starting N8N Setup Process"
+echo "Starting N8N Setup Process (Enhanced)"
 echo "=========================================="
 echo "N8N Host: $N8N_HOST"
 echo "N8N Base URL: $N8N_EDITOR_BASE_URL"
@@ -79,16 +79,22 @@ fi
 echo "⏳ Waiting 10s for user account to be ready..."
 sleep 10
 
-# ===== Import Workflow Templates =====
+# ===== Import & Activate Workflow Templates =====
 echo ""
-echo "=== STEP 3: IMPORT & ACTIVATE WORKFLOWS ==="
+echo "=== STEP 3: IMPORT & ACTIVATE WORKFLOWS (ENHANCED) ==="
+echo "📦 Using enhanced import script with:"
+echo "   - Intelligent activation"
+echo "   - Webhook detection"
+echo "   - Robust retry logic"
+echo "   - Verification system"
+echo ""
+
 if node /scripts/import-workflows.js; then
-    echo "✅ Workflows imported and activated"
+    echo "✅ Workflows imported and activated successfully"
 else
     echo "⚠️  Some workflows may need manual activation"
+    echo "ℹ️  Check logs above for details"
 fi
-
-# ✅ ไม่ต้องใช้ activate-workflows.js อีกแล้ว เพราะทำใน import แล้ว
 
 # ===== Store to Neon =====
 echo ""
@@ -107,4 +113,7 @@ echo "=========================================="
 echo "N8N URL: $N8N_EDITOR_BASE_URL"
 echo "Email: $N8N_USER_EMAIL"
 echo "Password: $N8N_USER_PASSWORD"
+echo ""
+echo "📊 Workflow Status:"
+echo "   Check logs above for import details"
 echo "=========================================="

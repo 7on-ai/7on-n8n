@@ -1,21 +1,40 @@
 {
   "name": "n8n-setup-scripts",
-  "version": "1.0.0",
-  "description": "N8N setup and configuration scripts for Northflank deployment",
+  "version": "2.0.0",
+  "description": "N8N setup and configuration scripts with enhanced workflow import",
   "main": "scripts/setup.sh",
   "scripts": {
     "start": "./scripts/setup.sh",
-    "create-user": "node scripts/create-user.js",
-    "import-workflows": "node scripts/import-workflows.js",
-    "send-notification": "node scripts/webhook-notify.js"
+    "setup:n8n": "bash scripts/setup.sh",
+    "create:user": "node scripts/create-user.js",
+    "import:workflows": "node scripts/import-workflows.js",
+    "store:neon": "node scripts/neon-store.js",
+    "init:db": "bash scripts/init-db.sh",
+    "test:import": "NODE_ENV=test N8N_EDITOR_BASE_URL=http://localhost:5678 node scripts/import-workflows.js",
+    "test:login": "node -e \"require('./scripts/import-workflows.js').loginToN8N(process.env.N8N_EDITOR_BASE_URL || 'http://localhost:5678').then(console.log).catch(console.error)\""
   },
   "dependencies": {
     "axios": "^1.6.0",
     "pg": "^8.11.3"
   },
-  "engines": {
-    "node": ">=18.0.0"
+  "devDependencies": {
+    "@types/node": "^20.0.0"
   },
-  "author": "N8N Setup Team",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/n8n-deployment"
+  },
+  "keywords": [
+    "n8n",
+    "workflow",
+    "automation",
+    "deployment",
+    "northflank"
+  ],
+  "author": "Your Team",
   "license": "MIT"
 }
