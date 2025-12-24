@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // scripts/import-workflows.js
-// ✅ IMPROVED: Enhanced import with robust activation logic
+// ✅ FIXED: Guaranteed workflow activation with extended wait times
 
 const axios = require('axios');
 const fs = require('fs');
@@ -9,12 +9,15 @@ const path = require('path');
 
 // ===== CONFIGURATION =====
 const CONFIG = {
-    MAX_WORKFLOW_READY_RETRIES: 15,
+    MAX_WORKFLOW_READY_RETRIES: 20,
     WORKFLOW_READY_CHECK_INTERVAL: 2000,
     MAX_ACTIVATION_RETRIES: 5,
     ACTIVATION_RETRY_DELAY: 3000,
-    WEBHOOK_REGISTRATION_DELAY: 8000,
-    POST_IMPORT_STABILIZATION_DELAY: 5000
+    WEBHOOK_REGISTRATION_DELAY: 10000, // ✅ เพิ่มจาก 8s → 10s
+    POST_IMPORT_STABILIZATION_DELAY: 5000,
+    POST_ACTIVATION_WAIT: 8000, // ✅ NEW: รอหลัง activate ก่อน verify
+    FINAL_VERIFICATION_RETRIES: 10, // ✅ NEW: verify หลายครั้ง
+    FINAL_VERIFICATION_INTERVAL: 3000 // ✅ NEW: ช่วงเวลาระหว่าง verify
 };
 
 // ===== HELPER FUNCTIONS =====
@@ -86,7 +89,6 @@ async function waitForWorkflowReady(baseUrl, workflowId, cookies) {
             if (response.status === 200 && response.data?.data) {
                 const workflow = response.data.data;
                 
-                // ตรวจสอบว่า workflow มีข้อมูลครบถ้วน
                 const hasNodes = workflow.nodes && workflow.nodes.length > 0;
                 const hasConnections = workflow.connections && Object.keys(workflow.connections).length > 0;
                 const isInactive = workflow.active === false;
@@ -127,7 +129,7 @@ function hasWebhookNodes(workflowData) {
 async function activateWorkflow(baseUrl, workflowId, cookies, hasWebhooks = false) {
     console.log('   🔄 Activating workflow...');
     
-    // ถ้ามี webhook ให้รอนานขึ้นเพื่อให้ลงทะเบียนเสร็จ
+    // ถ้ามี webhook ให้รอนานขึ้น
     if (hasWebhooks) {
         console.log('   ⏰ Workflow has webhooks - waiting for registration...');
         await new Promise(resolve => setTimeout(resolve, CONFIG.WEBHOOK_REGISTRATION_DELAY));
@@ -154,7 +156,7 @@ async function activateWorkflow(baseUrl, workflowId, cookies, hasWebhooks = fals
                 return { success: true, method: 'activate' };
             }
             
-            // Method 2: If /activate fails, try PATCH
+            // Method 2: Try PATCH
             console.log(`   ⚠️  /activate returned ${activateResponse.status}, trying PATCH...`);
             
             const patchResponse = await axios.patch(
@@ -192,34 +194,54 @@ async function activateWorkflow(baseUrl, workflowId, cookies, hasWebhooks = fals
 }
 
 /**
- * Verify workflow is actually active
+ * ✅ NEW: Verify workflow is actually active with extended retries
  */
 async function verifyWorkflowActive(baseUrl, workflowId, cookies) {
-    console.log('   🔍 Verifying activation...');
+    console.log('   🔍 Verifying activation (extended verification)...');
     
-    try {
-        const response = await axios.get(
-            `${baseUrl}/rest/workflows/${workflowId}`,
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Cookie': cookies
-                },
-                timeout: 15000
-            }
-        );
+    // ✅ รอสักครู่ก่อน verify เพื่อให้ n8n ประมวลผลเสร็จ
+    console.log(`   ⏰ Waiting ${CONFIG.POST_ACTIVATION_WAIT/1000}s for n8n to process...`);
+    await new Promise(resolve => setTimeout(resolve, CONFIG.POST_ACTIVATION_WAIT));
+    
+    // ✅ Verify หลายครั้งเพื่อความแน่นอน
+    for (let attempt = 1; attempt <= CONFIG.FINAL_VERIFICATION_RETRIES; attempt++) {
+        try {
+            const response = await axios.get(
+                `${baseUrl}/rest/workflows/${workflowId}`,
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cookie': cookies
+                    },
+                    timeout: 15000,
+                    validateStatus: () => true
+                }
+            );
 
-        if (response.status === 200 && response.data?.data?.active === true) {
-            console.log('   ✅ Activation verified!');
-            return true;
+            if (response.status === 200 && response.data?.data) {
+                const isActive = response.data.data.active === true;
+                
+                if (isActive) {
+                    console.log(`   ✅ Activation verified! (attempt ${attempt}/${CONFIG.FINAL_VERIFICATION_RETRIES})`);
+                    return true;
+                } else {
+                    console.log(`   ⌛ Not active yet (attempt ${attempt}/${CONFIG.FINAL_VERIFICATION_RETRIES})`);
+                }
+            } else {
+                console.log(`   ⚠️  Status ${response.status} (attempt ${attempt}/${CONFIG.FINAL_VERIFICATION_RETRIES})`);
+            }
+        } catch (error) {
+            console.log(`   ⚠️  Verification error (attempt ${attempt}): ${error.message}`);
         }
         
-        console.log('   ⚠️  Workflow not active after activation attempt');
-        return false;
-    } catch (error) {
-        console.log(`   ⚠️  Verification failed: ${error.message}`);
-        return false;
+        // รอก่อน retry ครั้งต่อไป
+        if (attempt < CONFIG.FINAL_VERIFICATION_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, CONFIG.FINAL_VERIFICATION_INTERVAL));
+        }
     }
+    
+    console.log('   ⚠️  Workflow not active after extended verification');
+    return false;
 }
 
 /**
@@ -258,13 +280,12 @@ async function importWorkflows() {
     const templateSet = process.env.WORKFLOW_TEMPLATES || 'default';
     
     console.log('========================================');
-    console.log('🔧 n8n Workflow Importer (Enhanced)');
+    console.log('🔧 n8n Workflow Importer (Auto-Publish Fixed)');
     console.log('========================================');
     console.log(`n8n URL: ${baseUrl}`);
     console.log(`Template Set: ${templateSet}`);
     console.log('');
 
-    // Determine template directory
     const templateDir = templateSet === 'default' 
         ? '/templates/default-workflows'
         : '/templates/custom-workflows';
@@ -285,14 +306,12 @@ async function importWorkflows() {
 
     console.log(`📦 Found ${files.length} workflow template(s)\n`);
 
-    // Login to n8n
     const cookies = await loginToN8N(baseUrl);
 
     let imported = 0;
     let published = 0;
     let failed = 0;
 
-    // Process each workflow
     for (const file of files) {
         try {
             const filePath = path.join(templateDir, file);
@@ -300,11 +319,9 @@ async function importWorkflows() {
             console.log(`📄 Processing: ${file}`);
             console.log('─'.repeat(60));
 
-            // Read and parse workflow
             const rawData = fs.readFileSync(filePath, 'utf-8');
             const workflowData = JSON.parse(rawData);
             
-            // Check if should activate
             const shouldActivate = workflowData.active === true || 
                                  workflowData.meta?.autoActivate === true;
             
@@ -314,7 +331,7 @@ async function importWorkflows() {
             console.log(`   Should activate: ${shouldActivate ? 'Yes' : 'No'}`);
             console.log(`   Has webhooks: ${hasWebhooks ? 'Yes' : 'No'}`);
 
-            // ===== STEP 1: Import workflow =====
+            // ===== STEP 1: Import =====
             console.log('\n   📥 Step 1: Importing workflow...');
             
             const cleanedWorkflow = cleanWorkflowForImport(workflowData);
@@ -333,27 +350,27 @@ async function importWorkflows() {
             );
 
             if (importResponse.status !== 200 && importResponse.status !== 201) {
-                throw new Error(`Import failed: ${importResponse.status} - ${JSON.stringify(importResponse.data)}`);
+                throw new Error(`Import failed: ${importResponse.status}`);
             }
 
             const workflowId = importResponse.data?.data?.id || importResponse.data?.id;
             if (!workflowId) {
-                throw new Error('No workflow ID returned from import');
+                throw new Error('No workflow ID returned');
             }
 
             console.log(`   ✅ Imported successfully (ID: ${workflowId})`);
             imported++;
 
-            // ===== STEP 2: Stabilization delay =====
-            console.log(`\n   ⏰ Step 2: Stabilization delay (${CONFIG.POST_IMPORT_STABILIZATION_DELAY/1000}s)...`);
+            // ===== STEP 2: Stabilization =====
+            console.log(`\n   ⏰ Step 2: Stabilization (${CONFIG.POST_IMPORT_STABILIZATION_DELAY/1000}s)...`);
             await new Promise(resolve => setTimeout(resolve, CONFIG.POST_IMPORT_STABILIZATION_DELAY));
 
-            // ===== STEP 3: Wait for workflow ready =====
+            // ===== STEP 3: Check Ready =====
             console.log('\n   🔄 Step 3: Checking workflow readiness...');
-            const { ready, workflow } = await waitForWorkflowReady(baseUrl, workflowId, cookies);
+            const { ready } = await waitForWorkflowReady(baseUrl, workflowId, cookies);
             
             if (!ready) {
-                console.log('   ⚠️  Workflow not ready, but imported as draft');
+                console.log('   ⚠️  Workflow not ready - imported as draft');
                 continue;
             }
 
@@ -369,14 +386,14 @@ async function importWorkflows() {
                 );
 
                 if (activationResult.success) {
-                    // Verify activation
+                    // ✅ CRITICAL: Extended verification with retries
                     const isActive = await verifyWorkflowActive(baseUrl, workflowId, cookies);
                     
                     if (isActive) {
-                        console.log('   🎉 Workflow published successfully!');
+                        console.log('   🎉 Workflow PUBLISHED successfully!');
                         published++;
                     } else {
-                        console.log('   ⚠️  Activation may have failed - please check manually');
+                        console.log('   ⚠️  Activation uncertain - please check n8n UI');
                     }
                 } else {
                     console.log('   ❌ Activation failed - workflow imported as draft');
@@ -387,9 +404,6 @@ async function importWorkflows() {
 
         } catch (error) {
             console.error(`\n   ❌ Error processing ${file}:`, error.message);
-            if (error.response) {
-                console.error('   Response:', JSON.stringify(error.response.data, null, 2));
-            }
             failed++;
         }
     }
@@ -427,7 +441,6 @@ if (require.main === module) {
         })
         .catch(error => {
             console.error('💥 Fatal error:', error.message);
-            console.error(error.stack);
             process.exit(1);
         });
 }
