@@ -75,10 +75,34 @@ async function activateWorkflow(baseUrl, workflowId, cookies) {
     console.log('   🚀 Activating workflow...');
     
     try {
-        // ✅ Use /activate endpoint (correct for n8n v2)
+        // ✅ STEP 1: Get workflow to extract versionId
+        console.log('   📄 Getting workflow details...');
+        const getResponse = await axios.get(
+            `${baseUrl}/rest/workflows/${workflowId}`,
+            {
+                headers: { Cookie: cookies },
+                timeout: 15000,
+                validateStatus: () => true
+            }
+        );
+
+        if (getResponse.status !== 200 || !getResponse.data?.data) {
+            console.log('   ⚠️ Failed to get workflow details');
+            return false;
+        }
+
+        const versionId = getResponse.data.data.versionId;
+        if (!versionId) {
+            console.log('   ⚠️ No versionId found');
+            return false;
+        }
+
+        console.log(`   📌 Found versionId: ${versionId.substring(0, 8)}...`);
+
+        // ✅ STEP 2: Activate with versionId
         const response = await axios.post(
             `${baseUrl}/rest/workflows/${workflowId}/activate`,
-            {},
+            { versionId },
             {
                 headers: {
                     'Content-Type': 'application/json',
