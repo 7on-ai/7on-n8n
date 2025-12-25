@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // scripts/import-workflows.js
-// ✅ ULTIMATE FIX: Proper n8n v2.0 workflow activation
+// ✅ CORRECT FIX: Use /activate endpoint (n8n v2.0 compatible)
 
 const axios = require('axios');
 const fs = require('fs');
@@ -9,8 +9,7 @@ const path = require('path');
 
 const CONFIG = {
     IMPORT_DELAY: 3000,
-    SAVE_DELAY: 2000,
-    ACTIVATION_DELAY: 3000,
+    ACTIVATION_DELAY: 2000,
     VERIFICATION_RETRIES: 10,
     VERIFICATION_INTERVAL: 2000,
 };
@@ -49,6 +48,7 @@ async function loginToN8N(baseUrl) {
 function cleanWorkflowForImport(workflowData) {
     const cleaned = { ...workflowData };
     
+    // Remove fields that shouldn't be in import
     delete cleaned.id;
     delete cleaned.createdAt;
     delete cleaned.updatedAt;
@@ -60,8 +60,8 @@ function cleanWorkflowForImport(workflowData) {
     delete cleaned.activeVersion;
     delete cleaned.parentFolder;
     
-    // ✅ CRITICAL: Import as ACTIVE
-    cleaned.active = true;
+    // ✅ Import as INACTIVE first (will activate later)
+    cleaned.active = false;
     cleaned.pinData = cleaned.pinData || {};
     cleaned.staticData = null;
     cleaned.settings = cleaned.settings || { executionOrder: 'v1' };
@@ -71,35 +71,14 @@ function cleanWorkflowForImport(workflowData) {
     return cleaned;
 }
 
-// ✅ NEW: Re-save workflow to register triggers properly
-async function resaveWorkflow(baseUrl, workflowId, cookies) {
-    console.log('   📝 Re-saving workflow to register triggers...');
+async function activateWorkflow(baseUrl, workflowId, cookies) {
+    console.log('   🚀 Activating workflow...');
     
     try {
-        // Get current workflow
-        const getResp = await axios.get(
-            `${baseUrl}/rest/workflows/${workflowId}`,
-            {
-                headers: { Cookie: cookies },
-                timeout: 15000,
-                validateStatus: () => true
-            }
-        );
-
-        if (getResp.status !== 200) {
-            console.log('   ⚠️ Failed to get workflow');
-            return false;
-        }
-
-        const workflow = getResp.data.data;
-        
-        // Save it back (this registers webhooks/triggers)
-        const saveResp = await axios.put(
-            `${baseUrl}/rest/workflows/${workflowId}`,
-            {
-                ...workflow,
-                active: true // Keep active during save
-            },
+        // ✅ Use /activate endpoint (correct for n8n v2)
+        const response = await axios.post(
+            `${baseUrl}/rest/workflows/${workflowId}/activate`,
+            {},
             {
                 headers: {
                     'Content-Type': 'application/json',
@@ -110,15 +89,16 @@ async function resaveWorkflow(baseUrl, workflowId, cookies) {
             }
         );
 
-        if (saveResp.status === 200) {
-            console.log('   ✅ Workflow re-saved successfully');
+        if (response.status === 200 || response.status === 201) {
+            console.log('   ✅ Activation successful');
             return true;
         } else {
-            console.log(`   ⚠️ Save returned ${saveResp.status}`);
+            console.log(`   ⚠️ Activation returned ${response.status}`);
+            console.log(`   Response: ${JSON.stringify(response.data)}`);
             return false;
         }
     } catch (error) {
-        console.log(`   ❌ Re-save error: ${error.message}`);
+        console.log(`   ❌ Activation error: ${error.message}`);
         return false;
     }
 }
@@ -163,7 +143,7 @@ async function importWorkflows() {
     const templateSet = process.env.WORKFLOW_TEMPLATES || 'default';
     
     console.log('========================================');
-    console.log('🔧 n8n Workflow Importer v3.0 (ULTIMATE)');
+    console.log('🔧 n8n Workflow Importer v4.0 (FIXED)');
     console.log('========================================');
     console.log(`n8n URL: ${baseUrl}`);
     console.log(`Template Set: ${templateSet}\n`);
@@ -207,14 +187,10 @@ async function importWorkflows() {
             console.log(`   Name: ${workflowData.name || 'Untitled'}`);
             console.log(`   Should activate: ${shouldActivate ? 'YES' : 'NO'}`);
 
-            // ===== STEP 1: Import with active=true =====
-            console.log('\n   📥 Step 1: Importing workflow as ACTIVE...');
+            // ===== STEP 1: Import as INACTIVE =====
+            console.log('\n   📥 Step 1: Importing workflow...');
             
             const cleanedWorkflow = cleanWorkflowForImport(workflowData);
-            // Force active if needed
-            if (shouldActivate) {
-                cleanedWorkflow.active = true;
-            }
             
             const importResponse = await axios.post(
                 `${baseUrl}/rest/workflows`,
@@ -230,12 +206,12 @@ async function importWorkflows() {
             );
 
             if (importResponse.status !== 200 && importResponse.status !== 201) {
-                throw new Error(`Import failed: ${importResponse.status}`);
+                throw new Error(`Import failed: ${importResponse.status} - ${JSON.stringify(importResponse.data)}`);
             }
 
             const workflowId = importResponse.data?.data?.id || importResponse.data?.id;
             if (!workflowId) {
-                throw new Error('No workflow ID');
+                throw new Error('No workflow ID returned');
             }
 
             console.log(`   ✅ Imported (ID: ${workflowId})`);
@@ -250,15 +226,15 @@ async function importWorkflows() {
             console.log(`\n   ⏰ Step 2: Waiting ${CONFIG.IMPORT_DELAY/1000}s...`);
             await new Promise(resolve => setTimeout(resolve, CONFIG.IMPORT_DELAY));
 
-            // ===== STEP 3: Re-save to register triggers =====
-            console.log('\n   🔄 Step 3: Re-saving to register triggers...');
-            const saveSuccess = await resaveWorkflow(baseUrl, workflowId, cookies);
+            // ===== STEP 3: Activate using /activate endpoint =====
+            console.log('\n   🔄 Step 3: Activating workflow...');
+            const activateSuccess = await activateWorkflow(baseUrl, workflowId, cookies);
             
-            if (!saveSuccess) {
-                console.log('   ⚠️ Re-save failed, but continuing...');
+            if (!activateSuccess) {
+                console.log('   ⚠️ Activation failed, but continuing...');
             }
 
-            await new Promise(resolve => setTimeout(resolve, CONFIG.SAVE_DELAY));
+            await new Promise(resolve => setTimeout(resolve, CONFIG.ACTIVATION_DELAY));
 
             // ===== STEP 4: Verify =====
             console.log('\n   🎯 Step 4: Verifying activation...');
@@ -281,7 +257,7 @@ async function importWorkflows() {
     console.log('📊 FINAL SUMMARY');
     console.log('='.repeat(60));
     console.log(`✅ Imported: ${imported}`);
-    console.log(`🚀 Published: ${published}`);
+    console.log(`🚀 Activated: ${published}`);
     console.log(`❌ Failed: ${failed}`);
     console.log('='.repeat(60) + '\n');
 
