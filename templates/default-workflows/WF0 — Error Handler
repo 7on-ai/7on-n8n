@@ -1,0 +1,91 @@
+{
+  "name": "WF0 — Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "df52d81c-1027-4985-bb1d-9c01faa972d2",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $input.first().json;\nconst info = {\n  workflow: err.workflow?.name || 'unknown',\n  node: err.execution?.lastNodeExecuted || 'unknown',\n  error: err.execution?.error?.message || 'Unknown error',\n  executionId: err.execution?.id || 'unknown',\n  timestamp: new Date().toISOString()\n};\nconsole.error('🔴 [ERROR]', JSON.stringify(info));\nreturn { json: info };"
+      },
+      "id": "aa7740b3-44a3-4a6d-887b-5ae8603c4e60",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_ERROR_URL || 'https://placeholder/api/n8n/error' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 5000
+        }
+      },
+      "id": "d2b48a22-9c51-48f1-84a1-948da83457e8",
+      "name": "Notify Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        -80
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error": {
+      "main": [
+        [
+          {
+            "node": "Notify Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "9f995618-ec61-4ead-9627-b1566e510176",
+  "meta": {
+    "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
+  },
+  "id": "NWsd6QcNilv34vR1",
+  "tags": []
+}
