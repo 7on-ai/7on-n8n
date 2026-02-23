@@ -1,0 +1,364 @@
+{
+  "name": "WF3-C — Career Coach Agent v2 (Code Tool)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# WF3-C — CAREER COACH v2\n## 5 Code Tools\n1. market_data     → stocks/crypto/FX (Finnhub+CoinGecko)\n2. manage_finances → expense/income log + cashflow\n3. calculate       → tax/compound/loan/savings\n4. law_reference   → Thai labor/business law\n5. generate_invoice → freelancer invoice\n\n⚠️ Disclaimer บน law/finance ทุก response\n\n## MULTILINGUAL SUPPORT:\n- th / en / ja / zh\n- i18n via Load Credentials node\n- Disclaimer, law refs, invoice แปลตาม lang",
+        "height": 300,
+        "width": 360,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        -80
+      ],
+      "id": "6b093272-fdc8-45ea-bafc-94f79b4add6f",
+      "name": "Career Coach v2 Overview"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf3c-careercoach",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "3952639f-b5a9-4b8e-a4af-105d2ebe2a22",
+      "name": "WF3-C Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        592,
+        272
+      ],
+      "webhookId": "wf3c-careercoach-entry"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json.body || $input.first().json;\nreturn { json: {\n  userId: p.userId, sessionId: p.sessionId, source: p.source,\n  message: p.message || p.enrichedMessage,\n  originalMessage: p.originalMessage || p.message,\n  persona: typeof p.persona === 'string' ? JSON.parse(p.persona) : (p.persona || {}),\n  replyTarget: p.replyTarget, replyToken: p.replyToken, timestamp: p.timestamp\n}};"
+      },
+      "id": "6f93c490-8c7c-4be5-aea1-1b82dad71a52",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Load Credentials — MULTILINGUAL + i18n\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\n\n// i18n Messages\nconst i18nMap = {\n  th: {\n    not_connected: 'ยังไม่ได้เชื่อมต่อ',\n    configure: 'กรุณาตั้งค่าที่ /dashboard/api-settings',\n    success: 'สำเร็จ',\n    error: 'เกิดข้อผิดพลาด',\n    completed: 'เสร็จแล้ว',\n    symbol_required: 'กรุณาระบุ symbol',\n    amount_required: 'กรุณาระบุจำนวนเงินที่ถูกต้อง',\n    invoice_required: 'กรุณาระบุ seller_name, buyer_name และ items[]',\n    disclaimer_legal: 'ข้อมูลนี้เป็นเพื่อการศึกษาเท่านั้น ไม่ใช่คำปรึกษาทางกฎหมายหรือการเงิน',\n    disclaimer_tax: 'ประมาณการเบื้องต้น กรุณาปรึกษานักบัญชีหรือสรรพากร',\n    disclaimer_law: 'ข้อมูลนี้เป็นการอ้างอิงเบื้องต้น กฎหมายอาจมีการเปลี่ยนแปลง กรุณาปรึกษาทนายความหรือหน่วยงานที่เกี่ยวข้องก่อนดำเนินการ'\n  },\n  en: {\n    not_connected: 'Not connected',\n    configure: 'Please configure at /dashboard/api-settings',\n    success: 'Success',\n    error: 'Error occurred',\n    completed: 'Completed',\n    symbol_required: 'symbol is required',\n    amount_required: 'Valid amount required',\n    invoice_required: 'Required: seller_name, buyer_name, items[]',\n    disclaimer_legal: 'For educational purposes only. Not professional legal or financial advice.',\n    disclaimer_tax: 'Preliminary estimate only. Please consult an accountant or tax authority.',\n    disclaimer_law: 'This is a preliminary reference. Laws may change. Please consult a lawyer or relevant authority before taking action.'\n  },\n  ja: {\n    not_connected: '接続されていません',\n    configure: '/dashboard/api-settingsで設定してください',\n    success: '成功しました',\n    error: 'エラーが発生しました',\n    completed: '完了しました',\n    symbol_required: 'symbolが必要です',\n    amount_required: '有効な金額が必要です',\n    invoice_required: 'seller_name、buyer_name、items[]が必要です',\n    disclaimer_legal: '教育目的のみです。専門的な法律・金融アドバイスではありません。',\n    disclaimer_tax: '概算のみです。会計士または税務機関にご相談ください。',\n    disclaimer_law: 'これは初期参照情報です。法律は変更される場合があります。行動する前に弁護士や関係機関にご相談ください。'\n  },\n  zh: {\n    not_connected: '未连接',\n    configure: '请在 /dashboard/api-settings 配置',\n    success: '成功',\n    error: '发生错误',\n    completed: '已完成',\n    symbol_required: '需要symbol',\n    amount_required: '需要有效金额',\n    invoice_required: '需要 seller_name、buyer_name 和 items[]',\n    disclaimer_legal: '仅供教育目的。非专业法律或财务建议。',\n    disclaimer_tax: '仅为初步估算。请咨询会计师或税务机关。',\n    disclaimer_law: '这是初步参考信息。法律可能会有变化。采取行动前请咨询律师或相关机构。'\n  }\n};\n\nconst i18n = i18nMap[lang] || i18nMap['en'];\n\nconst get = (envKey, payloadKey) =>\n  t[payloadKey] || p[payloadKey] || process.env[envKey] || '';\n\nconst creds = {\n  google_access_token:    get('GOOGLE_ACCESS_TOKEN',    'google_access_token'),\n  google_refresh_token:   get('GOOGLE_REFRESH_TOKEN',   'google_refresh_token'),\n  microsoft_access_token: get('MICROSOFT_ACCESS_TOKEN', 'microsoft_access_token'),\n  outlook_access_token:   get('MICROSOFT_ACCESS_TOKEN', 'microsoft_access_token'),\n  telegram_bot_token:     get('TELEGRAM_BOT_TOKEN',     'telegram_bot_token'),\n  discord_bot_token:      get('DISCORD_BOT_TOKEN',      'discord_bot_token'),\n  slack_bot_token:        get('SLACK_BOT_TOKEN',        'slack_bot_token'),\n  twitter_bearer_token:   get('TWITTER_BEARER_TOKEN',   'twitter_bearer_token'),\n  facebook_access_token:  get('FACEBOOK_ACCESS_TOKEN',  'facebook_access_token'),\n  linkedin_access_token:  get('LINKEDIN_ACCESS_TOKEN',  'linkedin_access_token'),\n  spotify_access_token:   get('SPOTIFY_ACCESS_TOKEN',   'spotify_access_token'),\n  youtube_api_key:        get('YOUTUBE_API_KEY',        'youtube_api_key'),\n  line_notify_token:      get('LINE_NOTIFY_TOKEN',      'line_notify_token'),\n  google_maps_key:        get('GOOGLE_MAPS_API_KEY',    'google_maps_key'),\n  brave_api_key:          get('BRAVE_API_KEY',          'brave_api_key'),\n  openweathermap_key:     get('OPENWEATHERMAP_API_KEY', 'openweathermap_key'),\n  fal_api_key:            get('FAL_API_KEY',            'fal_api_key'),\n  elevenlabs_api_key:     get('ELEVENLABS_API_KEY',     'elevenlabs_api_key'),\n  unsplash_access_key:    get('UNSPLASH_ACCESS_KEY',    'unsplash_access_key'),\n  nutritionix_app_id:     get('NUTRITIONIX_APP_ID',     'nutritionix_app_id'),\n  nutritionix_api_key:    get('NUTRITIONIX_API_KEY',    'nutritionix_api_key'),\n  finnhub_api_key:        get('FINNHUB_API_KEY',        'finnhub_api_key'),\n  ha_url:                 get('HOME_ASSISTANT_URL',      'ha_url'),\n  ha_token:               get('HOME_ASSISTANT_TOKEN',    'ha_token'),\n  sonos_api_url:          get('SONOS_HTTP_API_URL',     'sonos_api_url'),\n  lastfm_api_key:         get('LASTFM_API_KEY',         'lastfm_api_key'),\n  gating_service_url:     get('GATING_SERVICE_URL',     'gating_service_url'),\n  internal_auth_token:    get('INTERNAL_AUTH_TOKEN',    'internal_auth_token'),\n  n8n_base_url:           get('N8N_BASE_URL',           'n8n_base_url'),\n  database_url:           get('DATABASE_URL',           'database_url'),\n};\n\nconst connected = Object.entries(creds).filter(([k,v]) => v).map(([k]) => k);\n\nconsole.log('[Load Credentials]', {\n  userId: prev.userId?.substring(0, 8) + '...',\n  connected: connected.length,\n  lang\n});\n\nreturn { \n  json: { \n    ...prev, \n    credentials: creds, \n    lang,\n    i18n,\n    _connected: connected \n  } \n};"
+      },
+      "id": "4446deb8-2a5a-4184-b2f4-b4969f1fde87",
+      "name": "Load Credentials",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message }}",
+        "options": {
+          "systemMessage": "=You are Career Coach — expert in money, career, and Thai law.\n\nUser: {{ $json.persona.name || 'User' }}\nLanguage: {{ $json.persona.language_preference || 'th' }}\n\n## LANGUAGE RULES:\n**ALWAYS respond in user's preferred language: {{ $json.persona.language_preference }}**\n- If 'th' → Thai\n- If 'en' → English\n- If 'ja' → Japanese\n- If 'zh' → Chinese\n\n## DISCLAIMER (include in EVERY response about law or finances, adapt to language):\n- Thai: 'ข้อมูลนี้เป็นเพื่อการศึกษาเท่านั้น ไม่ใช่คำปรึกษาทางกฎหมายหรือการเงิน'\n- English: 'For educational purposes only. Not professional legal or financial advice.'\n- Japanese: '教育目的のみです。専門的な法律・金融アドバイスではありません。'\n- Chinese: '仅供教育目的。非专业法律或财务建议。'\n\n## TOOLS:\nmarket_data, manage_finances, calculate, law_reference, generate_invoice, think"
+        }
+      },
+      "id": "835606dc-65f7-4573-bfac-1e074b3a9f02",
+      "name": "Career Coach Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        1632,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Load Credentials').item.json.sessionId }}"
+      },
+      "id": "15625570-0d3e-48c9-a24b-13d35af7ff6a",
+      "name": "Session Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1616,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "8c690246-d837-4611-98f2-2ac44a31135a",
+      "name": "think",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "name": "market_data",
+        "description": "Get real-time market data. data_type: stock_quote (requires: symbol), stock_news (requires: symbol), crypto_price (requires: coin_id e.g. bitcoin), fx_rates (requires: base e.g. USD).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst dataType = (input.data_type || 'stock_quote').toLowerCase();\nconst finnhubKey = creds.finnhub_api_key || '';\n\ntry {\n  if (dataType === 'stock_quote') {\n    if (!input.symbol) return { json: { error: i18n.symbol_required || 'symbol required' } };\n    if (!finnhubKey) return { json: { error: `Finnhub API key ${i18n.not_connected}`, help: i18n.configure } };\n    const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${input.symbol.toUpperCase()}&token=${finnhubKey}`);\n    const data = await res.json();\n    if (data.error) return { json: { error: data.error } };\n    return { json: { symbol: input.symbol, current: data.c, high: data.h, low: data.l, prev_close: data.pc, change_pct: data.dp, timestamp: new Date().toISOString() } };\n  }\n\n  if (dataType === 'stock_news') {\n    if (!input.symbol) return { json: { error: i18n.symbol_required || 'symbol required' } };\n    if (!finnhubKey) return { json: { error: `Finnhub API key ${i18n.not_connected}`, help: i18n.configure } };\n    const to = new Date().toISOString().split('T')[0];\n    const from = new Date(Date.now() - 7*24*60*60*1000).toISOString().split('T')[0];\n    const res = await fetch(`https://finnhub.io/api/v1/company-news?symbol=${input.symbol}&from=${from}&to=${to}&token=${finnhubKey}`);\n    const data = await res.json();\n    return { json: { news: (data || []).slice(0, 5).map(n => ({ headline: n.headline, summary: n.summary, url: n.url, datetime: n.datetime })) } };\n  }\n\n  if (dataType === 'crypto_price') {\n    const coinId = input.coin_id || 'bitcoin';\n    const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd,thb&include_24hr_change=true&include_market_cap=true`);\n    const data = await res.json();\n    if (!data[coinId]) return { json: { error: `Coin '${coinId}' not found` } };\n    return { json: { coin: coinId, ...data[coinId] } };\n  }\n\n  if (dataType === 'fx_rates') {\n    const base = input.base || 'USD';\n    const res = await fetch(`https://api.fxratesapi.com/latest?base=${base}&currencies=THB,EUR,JPY,GBP,SGD,CNY`);\n    const data = await res.json();\n    return { json: { base, rates: data.rates, date: data.date } };\n  }\n\n  return { json: { error: `Unknown data_type: ${dataType}. Use: stock_quote, stock_news, crypto_price, fx_rates` } };\n} catch(e) {\n  return { json: { error: e.message } };\n}"
+      },
+      "id": "c2b54559-6114-4174-95e3-2e7563a125f4",
+      "name": "market_data",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        1968,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "name": "manage_finances",
+        "description": "Log expenses/income or get monthly cash flow summary. Actions: log_expense (requires: amount, category, description), log_income (requires: amount, description), monthly_summary (returns income/expense breakdown for current month).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst action = (input.action || 'monthly_summary').toLowerCase();\nconst pgUrl = (creds.n8n_base_url || process.env.N8N_BASE_URL || '') + '/webhook/internal-pg-query';\nconst headers = { 'Content-Type': 'application/json', 'x-internal-auth': creds.internal_auth_token || '' };\n\ntry {\n  if (action === 'log_expense' || action === 'log_income') {\n    const amount = parseFloat(input.amount);\n    if (!amount || amount <= 0) return { json: { error: i18n.amount_required || 'Valid amount required' } };\n    const category = action === 'log_income' ? 'income' : (input.category || 'other').replace(/'/g, \"''\");\n    const desc = (input.description || '').replace(/'/g, \"''\");\n    const currency = input.currency || 'THB';\n    const res = await fetch(pgUrl, {\n      method: 'POST',\n      headers,\n      body: JSON.stringify({ query: `INSERT INTO user_data_schema.expense_log (user_id, amount, category, description, currency, logged_at) VALUES ('${ctx.userId}', ${amount}, '${category}', '${desc}', '${currency}', NOW()) RETURNING id, amount, category` })\n    });\n    const data = await res.json();\n    return { json: { success: true, message: i18n.success, logged: data.rows?.[0], action } };\n  }\n\n  // monthly_summary\n  const res = await fetch(pgUrl, {\n    method: 'POST',\n    headers,\n    body: JSON.stringify({ query: `SELECT category, SUM(amount) as total, COUNT(*) as count FROM user_data_schema.expense_log WHERE user_id = '${ctx.userId}' AND logged_at >= DATE_TRUNC('month', NOW()) GROUP BY category ORDER BY total DESC` })\n  });\n  const data = await res.json();\n  const rows = data.rows || [];\n  const income = rows.filter(r => r.category === 'income').reduce((s, r) => s + parseFloat(r.total), 0);\n  const expense = rows.filter(r => r.category !== 'income').reduce((s, r) => s + parseFloat(r.total), 0);\n  return { json: { income, expense, net: income - expense, breakdown: rows, month: new Date().toISOString().slice(0,7) } };\n} catch(e) {\n  return { json: { error: e.message } };\n}"
+      },
+      "id": "e0269812-1370-4f11-98f2-27e14f7ae3bb",
+      "name": "manage_finances",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2160,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "name": "calculate",
+        "description": "Financial calculators. calc_type: thai_income_tax (requires: annual_income, optional: deductions), compound_interest (requires: principal, rate_pct, years), loan_payment (requires: principal, annual_rate_pct, years), savings_goal (requires: goal, initial, monthly_savings, rate_pct).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst i18n = ctx.i18n || {};\nconst lang = ctx.lang || 'th';\nconst type = (input.calc_type || 'thai_income_tax').toLowerCase();\n\n// Dynamic disclaimer per language\nconst disclaimers = {\n  th: '⚠️ ประมาณการเบื้องต้น กรุณาปรึกษานักบัญชีหรือสรรพากร',\n  en: '⚠️ Preliminary estimate only. Please consult an accountant or tax authority.',\n  ja: '⚠️ 概算のみです。会計士または税務機関にご相談ください。',\n  zh: '⚠️ 仅为初步估算。请咨询会计师或税务机关。'\n};\nconst disclaimer = disclaimers[lang] || disclaimers['en'];\n\ntry {\n  if (type === 'thai_income_tax') {\n    const income = parseFloat(input.annual_income || 0);\n    const extraDeduct = parseFloat(input.deductions || 0);\n    const personalDeduct = 60000;\n    const ssoDeduct = Math.min(income * 0.05, 9000);\n    const totalDeduct = personalDeduct + ssoDeduct + extraDeduct;\n    const taxable = Math.max(0, income - totalDeduct);\n    const brackets = [\n      [0, 150000, 0],\n      [150001, 300000, 0.05],\n      [300001, 500000, 0.10],\n      [500001, 750000, 0.15],\n      [750001, 1000000, 0.20],\n      [1000001, 2000000, 0.25],\n      [2000001, 5000000, 0.30],\n      [5000001, Infinity, 0.35]\n    ];\n    let tax = 0;\n    for (const [min, max, rate] of brackets) {\n      if (taxable <= min) break;\n      tax += (Math.min(taxable, max) - min) * rate;\n    }\n    return { json: {\n      calc_type: type,\n      annual_income: income,\n      total_deductions: totalDeduct,\n      taxable_income: taxable,\n      estimated_tax: Math.round(tax),\n      effective_rate_pct: income > 0 ? Math.round(tax/income*1000)/10 : 0,\n      monthly_withholding: Math.round(tax/12),\n      disclaimer\n    }};\n  }\n\n  if (type === 'compound_interest') {\n    const p = parseFloat(input.principal || 0);\n    const r = parseFloat(input.rate_pct || 0) / 100;\n    const n = parseInt(input.years || 1);\n    const final = p * Math.pow(1 + r, n);\n    return { json: {\n      calc_type: type,\n      principal: p,\n      rate_pct: r*100,\n      years: n,\n      final_amount: Math.round(final),\n      gain: Math.round(final - p),\n      gain_pct: Math.round((final/p - 1)*1000)/10\n    }};\n  }\n\n  if (type === 'loan_payment') {\n    const p = parseFloat(input.principal || 0);\n    const r = parseFloat(input.annual_rate_pct || 0) / 100 / 12;\n    const n = parseInt(input.years || 1) * 12;\n    const pmt = r === 0 ? p/n : p * (r * Math.pow(1+r,n)) / (Math.pow(1+r,n) - 1);\n    return { json: {\n      calc_type: type,\n      principal: p,\n      monthly_payment: Math.round(pmt),\n      total_paid: Math.round(pmt*n),\n      total_interest: Math.round(pmt*n - p)\n    }};\n  }\n\n  if (type === 'savings_goal') {\n    const goal = parseFloat(input.goal || 0);\n    const initial = parseFloat(input.initial || 0);\n    const monthly = parseFloat(input.monthly_savings || 0);\n    const r = parseFloat(input.rate_pct || 0) / 100 / 12;\n    let balance = initial, months = 0;\n    while (balance < goal && months < 1200) {\n      balance = balance * (1 + r) + monthly;\n      months++;\n    }\n    return { json: {\n      calc_type: type,\n      goal,\n      initial,\n      monthly_savings: monthly,\n      months_to_goal: months,\n      years_to_goal: Math.round(months/12*10)/10,\n      achievable: months < 1200\n    }};\n  }\n\n  return { json: { error: `Unknown calc_type: ${type}. Use: thai_income_tax, compound_interest, loan_payment, savings_goal` } };\n} catch(e) {\n  return { json: { error: e.message } };\n}"
+      },
+      "id": "feb25632-22fa-4bf4-820e-a9e00957871e",
+      "name": "calculate",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2336,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "name": "law_reference",
+        "description": "Get Thai law quick reference. topic: leave_rights, termination_compensation, minimum_wage, social_security, business_registration, tax_overview. Always includes disclaimer.",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst i18n = ctx.i18n || {};\nconst lang = ctx.lang || 'th';\nconst topic = (input.topic || 'leave_rights').toLowerCase().replace(/[- ]/g,'_');\n\n// Dynamic disclaimer per language\nconst disclaimers = {\n  th: '⚠️ ข้อมูลนี้เป็นการอ้างอิงเบื้องต้น กฎหมายอาจมีการเปลี่ยนแปลง กรุณาปรึกษาทนายความหรือหน่วยงานที่เกี่ยวข้องก่อนดำเนินการ',\n  en: '⚠️ This is a preliminary reference. Laws may change. Please consult a lawyer or relevant authority before taking action.',\n  ja: '⚠️ これは初期参照情報です。法律は変更される場合があります。行動する前に弁護士や関係機関にご相談ください。',\n  zh: '⚠️ 这是初步参考信息。法律可能会有变化。采取行动前请咨询律师或相关机构。'\n};\nconst disclaimer = disclaimers[lang] || disclaimers['en'];\n\n// Multilingual law references\nconst refsI18n = {\n  leave_rights: {\n    title: {\n      th: 'สิทธิ์การลา (พ.ร.บ.คุ้มครองแรงงาน)',\n      en: 'Leave Rights (Thai Labour Protection Act)',\n      ja: '休暇権（タイ労働者保護法）',\n      zh: '请假权利（泰国劳动保护法）'\n    },\n    items: {\n      th: ['ลาพักร้อน ≥6 วัน/ปี (อายุงาน ≥1 ปี)','ลาป่วย ≤30 วัน/ปี (ได้รับค่าจ้าง)','ลากิจ อย่างน้อย 3 วัน/ปี','ลาคลอด 98 วัน (45 วันแรกได้รับค่าจ้าง)','ลาทหาร ≤60 วัน/ปี'],\n      en: ['Annual leave ≥6 days/year (service ≥1 year)','Sick leave ≤30 days/year (with pay)','Personal leave at least 3 days/year','Maternity leave 98 days (first 45 days with pay)','Military leave ≤60 days/year'],\n      ja: ['年次有給休暇 ≥6日/年（勤続≥1年）','病気休暇 ≤30日/年（有給）','私用休暇 最低3日/年','産休98日（最初の45日は有給）','軍務休暇 ≤60日/年'],\n      zh: ['年假 ≥6天/年（工龄≥1年）','病假 ≤30天/年（带薪）','事假至少3天/年','产假98天（前45天带薪）','军事休假 ≤60天/年']\n    }\n  },\n  termination_compensation: {\n    title: {\n      th: 'ค่าชดเชยการเลิกจ้าง',\n      en: 'Termination Compensation',\n      ja: '解雇補償',\n      zh: '解雇补偿'\n    },\n    items: {\n      th: ['120 วัน–1 ปี → 30 วัน','1–3 ปี → 90 วัน','3–6 ปี → 180 วัน','6–10 ปี → 240 วัน','10–20 ปี → 300 วัน','≥20 ปี → 400 วัน','+ สินจ้างแทนการบอกกล่าว ≥1 งวด'],\n      en: ['120 days–1 year → 30 days pay','1–3 years → 90 days pay','3–6 years → 180 days pay','6–10 years → 240 days pay','10–20 years → 300 days pay','≥20 years → 400 days pay','+ Advance notice pay ≥1 pay period'],\n      ja: ['120日〜1年 → 30日分給与','1〜3年 → 90日分','3〜6年 → 180日分','6〜10年 → 240日分','10〜20年 → 300日分','≥20年 → 400日分','+ 解雇予告手当 ≥1給与期間'],\n      zh: ['120天–1年 → 30天工资','1–3年 → 90天','3–6年 → 180天','6–10年 → 240天','10–20年 → 300天','≥20年 → 400天','+ 预告通知期工资 ≥1个薪资周期']\n    }\n  },\n  minimum_wage: {\n    title: {\n      th: 'ค่าแรงขั้นต่ำ 2024 (ตัวอย่าง)',\n      en: 'Minimum Wage 2024 (Examples)',\n      ja: '最低賃金2024（例）',\n      zh: '最低工资2024（示例）'\n    },\n    items: {\n      th: ['กรุงเทพฯ/ปริมณฑล: 363 บาท/วัน','ภูเก็ต: 370 บาท/วัน','เชียงใหม่/ขอนแก่น: 345 บาท/วัน','ตรวจสอบล่าสุด: กรมสวัสดิการและคุ้มครองแรงงาน'],\n      en: ['Bangkok/Greater Bangkok: THB 363/day','Phuket: THB 370/day','Chiang Mai/Khon Kaen: THB 345/day','Verify latest: Department of Labour Protection and Welfare'],\n      ja: ['バンコク/大バンコク圏: 363バーツ/日','プーケット: 370バーツ/日','チェンマイ/コンケン: 345バーツ/日','最新情報: 労働福祉保護局にて確認'],\n      zh: ['曼谷/大曼谷区: 363铢/天','普吉岛: 370铢/天','清迈/孔敬: 345铢/天','最新信息: 请查阅劳工保护福利局']\n    }\n  },\n  social_security: {\n    title: {\n      th: 'ประกันสังคม',\n      en: 'Social Security (Thailand)',\n      ja: '社会保障（タイ）',\n      zh: '社会保障（泰国）'\n    },\n    items: {\n      th: ['ม.33 (ลูกจ้าง): หัก 5% นายจ้างสมทบ 5% (≤750 บาท/เดือน)','ม.39 (ออกจากงาน): สมทบเอง 432 บาท/เดือน','ม.40 (อิสระ): 70–200 บาท/เดือน','สิทธิ์: รักษาพยาบาล ว่างงาน ชราภาพ คลอดบุตร เสียชีวิต'],\n      en: ['Section 33 (employees): 5% deducted, employer contributes 5% (≤750 THB/month)','Section 39 (ex-employees): self-pay 432 THB/month','Section 40 (freelance): 70–200 THB/month','Benefits: medical, unemployment, pension, maternity, death'],\n      ja: ['第33条（従業員）: 5%控除、雇用主5%負担（≤750バーツ/月）','第39条（元従業員）: 自己負担 432バーツ/月','第40条（フリーランス）: 70〜200バーツ/月','給付: 医療、失業、老齢、出産、死亡'],\n      zh: ['第33条（员工）: 扣除5%，雇主缴纳5%（≤750铢/月）','第39条（前员工）: 自付 432铢/月','第40条（自由职业）: 70–200铢/月','福利: 医疗、失业、养老、生育、死亡']\n    }\n  },\n  business_registration: {\n    title: {\n      th: 'การจดทะเบียนธุรกิจ',\n      en: 'Business Registration (Thailand)',\n      ja: '法人登記（タイ）',\n      zh: '商业注册（泰国）'\n    },\n    items: {\n      th: ['บุคคลธรรมดา: ง่าย ภาษีก้าวหน้า ความเสี่ยงส่วนตัว','ห้างหุ้นส่วน: ≥2 คน ความรับผิดไม่จำกัด','บริษัทจำกัด: ≥3 คน ทุน ≥1 ล้านบาท ความรับผิดจำกัด','จด VAT เมื่อรายได้ >1.8 ล้านบาท/ปี'],\n      en: ['Sole proprietor: simple setup, progressive tax, personal liability','Partnership: ≥2 persons, unlimited liability','Limited company: ≥3 persons, capital ≥1M THB, limited liability','VAT registration required when revenue >1.8M THB/year'],\n      ja: ['個人事業主: 簡単、累進課税、個人責任','合名会社: ≥2名、無限責任','有限会社: ≥3名、資本金≥100万バーツ、有限責任','年収>180万バーツでVAT登録必要'],\n      zh: ['个体经营: 简单，累进税，个人责任','合伙企业: ≥2人，无限责任','有限公司: ≥3人，注册资本≥100万铢，有限责任','收入>180万铢/年需注册增值税']\n    }\n  },\n  tax_overview: {\n    title: {\n      th: 'ภาษีที่ควรรู้',\n      en: 'Key Taxes to Know (Thailand)',\n      ja: '知っておくべき税金（タイ）',\n      zh: '需了解的税种（泰国）'\n    },\n    items: {\n      th: ['ภาษีเงินได้บุคคลธรรมดา: 5–35% (progressive)','ภาษีนิติบุคคล: 20%','VAT: 7%','ภาษีหัก ณ ที่จ่าย: 1–5% (แล้วแต่ประเภท)','ยื่นแบบ ภ.ง.ด.91 ภายใน 31 มีนาคมทุกปี'],\n      en: ['Personal income tax: 5–35% (progressive)','Corporate income tax: 20%','VAT: 7%','Withholding tax: 1–5% (varies by type)','File PND 91 by March 31 each year'],\n      ja: ['個人所得税: 5〜35%（累進）','法人税: 20%','VAT: 7%','源泉徴収税: 1〜5%（種類により異なる）','毎年3月31日までにPND 91申告'],\n      zh: ['个人所得税: 5–35%（累进）','企业所得税: 20%','增值税: 7%','预扣税: 1–5%（视类型而定）','每年3月31日前申报PND 91']\n    }\n  }\n};\n\nconst refData = refsI18n[topic];\nif (!refData) return { json: { error: `Unknown topic: ${topic}`, available_topics: Object.keys(refsI18n) } };\n\nconst localLang = ['th','en','ja','zh'].includes(lang) ? lang : 'en';\nconst ref = {\n  title: refData.title[localLang] || refData.title['en'],\n  items: refData.items[localLang] || refData.items['en'],\n  disclaimer,\n  topic,\n  available_topics: Object.keys(refsI18n)\n};\n\nreturn { json: ref };"
+      },
+      "id": "6dd45c50-bc3d-4e60-8357-66ddf1bc93f6",
+      "name": "law_reference",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2512,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "name": "generate_invoice",
+        "description": "Generate a freelancer invoice with VAT and withholding tax. Requires: seller_name, buyer_name, items (array of {description, amount}). Optional: include_vat (bool), wht_rate (1-3), bank_account.",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst i18n = ctx.i18n || {};\nconst lang = ctx.lang || 'th';\n\nif (!input.seller_name || !input.buyer_name || !input.items?.length) {\n  return { json: { error: i18n.invoice_required || 'Required: seller_name, buyer_name, items[]' } };\n}\n\n// Multilingual invoice labels\nconst labels = {\n  th: {\n    title: 'ใบแจ้งหนี้ / INVOICE',\n    invoice_no: 'เลขที่',\n    date: 'วันที่',\n    seller: 'ผู้รับเงิน',\n    buyer: 'ผู้จ่าย',\n    items_header: 'รายการ',\n    subtotal: 'ยอดรวม',\n    vat: 'VAT 7%',\n    wht: 'หัก ณ ที่จ่าย',\n    total: 'ยอดชำระ',\n    bank: 'บัญชีรับเงิน',\n    bank_placeholder: 'กรุณาระบุ',\n    currency: 'บาท'\n  },\n  en: {\n    title: 'INVOICE',\n    invoice_no: 'Invoice No.',\n    date: 'Date',\n    seller: 'Seller',\n    buyer: 'Buyer',\n    items_header: 'Items',\n    subtotal: 'Subtotal',\n    vat: 'VAT 7%',\n    wht: 'Withholding Tax',\n    total: 'Total Due',\n    bank: 'Bank Account',\n    bank_placeholder: 'Please specify',\n    currency: 'THB'\n  },\n  ja: {\n    title: '請求書 / INVOICE',\n    invoice_no: '請求書番号',\n    date: '日付',\n    seller: '受取人',\n    buyer: '支払者',\n    items_header: '明細',\n    subtotal: '小計',\n    vat: 'VAT 7%',\n    wht: '源泉徴収税',\n    total: '合計金額',\n    bank: '振込先口座',\n    bank_placeholder: '要記入',\n    currency: 'バーツ'\n  },\n  zh: {\n    title: '发票 / INVOICE',\n    invoice_no: '发票号',\n    date: '日期',\n    seller: '收款方',\n    buyer: '付款方',\n    items_header: '项目',\n    subtotal: '小计',\n    vat: 'VAT 7%',\n    wht: '预扣税',\n    total: '应付合计',\n    bank: '收款账户',\n    bank_placeholder: '请填写',\n    currency: '泰铢'\n  }\n};\n\nconst lb = labels[lang] || labels['en'];\nconst invoiceDate = new Date();\nconst dateStr = lang === 'th'\n  ? invoiceDate.toLocaleDateString('th-TH-u-ca-buddhist')\n  : invoiceDate.toLocaleDateString('en-GB');\n\nconst invoiceNum = `INV-${Date.now().toString().slice(-8)}`;\nconst items = input.items || [];\nconst subtotal = items.reduce((s, i) => s + parseFloat(i.amount || 0), 0);\nconst vat = input.include_vat ? Math.round(subtotal * 0.07) : 0;\nconst whtRate = parseFloat(input.wht_rate || 3) / 100;\nconst wht = input.withholding_tax ? Math.round(subtotal * whtRate) : 0;\nconst total = subtotal + vat - wht;\n\nconst lines = items.map((it, i) => `  ${i+1}. ${it.description}: ${parseFloat(it.amount).toLocaleString()} ${lb.currency}`).join('\\n');\n\nconst invoiceText = [\n  `╔══════════════════════════════════╗`,\n  `║   ${lb.title.padEnd(32)}║`,\n  `╚══════════════════════════════════╝`,\n  `${lb.invoice_no}: ${invoiceNum}    ${lb.date}: ${dateStr}`,\n  `${lb.seller}: ${input.seller_name}`,\n  `${lb.buyer}: ${input.buyer_name}`,\n  `──────────────────────────────────`,\n  `${lb.items_header}:`,\n  lines,\n  `──────────────────────────────────`,\n  `${lb.subtotal}:  ${subtotal.toLocaleString()} ${lb.currency}`,\n  vat > 0 ? `${lb.vat}:  ${vat.toLocaleString()} ${lb.currency}` : null,\n  wht > 0 ? `${lb.wht} ${input.wht_rate||3}%:  -${wht.toLocaleString()} ${lb.currency}` : null,\n  `${lb.total}:  ${total.toLocaleString()} ${lb.currency}`,\n  `──────────────────────────────────`,\n  `${lb.bank}: ${input.bank_account || lb.bank_placeholder}`\n].filter(l => l !== null).join('\\n');\n\nreturn { json: { invoice_number: invoiceNum, subtotal, vat, withholding_tax: wht, total, currency: lb.currency, invoice_text: invoiceText } };"
+      },
+      "id": "7e40e427-0b4a-449d-a629-168449224749",
+      "name": "generate_invoice",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2688,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = $input.first().json.output || $input.first().json.text || 'ไม่สามารถประมวลผลได้';\nconst prev = $('Extract Payload').item.json;\nreturn { json: { ...prev, agentOutput: out, agentCategory: 'career-coach', processedAt: new Date().toISOString() } };"
+      },
+      "id": "b40330cb-7f57-4187-a1ea-b84b8238f346",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2896,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "maxTokens": 4000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1456,
+        400
+      ],
+      "id": "1a8415e6-5e8e-4800-8c8a-e3d72bc9fd17",
+      "name": "OpenRouter LLM (Sonnet)",
+      "credentials": {
+        "openRouterApi": {
+          "id": "FUm3Fg9B8euy8cH3",
+          "name": "OpenRouter - 2026-02-14T03:30"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WF3-C Entry": {
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payload": {
+      "main": [
+        [
+          {
+            "node": "Load Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Credentials": {
+      "main": [
+        [
+          {
+            "node": "Career Coach Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Career Coach Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Career Coach Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "think": {
+      "ai_tool": [
+        [
+          {
+            "node": "Career Coach Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "market_data": {
+      "ai_tool": [
+        [
+          {
+            "node": "Career Coach Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "manage_finances": {
+      "ai_tool": [
+        [
+          {
+            "node": "Career Coach Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "calculate": {
+      "ai_tool": [
+        [
+          {
+            "node": "Career Coach Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "law_reference": {
+      "ai_tool": [
+        [
+          {
+            "node": "Career Coach Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "generate_invoice": {
+      "ai_tool": [
+        [
+          {
+            "node": "Career Coach Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter LLM (Sonnet)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Career Coach Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "e56961ea-266b-44be-86ae-b49c930f25ec",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
+  },
+  "id": "VvdbQhrJm4I3KK5H",
+  "tags": []
+}
