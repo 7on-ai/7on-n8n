@@ -1,0 +1,365 @@
+{
+  "name": "WF3-B — Soul Agent v2 (Code Tool)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# WF3-B — SOUL v2\n## 5 Code Tools (เชื่อม Agent ได้จริง)\n1. call_gating_service  → ethical classification\n2. manage_journal       → save/read journal entries\n3. manage_habits        → log/view habit streaks\n4. manage_persona       → read/update user profile\n5. mindfulness_guide    → breathing + meditation exercises\n\nThink Tool เป็น built-in\n\n## MULTILINGUAL SUPPORT:\n- th / en / ja / zh\n- i18n via Load Credentials node\n- Dynamic error messages per language\n- mindfulness_guide แปลตาม lang",
+        "height": 320,
+        "width": 360,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        0
+      ],
+      "id": "0a25af44-d427-4a39-b574-c058a551e21c",
+      "name": "Soul v2 Overview"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf3b-soul",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "bdda425e-a216-4c34-9e00-8e1ca944db68",
+      "name": "WF3-B Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        608,
+        352
+      ],
+      "webhookId": "wf3b-soul-entry"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json.body || $input.first().json;\nreturn { json: {\n  userId: p.userId,\n  sessionId: p.sessionId,\n  source: p.source,\n  message: p.message || p.enrichedMessage,\n  originalMessage: p.originalMessage || p.message,\n  persona: typeof p.persona === 'string' ? JSON.parse(p.persona) : (p.persona || {}),\n  replyTarget: p.replyTarget,\n  replyToken: p.replyToken,\n  timestamp: p.timestamp,\n  databaseUrl: p.databaseUrl || process.env.DATABASE_URL || ''\n}};"
+      },
+      "id": "5fc5d66b-ce82-497e-a05b-e6238b508080",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Load Credentials — MULTILINGUAL + i18n\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\n\n// i18n Messages\nconst i18nMap = {\n  th: {\n    not_connected: 'ยังไม่ได้เชื่อมต่อ',\n    configure: 'กรุณาตั้งค่าที่ /dashboard/api-settings',\n    success: 'สำเร็จ',\n    error: 'เกิดข้อผิดพลาด',\n    completed: 'เสร็จแล้ว',\n    db_not_configured: 'ยังไม่ได้ตั้งค่าฐานข้อมูล',\n    habit_name_required: 'กรุณาระบุชื่อนิสัย',\n    no_updates: 'ไม่มีข้อมูลที่ต้องการอัปเดต'\n  },\n  en: {\n    not_connected: 'Not connected',\n    configure: 'Please configure at /dashboard/api-settings',\n    success: 'Success',\n    error: 'Error occurred',\n    completed: 'Completed',\n    db_not_configured: 'Database not configured',\n    habit_name_required: 'habit_name is required',\n    no_updates: 'No updates provided'\n  },\n  ja: {\n    not_connected: '接続されていません',\n    configure: '/dashboard/api-settingsで設定してください',\n    success: '成功しました',\n    error: 'エラーが発生しました',\n    completed: '完了しました',\n    db_not_configured: 'データベースが設定されていません',\n    habit_name_required: '習慣名が必要です',\n    no_updates: '更新情報がありません'\n  },\n  zh: {\n    not_connected: '未连接',\n    configure: '请在 /dashboard/api-settings 配置',\n    success: '成功',\n    error: '发生错误',\n    completed: '已完成',\n    db_not_configured: '数据库未配置',\n    habit_name_required: '需要习惯名称',\n    no_updates: '没有提供更新'\n  }\n};\n\nconst i18n = i18nMap[lang] || i18nMap['en'];\n\nconst get = (envKey, payloadKey) =>\n  t[payloadKey] || p[payloadKey] || process.env[envKey] || '';\n\nconst creds = {\n  google_access_token:    get('GOOGLE_ACCESS_TOKEN',    'google_access_token'),\n  google_refresh_token:   get('GOOGLE_REFRESH_TOKEN',   'google_refresh_token'),\n  microsoft_access_token: get('MICROSOFT_ACCESS_TOKEN', 'microsoft_access_token'),\n  outlook_access_token:   get('MICROSOFT_ACCESS_TOKEN', 'microsoft_access_token'),\n  telegram_bot_token:     get('TELEGRAM_BOT_TOKEN',     'telegram_bot_token'),\n  discord_bot_token:      get('DISCORD_BOT_TOKEN',      'discord_bot_token'),\n  slack_bot_token:        get('SLACK_BOT_TOKEN',        'slack_bot_token'),\n  twitter_bearer_token:   get('TWITTER_BEARER_TOKEN',   'twitter_bearer_token'),\n  facebook_access_token:  get('FACEBOOK_ACCESS_TOKEN',  'facebook_access_token'),\n  linkedin_access_token:  get('LINKEDIN_ACCESS_TOKEN',  'linkedin_access_token'),\n  spotify_access_token:   get('SPOTIFY_ACCESS_TOKEN',   'spotify_access_token'),\n  youtube_api_key:        get('YOUTUBE_API_KEY',        'youtube_api_key'),\n  line_notify_token:      get('LINE_NOTIFY_TOKEN',      'line_notify_token'),\n  google_maps_key:        get('GOOGLE_MAPS_API_KEY',    'google_maps_key'),\n  brave_api_key:          get('BRAVE_API_KEY',          'brave_api_key'),\n  openweathermap_key:     get('OPENWEATHERMAP_API_KEY', 'openweathermap_key'),\n  fal_api_key:            get('FAL_API_KEY',            'fal_api_key'),\n  elevenlabs_api_key:     get('ELEVENLABS_API_KEY',     'elevenlabs_api_key'),\n  unsplash_access_key:    get('UNSPLASH_ACCESS_KEY',    'unsplash_access_key'),\n  nutritionix_app_id:     get('NUTRITIONIX_APP_ID',     'nutritionix_app_id'),\n  nutritionix_api_key:    get('NUTRITIONIX_API_KEY',    'nutritionix_api_key'),\n  finnhub_api_key:        get('FINNHUB_API_KEY',        'finnhub_api_key'),\n  ha_url:                 get('HOME_ASSISTANT_URL',      'ha_url'),\n  ha_token:               get('HOME_ASSISTANT_TOKEN',    'ha_token'),\n  sonos_api_url:          get('SONOS_HTTP_API_URL',     'sonos_api_url'),\n  lastfm_api_key:         get('LASTFM_API_KEY',         'lastfm_api_key'),\n  gating_service_url:     get('GATING_SERVICE_URL',     'gating_service_url'),\n  internal_auth_token:    get('INTERNAL_AUTH_TOKEN',    'internal_auth_token'),\n  n8n_base_url:           get('N8N_BASE_URL',           'n8n_base_url'),\n  database_url:           get('DATABASE_URL',           'database_url'),\n};\n\nconst connected = Object.entries(creds).filter(([k,v]) => v).map(([k]) => k);\n\nconsole.log('[Load Credentials]', {\n  userId: prev.userId?.substring(0, 8) + '...',\n  connected: connected.length,\n  lang\n});\n\nreturn { \n  json: { \n    ...prev, \n    credentials: creds, \n    lang,\n    i18n,\n    _connected: connected \n  } \n};"
+      },
+      "id": "8b8dee4b-2a35-435f-9504-372f9d9541da",
+      "name": "Load Credentials",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message }}",
+        "options": {
+          "systemMessage": "=You are Soul — Sunday's emotional core and life mentor.\n\nUser: {{ $json.persona.name || 'User' }}\nLanguage: {{ $json.persona.language_preference || 'th' }}\nTime: {{ $json.timestamp }}\n\n## LANGUAGE RULES:\n**ALWAYS respond in user's preferred language: {{ $json.persona.language_preference }}**\n- If 'th' → Thai (informal, warm)\n- If 'en' → English (natural, empathetic)\n- If 'ja' → Japanese (polite, caring)\n- If 'zh' → Chinese (warm, supportive)\n- Adapt tone: informal for Thai, natural for English\n\n## TOOLS:\ncall_gating_service, manage_journal, manage_habits, manage_persona, mindfulness_guide\n\n## RULES:\n- ALWAYS call call_gating_service first to understand emotional context\n- Respond in user's language at all times\n- Never diagnose or prescribe medication\n- Be empathetic and supportive, not clinical"
+        }
+      },
+      "id": "7c60fa87-2d2d-4c78-a2da-9299cc4badb3",
+      "name": "Soul Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        1648,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Load Credentials').item.json.sessionId }}",
+        "contextWindowLength": 20
+      },
+      "id": "081dae11-dadf-4e99-a460-b8d918222e25",
+      "name": "Session Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        480
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b656c850-5ccb-4e00-b127-d43f1ac18be8",
+      "name": "think",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "name": "call_gating_service",
+        "description": "ALWAYS call first. Classifies message emotionally and returns tone guidance. Returns: classification, ethical_scores, gentle_guidance, reflection_prompt, growth_stage.",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst gatingUrl = creds.gating_service_url || process.env.GATING_SERVICE_URL || 'http://gating-service:8080';\n\ntry {\n  const res = await fetch(`${gatingUrl}/gating/ethical-route`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      user_id: ctx.userId,\n      text: ctx.message,\n      database_url: ctx.databaseUrl || creds.database_url || ''\n    })\n  });\n  if (!res.ok) throw new Error(`Gating HTTP ${res.status}`);\n  const data = await res.json();\n  return { json: {\n    classification: data.routing,\n    ethical_scores: data.ethical_scores,\n    growth_stage: data.growth_stage,\n    gentle_guidance: data.gentle_guidance,\n    reflection_prompt: data.reflection_prompt,\n    detected_language: data.detected_language\n  }};\n} catch(e) {\n  // Graceful fallback — don't break the conversation\n  return { json: {\n    classification: 'neutral_interaction',\n    ethical_scores: {},\n    growth_stage: 2,\n    gentle_guidance: '',\n    reflection_prompt: '',\n    error: e.message\n  }};\n}"
+      },
+      "id": "e496c0cc-6fdb-4744-9cdc-3280ec502c40",
+      "name": "call_gating_service",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        1936,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "name": "manage_journal",
+        "description": "Save a journal entry or read recent entries. Actions: save_entry (requires: content, mood_score 1-10, tags[]), read_recent (returns last 7 entries).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst action = (input.action || 'read_recent').toLowerCase();\nconst dbUrl = ctx.databaseUrl || creds.database_url || '';\n\nif (!dbUrl) return { json: { error: i18n.db_not_configured || 'Database not configured' } };\n\nconst pgUrl = (creds.n8n_base_url || process.env.N8N_BASE_URL || '') + '/webhook/internal-pg-query';\nconst authHeader = creds.internal_auth_token || '';\n\nif (action === 'save_entry') {\n  const content = (input.content || '').replace(/'/g, \"''\");\n  const mood = Math.min(10, Math.max(1, parseInt(input.mood_score) || 5));\n  const tags = (input.tags || ['general']).map(t => `'${t}'`).join(',');\n  \n  const res = await fetch(pgUrl, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json', 'x-internal-auth': authHeader },\n    body: JSON.stringify({ query: `INSERT INTO user_data_schema.journal_entries (user_id, content, mood_score, tags, created_at) VALUES ('${ctx.userId}', '${content}', ${mood}, ARRAY[${tags}], NOW()) RETURNING id, created_at` })\n  });\n  const data = await res.json();\n  return { json: { success: true, message: i18n.success, entry_id: data.rows?.[0]?.id, mood_score: mood, action: 'saved' } };\n}\n\n// read_recent\nconst res = await fetch(pgUrl, {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json', 'x-internal-auth': authHeader },\n  body: JSON.stringify({ query: `SELECT content, mood_score, tags, created_at FROM user_data_schema.journal_entries WHERE user_id = '${ctx.userId}' ORDER BY created_at DESC LIMIT 7` })\n});\nconst data = await res.json();\nreturn { json: { entries: data.rows || [], count: data.rows?.length || 0 } };"
+      },
+      "id": "5ba3aac6-396e-4dc8-8f09-1bcbe32c1d0b",
+      "name": "manage_journal",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2112,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "name": "manage_habits",
+        "description": "Log a completed habit or view habit streaks. Actions: log_habit (requires: habit_name, completed bool, notes?), view_streaks (returns all habits with streak counts for last 30 days).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst action = (input.action || 'view_streaks').toLowerCase();\nconst pgUrl = (creds.n8n_base_url || process.env.N8N_BASE_URL || '') + '/webhook/internal-pg-query';\nconst authHeader = creds.internal_auth_token || '';\n\nif (action === 'log_habit') {\n  const name = (input.habit_name || '').replace(/'/g, \"''\");\n  const completed = input.completed !== false;\n  const notes = (input.notes || '').replace(/'/g, \"''\");\n  if (!name) return { json: { error: i18n.habit_name_required || 'habit_name is required' } };\n  \n  const res = await fetch(pgUrl, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json', 'x-internal-auth': authHeader },\n    body: JSON.stringify({ query: `INSERT INTO user_data_schema.habit_log (user_id, habit_name, completed, notes, logged_at) VALUES ('${ctx.userId}', '${name}', ${completed}, '${notes}', NOW()) RETURNING id` })\n  });\n  const data = await res.json();\n  return { json: { success: true, message: i18n.success, habit: name, completed, id: data.rows?.[0]?.id } };\n}\n\n// view_streaks\nconst res = await fetch(pgUrl, {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json', 'x-internal-auth': authHeader },\n  body: JSON.stringify({ query: `SELECT habit_name, COUNT(*) as streak, MAX(logged_at) as last_done FROM user_data_schema.habit_log WHERE user_id = '${ctx.userId}' AND logged_at >= NOW() - INTERVAL '30 days' AND completed = true GROUP BY habit_name ORDER BY streak DESC` })\n});\nconst data = await res.json();\nreturn { json: { habits: data.rows || [], count: data.rows?.length || 0 } };"
+      },
+      "id": "b73cd8d5-6121-4a1a-acb4-27f19ed99524",
+      "name": "manage_habits",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2288,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "name": "manage_persona",
+        "description": "Read or update user personality profile and preferences. Actions: read_profile (returns full persona), update_profile (requires: updates object with key-value pairs to merge into preferences).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst action = (input.action || 'read_profile').toLowerCase();\nconst pgUrl = (creds.n8n_base_url || process.env.N8N_BASE_URL || '') + '/webhook/internal-pg-query';\nconst authHeader = creds.internal_auth_token || '';\n\nif (action === 'read_profile') {\n  const res = await fetch(pgUrl, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json', 'x-internal-auth': authHeader },\n    body: JSON.stringify({ query: `SELECT display_name, language_preference, timezone, preferences, physical_stats FROM user_data_schema.user_profiles WHERE user_id = '${ctx.userId}' LIMIT 1` })\n  });\n  const data = await res.json();\n  return { json: { profile: data.rows?.[0] || {}, found: (data.rows?.length || 0) > 0 } };\n}\n\n// update_profile\nconst updates = input.updates || {};\nif (Object.keys(updates).length === 0) return { json: { error: i18n.no_updates || 'No updates provided' } };\nconst updatesJson = JSON.stringify(updates).replace(/'/g, \"''\");\n\nconst res = await fetch(pgUrl, {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json', 'x-internal-auth': authHeader },\n  body: JSON.stringify({ query: `UPDATE user_data_schema.user_profiles SET preferences = COALESCE(preferences,'{}')::jsonb || '${updatesJson}'::jsonb, updated_at = NOW() WHERE user_id = '${ctx.userId}' RETURNING user_id, preferences` })\n});\nconst data = await res.json();\nreturn { json: { success: true, message: i18n.success, updated: data.rows?.[0]?.preferences || {} } };"
+      },
+      "id": "84f6538c-a19b-4f0b-b325-7c48d6be2ee8",
+      "name": "manage_persona",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2464,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "name": "mindfulness_guide",
+        "description": "Get a step-by-step mindfulness or breathing exercise guide. Exercises: box_breathing, four_seven_eight, loving_kindness, body_scan. Input: { exercise: string }",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst lang = ctx.lang || 'th';\nconst ex = (input.exercise || 'box_breathing').toLowerCase().replace(/[- ]/g,'_');\n\n// Multilingual mindfulness guides\nconst guidesI18n = {\n  box_breathing: {\n    name: {\n      th: 'Box Breathing 4-4-4-4 (หายใจกล่อง)',\n      en: 'Box Breathing 4-4-4-4',\n      ja: 'ボックス呼吸法 4-4-4-4',\n      zh: '方块呼吸法 4-4-4-4'\n    },\n    steps: {\n      th: ['หายใจเข้าช้าๆ นับ 1-2-3-4','กลั้นลมหายใจ นับ 1-2-3-4','หายใจออกช้าๆ นับ 1-2-3-4','พักก่อนหายใจใหม่ นับ 1-2-3-4'],\n      en: ['Inhale slowly, count 1-2-3-4','Hold your breath, count 1-2-3-4','Exhale slowly, count 1-2-3-4','Rest before next breath, count 1-2-3-4'],\n      ja: ['ゆっくり息を吸う、1-2-3-4と数える','息を止める、1-2-3-4と数える','ゆっくり息を吐く、1-2-3-4と数える','次の呼吸まで休む、1-2-3-4と数える'],\n      zh: ['缓慢吸气，数1-2-3-4','屏住呼吸，数1-2-3-4','缓慢呼气，数1-2-3-4','停顿休息，数1-2-3-4']\n    },\n    benefit: {\n      th: 'ลดความเครียด ทำให้ระบบประสาทสงบ',\n      en: 'Reduces stress and calms the nervous system',\n      ja: 'ストレスを軽減し、神経系を落ち着かせる',\n      zh: '减轻压力，平静神经系统'\n    },\n    duration_min: 5,\n    rounds: 4\n  },\n  four_seven_eight: {\n    name: {\n      th: '4-7-8 Breathing (หายใจผ่อนคลาย)',\n      en: '4-7-8 Breathing (Relaxing Breath)',\n      ja: '4-7-8呼吸法（リラックス呼吸）',\n      zh: '4-7-8呼吸法（放松呼吸）'\n    },\n    steps: {\n      th: ['หายใจเข้าทางจมูก นับ 4','กลั้นลมหายใจ นับ 7','หายใจออกทางปาก นับ 8 (เสียง ฮ่า)'],\n      en: ['Inhale through nose, count 4','Hold breath, count 7','Exhale through mouth with whoosh sound, count 8'],\n      ja: ['鼻から息を吸う、4と数える','息を止める、7と数える','口から音を立てて息を吐く、8と数える'],\n      zh: ['用鼻子吸气，数4','屏住呼吸，数7','用嘴呼气发出声音，数8']\n    },\n    benefit: {\n      th: 'ช่วยให้หลับง่าย ลดวิตกกังวล',\n      en: 'Aids sleep, reduces anxiety',\n      ja: '睡眠を改善し、不安を軽減する',\n      zh: '帮助入睡，减轻焦虑'\n    },\n    duration_min: 4,\n    rounds: 4\n  },\n  loving_kindness: {\n    name: {\n      th: 'เมตตาภาวนา (Metta Meditation)',\n      en: 'Loving-Kindness Meditation (Metta)',\n      ja: '慈悲の瞑想（メッタ）',\n      zh: '慈悲冥想（Metta）'\n    },\n    steps: {\n      th: [\n        'นั่งสบาย หลับตา หายใจลึกๆ 3 ครั้ง',\n        'นึกถึงตัวเอง พูดในใจว่า: ขอให้ฉันมีความสุข ขอให้ฉันมีสุขภาพดี ขอให้ฉันปลอดภัย',\n        'นึกถึงคนที่รัก ส่งความปรารถนาดีให้เขา',\n        'ขยายไปยังคนรู้จัก คนแปลกหน้า และสรรพสัตว์',\n        'จบด้วยการหายใจลึกๆ และค่อยๆ ลืมตา'\n      ],\n      en: [\n        'Sit comfortably, close your eyes, take 3 deep breaths',\n        'Think of yourself, say inwardly: May I be happy, May I be healthy, May I be safe',\n        'Think of someone you love, send them good wishes',\n        'Expand to acquaintances, strangers, and all beings',\n        'End with deep breaths and slowly open your eyes'\n      ],\n      ja: [\n        '楽に座り、目を閉じ、深呼吸を3回する',\n        '自分自身を思い浮かべ、心の中で言う：私が幸せでありますように、健康でありますように、安全でありますように',\n        '愛する人を思い浮かべ、善意を送る',\n        '知人、見知らぬ人、すべての生き物に広げる',\n        '深呼吸でしめくくり、ゆっくりと目を開ける'\n      ],\n      zh: [\n        '舒适地坐好，闭上眼睛，深呼吸3次',\n        '想到自己，在心里说：愿我快乐，愿我健康，愿我平安',\n        '想到你爱的人，向他们送去祝福',\n        '扩展到熟人、陌生人和所有众生',\n        '以深呼吸结束，慢慢睁开眼睛'\n      ]\n    },\n    benefit: {\n      th: 'เพิ่มความเมตตา ลดความโกรธ ความเหงา',\n      en: 'Increases compassion, reduces anger and loneliness',\n      ja: '思いやりを高め、怒りや孤独感を軽減する',\n      zh: '增加慈悲心，减少愤怒和孤独感'\n    },\n    duration_min: 10,\n    rounds: null\n  },\n  body_scan: {\n    name: {\n      th: 'Body Scan (สแกนร่างกาย)',\n      en: 'Body Scan Meditation',\n      ja: 'ボディスキャン瞑想',\n      zh: '身体扫描冥想'\n    },\n    steps: {\n      th: [\n        'นอนหงายหรือนั่งสบาย หลับตา',\n        'สังเกตลมหายใจ 5 ครั้ง ไม่ต้องบังคับ',\n        'เริ่มจากเท้า — รู้สึกถึงส่วนต่างๆ ค่อยๆ ขยับขึ้น',\n        'ถึงส่วนไหนที่ตึงหรือเจ็บปวด — แค่รับรู้ ไม่ต้องแก้',\n        'จบที่ศีรษะ หายใจลึก แล้วค่อยๆ ลืมตา'\n      ],\n      en: [\n        'Lie on your back or sit comfortably, close your eyes',\n        'Observe your breath for 5 cycles, no need to control',\n        'Start from your feet — feel each part, slowly moving upward',\n        'When you reach tense or painful areas — just notice, no need to fix',\n        'End at the top of your head, take a deep breath, then slowly open your eyes'\n      ],\n      ja: [\n        '仰向けに寝るか、楽に座り、目を閉じる',\n        '呼吸を5回観察する、コントロールしなくてよい',\n        '足から始め、各部位を感じながらゆっくり上へ',\n        '緊張や痛みのある部位に来たら — ただ気づくだけでよい',\n        '頭の先で終わり、深呼吸してゆっくり目を開ける'\n      ],\n      zh: [\n        '仰卧或舒适地坐好，闭上眼睛',\n        '观察呼吸5次，不需要控制',\n        '从脚开始 — 感受各个部位，慢慢向上移动',\n        '遇到紧张或疼痛的部位 — 只需察觉，无需修复',\n        '在头顶结束，深呼吸，然后慢慢睁开眼睛'\n      ]\n    },\n    benefit: {\n      th: 'คลายความตึงเครียดสะสม เพิ่มการรับรู้ร่างกาย',\n      en: 'Releases accumulated tension, increases body awareness',\n      ja: '蓄積された緊張をほぐし、身体意識を高める',\n      zh: '释放累积的紧张，提高身体意识'\n    },\n    duration_min: 10,\n    rounds: null\n  }\n};\n\nconst guideData = guidesI18n[ex] || guidesI18n.box_breathing;\nconst localLang = ['th','en','ja','zh'].includes(lang) ? lang : 'en';\n\nconst guide = {\n  name: guideData.name[localLang] || guideData.name['en'],\n  steps: guideData.steps[localLang] || guideData.steps['en'],\n  benefit: guideData.benefit[localLang] || guideData.benefit['en'],\n  duration_min: guideData.duration_min,\n  rounds: guideData.rounds,\n  requested: ex,\n  available: Object.keys(guidesI18n)\n};\n\nreturn { json: guide };"
+      },
+      "id": "db551f5d-16f8-4cb0-a0b2-4abdc08c7fd0",
+      "name": "mindfulness_guide",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2656,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = $input.first().json.output || $input.first().json.text || 'สวัสดีครับ';\nconst prev = $('Extract Payload').item.json;\nreturn { json: { ...prev, agentOutput: out, agentCategory: 'soul', processedAt: new Date().toISOString() } };"
+      },
+      "id": "82688285-55b7-4da3-802b-3de67d95e66c",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2896,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "maxTokens": 2500
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        480
+      ],
+      "id": "e2500371-3d33-4145-bd30-e839624ea4c6",
+      "name": "OpenRouter LLM (Sonnet)",
+      "credentials": {
+        "openRouterApi": {
+          "id": "FUm3Fg9B8euy8cH3",
+          "name": "OpenRouter - 2026-02-14T03:30"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WF3-B Entry": {
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payload": {
+      "main": [
+        [
+          {
+            "node": "Load Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Credentials": {
+      "main": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Soul Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "think": {
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "call_gating_service": {
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "manage_journal": {
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "manage_habits": {
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "manage_persona": {
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mindfulness_guide": {
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter LLM (Sonnet)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "c99cea82-6b54-4f64-a680-72b9a3bf9e5b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
+  },
+  "id": "7EhnfKrR1SR7FBcx",
+  "tags": []
+}
