@@ -1,0 +1,89 @@
+{
+  "name": "WF1 — Intake Gateway (Production)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf1-intake",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "e27b12e8-10ec-4e11-8ce6-9cecb750460a",
+      "name": "WF1 Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -288,
+        -80
+      ],
+      "webhookId": "wf1-intake-entry"
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF1 Intake — Normalize Input\n// Supports: Telegram, Discord, LINE, Web\nconst payload = $input.first().json.body || $input.first().json;\n\nif (payload.source === 'telegram') {\n  return {\n    json: {\n      userId: payload.userId,\n      sessionId: `telegram_${payload.userId}`,\n      source: 'telegram',\n      message: payload.message,\n      originalMessage: payload.message,\n      timestamp: new Date().toISOString(),\n      replyTarget: `telegram:${payload.userId}`,\n      rawPayload: payload\n    }\n  };\n}\n\nif (payload.source === 'discord') {\n  return {\n    json: {\n      userId: payload.userId,\n      sessionId: `discord_${payload.userId}`,\n      source: 'discord',\n      message: payload.message,\n      originalMessage: payload.message,\n      timestamp: new Date().toISOString(),\n      replyTarget: `discord:${payload.channelId}`,\n      rawPayload: payload\n    }\n  };\n}\n\nif (payload.source === 'line') {\n  return {\n    json: {\n      userId: payload.userId,\n      sessionId: `line_${payload.userId}`,\n      source: 'line',\n      message: payload.message,\n      originalMessage: payload.message,\n      timestamp: payload.timestamp || new Date().toISOString(),\n      replyToken: payload.replyToken,\n      replyTarget: `line:${payload.userId}`,\n      rawPayload: payload\n    }\n  };\n}\n\n// Default: Web\nreturn {\n  json: {\n    userId: payload.userId || 'anonymous',\n    sessionId: payload.sessionId || `web_${Date.now()}`,\n    source: 'web',\n    message: payload.message || payload.query || '',\n    originalMessage: payload.message || payload.query || '',\n    timestamp: new Date().toISOString(),\n    replyTarget: 'web',\n    rawPayload: payload\n  }\n};"
+      },
+      "id": "1db54645-c308-4e7d-bd5d-994723b4f184",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_WF2_URL || 'http://localhost:5678/webhook/wf2-brain' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "faf0f63e-d201-46e6-80ac-2b6df85b9f91",
+      "name": "Forward to WF2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        112,
+        -80
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WF1 Entry": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Forward to WF2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "0d5306e4-c3ec-4dc6-b73c-a8bf3a372a67",
+  "meta": {
+    "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
+  },
+  "id": "jT9SBvZiiTZgDKyu",
+  "tags": []
+}
