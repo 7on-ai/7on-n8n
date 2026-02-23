@@ -1,0 +1,162 @@
+{
+  "name": "WF2 — Brain Router (Production)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf2-brain",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "a5548c58-57d1-42bf-9fbb-e52938dea8ea",
+      "name": "WF2 Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        48
+      ],
+      "webhookId": "wf2-brain-entry"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and validate payload\nconst payload = $input.first().json.body || $input.first().json;\n\nreturn {\n  json: {\n    userId: payload.userId,\n    sessionId: payload.sessionId,\n    source: payload.source,\n    message: payload.message,\n    originalMessage: payload.originalMessage,\n    timestamp: payload.timestamp,\n    replyTarget: payload.replyTarget,\n    replyToken: payload.replyToken,\n    rawPayload: payload\n  }\n};"
+      },
+      "id": "5fc803f4-1b3e-4d0c-a232-d88f0e29fd35",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Load User Context from Database\nconst userId = $input.first().json.userId;\n\nif (!userId) {\n  return { json: { error: 'No userId provided' } };\n}\n\nconst dbUrl = process.env.DATABASE_URL || '';\n\nif (!dbUrl) {\n  console.log('[Load Context] DATABASE_URL not configured, using empty persona');\n  return { \n    json: { \n      ...$input.first().json,\n      persona: {\n        userId,\n        language_preference: 'th',\n        tokens: {}\n      }\n    } \n  };\n}\n\n// Query Neon DB for user persona\ntry {\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n  \n  const result = await pool.query(\n    'SELECT * FROM \"User\" WHERE id = $1 LIMIT 1',\n    [userId]\n  );\n  \n  await pool.end();\n  \n  if (result.rows.length === 0) {\n    console.log('[Load Context] User not found:', userId);\n    return { \n      json: { \n        ...$input.first().json,\n        persona: {\n          userId,\n          language_preference: 'th',\n          tokens: {}\n        }\n      } \n    };\n  }\n  \n  const user = result.rows[0];\n  \n  const persona = {\n    userId: user.id,\n    email: user.email,\n    name: user.name || user.email?.split('@')[0],\n    language_preference: user.language_preference || 'th',\n    timezone: user.timezone || 'Asia/Bangkok',\n    subscriptionTier: user.subscriptionTier || 'FREE',\n    tokens: {} // Will be populated by Load Tokens node\n  };\n  \n  console.log('[Load Context] User loaded:', {\n    userId: userId.substring(0, 8) + '...',\n    language: persona.language_preference,\n    tier: persona.subscriptionTier\n  });\n  \n  return { \n    json: { \n      ...$input.first().json,\n      persona\n    } \n  };\n  \n} catch (err) {\n  console.error('[Load Context] Database error:', err.message);\n  return { \n    json: { \n      ...$input.first().json,\n      persona: {\n        userId,\n        language_preference: 'th',\n        tokens: {},\n        _error: err.message\n      }\n    } \n  };\n}"
+      },
+      "id": "56c2a101-f6c8-4614-b0ed-8c1c5ab2f6b9",
+      "name": "Load Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF2 — Load Tokens from n8n (COMPLETE with API Keys)\nconst context = $input.first().json;\nconst userId = context.userId;\n\nif (!userId) {\n  console.log('[Load Tokens] No userId found');\n  return { json: { ...context, persona: { ...context.persona, tokens: {} } } };\n}\n\nconst n8nUrl = process.env.N8N_BASE_URL || '';\nconst n8nEmail = process.env.N8N_USER_EMAIL || '';\nconst n8nPassword = process.env.N8N_USER_PASSWORD || '';\n\nif (!n8nUrl || !n8nEmail || !n8nPassword) {\n  console.log('[Load Tokens] n8n config missing');\n  return { json: { ...context, persona: { ...context.persona, tokens: {} } } };\n}\n\ntry {\n  // Login to n8n\n  const loginRes = await fetch(`${n8nUrl}/rest/login`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      emailOrLdapLoginId: n8nEmail,\n      password: n8nPassword\n    })\n  });\n  \n  if (!loginRes.ok) {\n    console.log('[Load Tokens] n8n login failed');\n    return { json: { ...context, persona: { ...context.persona, tokens: {} } } };\n  }\n  \n  const cookies = loginRes.headers.get('set-cookie') || '';\n  \n  // Get all credentials\n  const credsRes = await fetch(`${n8nUrl}/rest/credentials`, {\n    headers: { Cookie: cookies }\n  });\n  \n  if (!credsRes.ok) {\n    console.log('[Load Tokens] Failed to fetch credentials');\n    return { json: { ...context, persona: { ...context.persona, tokens: {} } } };\n  }\n  \n  const allCreds = await credsRes.json();\n  \n  // Filter by userId prefix\n  const userCreds = (allCreds.data || []).filter(c => \n    c.name && c.name.startsWith(`${userId}:`)\n  );\n  \n  console.log(`[Load Tokens] Found ${userCreds.length} credentials for user`);\n  \n  const tokens = {};\n  const metadata = {};\n  \n  // Fetch full credential details\n  for (const cred of userCreds) {\n    try {\n      const detailRes = await fetch(`${n8nUrl}/rest/credentials/${cred.id}`, {\n        headers: { Cookie: cookies }\n      });\n      \n      if (!detailRes.ok) continue;\n      \n      const detail = await detailRes.json();\n      const data = detail.data || {};\n      const parts = cred.name.split(':');\n      const service = parts[1];\n      \n      // ══════════════════════════════════════════════════════════\n      // OAUTH TOKENS\n      // ══════════════════════════════════════════════════════════\n      if (data.oauthTokenData) {\n        const prefix = service === 'google' ? 'google' : service;\n        tokens[`${prefix}_access_token`] = data.oauthTokenData.access_token;\n        tokens[`${prefix}_refresh_token`] = data.oauthTokenData.refresh_token;\n      }\n      \n      // ══════════════════════════════════════════════════════════\n      // API KEYS (manually configured)\n      // ══════════════════════════════════════════════════════════\n      if (service === 'line_notify' && data.value) {\n        tokens.line_notify_token = data.value.replace('Bearer ', '');\n      }\n      \n      if (service === 'youtube_api' && data.apiKey) {\n        tokens.youtube_api_key = data.apiKey;\n      }\n      \n      if (service === 'google_maps' && data.apiKey) {\n        tokens.google_maps_key = data.apiKey;\n      }\n      \n      if (service === 'openweathermap' && data.accessToken) {\n        tokens.openweathermap_key = data.accessToken;\n      }\n      \n      if (service === 'brave_search' && data.value) {\n        tokens.brave_api_key = data.value;\n      }\n      \n      if (service === 'finnhub' && data.apiKey) {\n        tokens.finnhub_api_key = data.apiKey;\n      }\n      \n      if (service === 'nutritionix') {\n        tokens.nutritionix_app_id = data.value || '';\n        tokens.nutritionix_api_key = data.additionalHeaders?.['x-app-key'] || '';\n      }\n      \n      if (service === 'fal_ai' && data.value) {\n        tokens.fal_api_key = data.value.replace('Key ', '');\n      }\n      \n      if (service === 'elevenlabs' && data.apiKey) {\n        tokens.elevenlabs_api_key = data.apiKey;\n        if (detail.refreshToken) {\n          try {\n            const meta = JSON.parse(detail.refreshToken);\n            if (meta.voice_id) metadata.elevenlabs_voice_id = meta.voice_id;\n          } catch (e) {}\n        }\n      }\n      \n      if (service === 'unsplash' && data.value) {\n        tokens.unsplash_access_key = data.value.replace('Client-ID ', '');\n      }\n      \n      if (service === 'lastfm') {\n        tokens.lastfm_api_key = data.value || '';\n        if (detail.refreshToken) {\n          try {\n            const meta = JSON.parse(detail.refreshToken);\n            if (meta.username) metadata.lastfm_username = meta.username;\n            if (meta.session_key) metadata.lastfm_session_key = meta.session_key;\n          } catch (e) {}\n        }\n      }\n      \n      if (service === 'home_assistant' && data.value) {\n        tokens.ha_token = data.value.replace('Bearer ', '');\n        if (detail.refreshToken) {\n          try {\n            const meta = JSON.parse(detail.refreshToken);\n            if (meta.url) metadata.ha_url = meta.url;\n          } catch (e) {}\n        }\n      }\n      \n      if (service === 'sonos') {\n        if (detail.refreshToken) {\n          try {\n            const meta = JSON.parse(detail.refreshToken);\n            if (meta.url) metadata.sonos_api_url = meta.url;\n          } catch (e) {}\n        }\n      }\n      \n    } catch (err) {\n      console.log(`[Load Tokens] Error processing ${cred.name}:`, err.message);\n    }\n  }\n  \n  console.log(`[Load Tokens] Extracted ${Object.keys(tokens).length} tokens`);\n  \n  return { \n    json: { \n      ...context, \n      persona: { \n        ...context.persona, \n        tokens: { ...tokens, ...metadata } \n      } \n    } \n  };\n  \n} catch (err) {\n  console.error('[Load Tokens] Error:', err.message);\n  return { json: { ...context, persona: { ...context.persona, tokens: {} } } };\n}"
+      },
+      "id": "967a7236-73f4-4b71-97a0-8bf73e167437",
+      "name": "Load Tokens",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Route to appropriate WF3 Agent\nconst payload = $input.first().json;\nconst message = (payload.message || '').toLowerCase();\n\n// Detect intent\nlet targetAgent = 'wf3a'; // Default: Secretary\n\nif (message.includes('remember') || message.includes('ความทรง') || message.includes('บันทึก')) {\n  targetAgent = 'wf3b'; // Soul\n} else if (message.includes('career') || message.includes('อาชีพ') || message.includes('งาน')) {\n  targetAgent = 'wf3c'; // Career Coach\n} else if (message.includes('travel') || message.includes('ท่องเที่ยว') || message.includes('map')) {\n  targetAgent = 'wf3d'; // Explorer Plus\n} else if (message.includes('health') || message.includes('สุขภาพ') || message.includes('expense')) {\n  targetAgent = 'wf3e'; // Health & Wealth\n} else if (message.includes('music') || message.includes('เพลง') || message.includes('play')) {\n  targetAgent = 'wf3f'; // Home Mate\n} else if (message.includes('create') || message.includes('สร้าง') || message.includes('image')) {\n  targetAgent = 'wf3g'; // Creator\n}\n\nconst agentUrls = {\n  wf3a: process.env.N8N_WF3A_URL || 'http://localhost:5678/webhook/wf3a-secretary',\n  wf3b: process.env.N8N_WF3B_URL || 'http://localhost:5678/webhook/wf3b-soul',\n  wf3c: process.env.N8N_WF3C_URL || 'http://localhost:5678/webhook/wf3c-career',\n  wf3d: process.env.N8N_WF3D_URL || 'http://localhost:5678/webhook/wf3d-explorer',\n  wf3e: process.env.N8N_WF3E_URL || 'http://localhost:5678/webhook/wf3e-health',\n  wf3f: process.env.N8N_WF3F_URL || 'http://localhost:5678/webhook/wf3f-homemate',\n  wf3g: process.env.N8N_WF3G_URL || 'http://localhost:5678/webhook/wf3g-creator'\n};\n\nconsole.log('[Route] Target agent:', targetAgent);\n\nreturn {\n  json: {\n    ...payload,\n    targetAgent,\n    targetUrl: agentUrls[targetAgent]\n  }\n};"
+      },
+      "id": "0955b0a9-a4fe-4a26-9854-2682d4e68d76",
+      "name": "Route to Agent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.targetUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "79cc58e9-a398-4ae3-8ace-ceaebf1f9dbc",
+      "name": "Forward to WF3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        784,
+        48
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WF2 Entry": {
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payload": {
+      "main": [
+        [
+          {
+            "node": "Load Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Context": {
+      "main": [
+        [
+          {
+            "node": "Load Tokens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Tokens": {
+      "main": [
+        [
+          {
+            "node": "Route to Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route to Agent": {
+      "main": [
+        [
+          {
+            "node": "Forward to WF3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "479ec1c7-3978-4b7d-9ee5-3a12e6f3d87f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
+  },
+  "id": "X207owXpSeTrfjeN",
+  "tags": []
+}
