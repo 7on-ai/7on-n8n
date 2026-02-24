@@ -1,0 +1,388 @@
+{
+  "name": "WF5-A — Memory Consolidator (Persona Builder)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# WF5-A — Memory Consolidator (Persona Builder)\n## รัน Cron ทุก 6 ชั่วโมง\n\n### หน้าที่:\nอ่าน raw_messages → LLM สกัด → อัพเดต User.persona\nเพื่อให้ WF2 Load Context ส่งข้อมูลครบให้ WF3 ทุกตัว\n\n### เขียนลง DB:\n→ `\"User\".persona` (JSONB)\n  interests[], preferences{}, physical_stats{},\n  personality_notes, _last_memory_update\n→ `user_data_schema.memory_facts` (key facts deduped)\n→ `user_data_schema.raw_messages` (mark processed=true)\n\n### ไม่เขียน heartbeat_log (WF5-B รับผิดชอบ)\n\n### Fixes จาก WF5 เดิม:\n1. ชื่อ → WF5-A\n2. LLM Chain มี systemMessage ครบถ้วน\n3. Save to DB: ลบ heartbeat_log ออก\n4. Save to DB: source = 'wf5a'\n5. SQL parameterized ทั้งหมด",
+        "height": 360,
+        "width": 400,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        -48
+      ],
+      "id": "2378d984-f78b-4b23-8949-911f89e1e7fe",
+      "name": "WF5-A Overview"
+    },
+    {
+      "parameters": {
+        "content": "## Tables ที่ใช้\n\n**อ่าน:**\n- `user_data_schema.chat_sessions`\n- `user_data_schema.raw_messages`\n- `\"User\"` (public schema)\n\n**เขียน:**\n- `\"User\".persona` → structured personality\n- `user_data_schema.raw_messages` → mark processed\n- `user_data_schema.memory_facts` → key facts\n\n**ไม่เขียน:** heartbeat_log (WF5-B)\n\n## Required DB:\n```sql\nALTER TABLE \"User\"\n  ADD COLUMN IF NOT EXISTS\n    persona JSONB DEFAULT '{}'::jsonb,\n  ADD COLUMN IF NOT EXISTS\n    updated_at TIMESTAMPTZ DEFAULT NOW();\n\nCREATE TABLE IF NOT EXISTS\n  user_data_schema.memory_facts (\n    id SERIAL PRIMARY KEY,\n    user_id TEXT NOT NULL,\n    fact TEXT NOT NULL,\n    source TEXT DEFAULT 'wf5a',\n    created_at TIMESTAMPTZ DEFAULT NOW(),\n    UNIQUE(user_id, fact)\n  );\n```",
+        "height": 360,
+        "width": 380,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        352
+      ],
+      "id": "b73e0b62-ebb4-4c8d-ba1c-3b949fcac453",
+      "name": "Schema Notes"
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-haiku-4-5",
+        "options": {
+          "maxTokens": 1000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1536,
+        496
+      ],
+      "id": "4d5e7fab-b190-4edb-be4b-f5119cdf2497",
+      "name": "LLM Memory Extractor (Haiku)",
+      "credentials": {
+        "openRouterApi": {
+          "id": "FUm3Fg9B8euy8cH3",
+          "name": "OpenRouter - 2026-02-14T03:30"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze this conversation and extract memory updates.\n\nUSER INFO:\nName: {{ $json.userMeta.name }}\nLanguage: {{ $json.userMeta.language }}\nTimezone: {{ $json.userMeta.timezone }}\n\nCURRENT PERSONA:\n{{ JSON.stringify($json.currentPersona, null, 2) }}\n\nCONVERSATION (last 7 hours, {{ $json.messageCount }} messages):\n{{ $json.conversation }}",
+        "batching": {}
+      },
+      "id": "1d002c84-1b38-4168-a701-7f1aef8e1948",
+      "name": "LLM Chain (Memory Extract)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1536,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ae1916d0-7d42-49ec-89b9-f1d9fe2b6bba",
+      "name": "Should Save?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst userId = item.userId;\nconst updatedPersona = item.updatedPersona;\nconst keyFacts = item.keyFacts || [];\n\nconst dbUrl = process.env.DATABASE_URL || '';\nif (!dbUrl) {\n  console.error('[WF5-A Save] DATABASE_URL not set');\n  return { json: { ...item, saved: false, reason: 'no_db_url' } };\n}\n\ntry {\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n\n  // 1. Update User.persona — parameterized (no SQL injection)\n  await pool.query(\n    'UPDATE \"User\" SET persona = $1::jsonb, updated_at = NOW() WHERE id = $2',\n    [JSON.stringify(updatedPersona), userId]\n  );\n\n  // 2. Mark messages as processed\n  await pool.query(\n    `UPDATE user_data_schema.raw_messages\n     SET processed_for_memory = true\n     WHERE session_id IN (\n       SELECT id FROM user_data_schema.chat_sessions WHERE user_id = $1\n     )\n     AND processed_for_memory = false\n     AND created_at > NOW() - INTERVAL '7 hours'`,\n    [userId]\n  );\n\n  // 3. Save key_facts — deduped via UNIQUE(user_id, fact)\n  for (const fact of keyFacts) {\n    try {\n      await pool.query(\n        `INSERT INTO user_data_schema.memory_facts (user_id, fact, source, created_at)\n         VALUES ($1, $2, 'wf5a', NOW())\n         ON CONFLICT (user_id, fact) DO NOTHING`,\n        [userId, fact]\n      );\n    } catch (e) {\n      console.log('[WF5-A Save] memory_facts skip:', e.message);\n      break;\n    }\n  }\n\n  // NOTE: ไม่เขียน heartbeat_log — WF5-B รับผิดชอบส่วนนั้น\n\n  await pool.end();\n  console.log(`[WF5-A Save] ✅ userId: ${userId.substring(0,8)}... | facts: ${keyFacts.length} | persona_keys: ${Object.keys(updatedPersona).length}`);\n  return { json: { ...item, saved: true, factsCount: keyFacts.length, personaKeys: Object.keys(updatedPersona).length } };\n\n} catch (err) {\n  console.error('[WF5-A Save] DB error:', err.message);\n  return { json: { ...item, saved: false, reason: err.message } };\n}"
+      },
+      "id": "35d61f9b-b7cf-4706-8571-b6fce9b72058",
+      "name": "Save to DB",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconsole.log('[WF5-A Skip]', item.userId?.substring(0,8), '| reason:', item.skipReason || 'parse_error_or_no_data');\nreturn { json: { status: 'skipped', userId: item.userId, reason: item.skipReason } };"
+      },
+      "id": "3c20c518-57a9-45be-9195-5672af23f36d",
+      "name": "Silent Skip",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "dbf5a9d5-5ae0-456f-a284-2f9ba9864c4a",
+      "name": "Cron: Every 6h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT s.user_id\nFROM user_data_schema.chat_sessions s\nJOIN user_data_schema.raw_messages m ON m.session_id = s.id\nWHERE m.created_at > NOW() - INTERVAL '7 hours'\n  AND m.processed_for_memory = false\nGROUP BY s.user_id\nHAVING COUNT(m.id) >= 3",
+        "options": {}
+      },
+      "id": "11c8e42c-b4e8-4523-b8d8-1e46f288bff4",
+      "name": "Get Active Users",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        528,
+        256
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "BLko8EzXDNKsZOal",
+          "name": "User Postgres - 2026-02-14T02:34"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "65abbfd9-a7e7-4436-b82d-b867f68bfdf6",
+      "name": "Split Users",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        768,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT m.role, m.content, m.created_at, m.category\nFROM user_data_schema.raw_messages m\nJOIN user_data_schema.chat_sessions s ON m.session_id = s.id\nWHERE s.user_id = '{{ $json.user_id }}'\n  AND m.created_at > NOW() - INTERVAL '7 hours'\n  AND m.processed_for_memory = false\nORDER BY m.created_at ASC\nLIMIT 100",
+        "options": {}
+      },
+      "id": "a228c5dd-de6f-4041-b2b3-935de758dc9d",
+      "name": "Load Unprocessed Messages",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1040,
+        112
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "BLko8EzXDNKsZOal",
+          "name": "User Postgres - 2026-02-14T02:34"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT id, name, email, language_preference, timezone,\n       persona, \"subscriptionTier\"\nFROM \"User\"\nWHERE id = '{{ $('Split Users').item.json.user_id }}'\nLIMIT 1",
+        "options": {}
+      },
+      "id": "89a039b1-d71d-460d-a7ea-4553943dba26",
+      "name": "Load Current Persona",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1040,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "BLko8EzXDNKsZOal",
+          "name": "User Postgres - 2026-02-14T02:34"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msgs = $('Load Unprocessed Messages').all().map(i => i.json);\nconst personaRow = $('Load Current Persona').first()?.json || {};\nconst userId = $('Split Users').item.json.user_id;\n\nlet currentPersona = {};\ntry {\n  const raw = personaRow.persona;\n  currentPersona = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});\n} catch(e) { currentPersona = {}; }\n\nconst conversation = msgs\n  .map(m => `[${m.role?.toUpperCase() || 'USER'}]: ${m.content}`)\n  .join('\\n')\n  .slice(0, 3000);\n\nconst userMeta = {\n  name: personaRow.name || 'User',\n  language: personaRow.language_preference || 'th',\n  timezone: personaRow.timezone || 'Asia/Bangkok'\n};\n\nconsole.log(`[WF5-A Merge] userId: ${userId.substring(0,8)}... | messages: ${msgs.length} | personaKeys: ${Object.keys(currentPersona).length}`);\n\nreturn {\n  json: { userId, userMeta, currentPersona, conversation, messageCount: msgs.length }\n};"
+      },
+      "id": "ece6b8ff-19f4-46d6-863f-02aa6016e08e",
+      "name": "Merge for Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst rawOutput = item.text || item.output || item.response || '{}';\nconst userId = $('Merge for Analysis').item.json.userId;\nconst currentPersona = $('Merge for Analysis').item.json.currentPersona;\nconst userMeta = $('Merge for Analysis').item.json.userMeta;\n\nlet memoryUpdate = {};\ntry {\n  const cleaned = rawOutput.replace(/```json|```/g, '').trim();\n  memoryUpdate = JSON.parse(cleaned);\n} catch(e) {\n  console.error('[WF5-A Parse] JSON parse error:', e.message, '| raw:', rawOutput.slice(0, 200));\n  return {\n    json: {\n      userId, updatedPersona: currentPersona,\n      keyFacts: [], emotionalPatterns: [],\n      languageDetected: userMeta.language,\n      skip: True, skipReason: 'json_parse_error'\n    }\n  };\n}\n\nconst pu = memoryUpdate.persona_updates || {};\n\nconst mergedInterests = [...new Set([...(currentPersona.interests || []), ...(pu.interests || [])])];\nconst mergedPreferences = { ...(currentPersona.preferences || {}), ...(pu.preferences || {}) };\nconst mergedPhysicalStats = {\n  ...(currentPersona.physical_stats || {}),\n  ...(Object.keys(pu.physical_stats || {}).length > 0 ? pu.physical_stats : {})\n};\n\nconst updatedPersona = {\n  ...currentPersona,\n  interests: mergedInterests,\n  preferences: mergedPreferences,\n  physical_stats: mergedPhysicalStats,\n  personality_notes: pu.personality_notes || currentPersona.personality_notes || null,\n  language_preference: memoryUpdate.language_detected || currentPersona.language_preference || userMeta.language,\n  _last_memory_update: new Date().toISOString()\n};\n\nconsole.log(`[WF5-A Parse] userId: ${userId.substring(0,8)}... | facts: ${(memoryUpdate.key_facts || []).length} | interests_new: ${(pu.interests || []).length}`);\n\nreturn {\n  json: {\n    userId, updatedPersona,\n    keyFacts: memoryUpdate.key_facts || [],\n    emotionalPatterns: memoryUpdate.emotional_patterns || [],\n    languageDetected: memoryUpdate.language_detected || userMeta.language,\n    skip: false\n  }\n};"
+      },
+      "id": "d42f1854-4870-4b15-898d-dd48f450f411",
+      "name": "Parse Memory Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        256
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "LLM Memory Extractor (Haiku)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "LLM Chain (Memory Extract)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Chain (Memory Extract)": {
+      "main": [
+        [
+          {
+            "node": "Parse Memory Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Save?": {
+      "main": [
+        [
+          {
+            "node": "Save to DB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Silent Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron: Every 6h": {
+      "main": [
+        [
+          {
+            "node": "Get Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Users": {
+      "main": [
+        [
+          {
+            "node": "Split Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Users": {
+      "main": [
+        [
+          {
+            "node": "Load Unprocessed Messages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Load Current Persona",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Unprocessed Messages": {
+      "main": [
+        [
+          {
+            "node": "Merge for Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Current Persona": {
+      "main": [
+        [
+          {
+            "node": "Merge for Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge for Analysis": {
+      "main": [
+        [
+          {
+            "node": "LLM Chain (Memory Extract)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Memory Update": {
+      "main": [
+        [
+          {
+            "node": "Should Save?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "bc7143bc-de55-4a4b-9d59-a1ad1c0917ec",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
+  },
+  "id": "igrEWaFnSmzEjMCm",
+  "tags": []
+}
