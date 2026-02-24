@@ -1,0 +1,318 @@
+{
+  "name": "WF5-B — Gating Queue (Ethical Memory + LoRA)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# WF5-B — Gating Queue (Ethical Memory + LoRA)\n## รับ async emit จาก WF2 Gating Emitter\n\n### Flow:\n1. Webhook รับ payload จาก WF2 (respond immediately)\n2. Validate: userId, text ≥ 10 chars, dbUrl, gatingUrl\n3. Call Gating Service → /gating/ethical-route\n4. Gating เขียน DB เอง:\n   - memory_embeddings (pgvector)\n   - interaction_memories (LoRA training data)\n   - ethical_profiles (growth_stage, 7 scores)\n5. Log: heartbeat_log + User.persona.ethical_summary\n6. Detect needs_support → emit alert to WF-Heartbeat\n\n### ENV Required:\n- GATING_SERVICE_URL\n- DATABASE_URL\n- N8N_BASE_URL",
+        "height": 340,
+        "width": 400,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        -192
+      ],
+      "id": "597d4f1a-ebb4-459f-93aa-6f24f36831f1",
+      "name": "WF5-B Overview"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf5b-gating-queue",
+        "responseMode": "immediately",
+        "options": {}
+      },
+      "id": "16b5453b-7f6e-48a7-91e9-008d46656dec",
+      "name": "Gating Queue Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        224
+      ],
+      "webhookId": "wf5b-gating-queue-entry"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate gating payload\nconst body = $input.first().json.body || $input.first().json;\n\nconst userId = body.user_id;\nconst text = (body.text || '').trim();\nconst databaseUrl = body.database_url || process.env.DATABASE_URL || '';\nconst metadata = body.metadata || {};\n\nif (!userId) {\n  return { json: { skip: true, reason: 'no_user_id' } };\n}\nif (!text || text.length < 10) {\n  return { json: { skip: true, reason: 'text_too_short', length: text.length } };\n}\nif (!databaseUrl) {\n  return { json: { skip: true, reason: 'no_database_url' } };\n}\n\nconst gatingUrl = process.env.GATING_SERVICE_URL || '';\nif (!gatingUrl) {\n  return { json: { skip: true, reason: 'gating_service_url_not_configured' } };\n}\n\nconsole.log(`[WF5-B] Processing | userId=${userId.substring(0,8)}... | len=${text.length} | source=${metadata.source}`);\n\nreturn {\n  json: { userId, text, databaseUrl, gatingUrl, metadata, skip: false }\n};"
+      },
+      "id": "98ea8ae5-70f4-43c1-933d-0c4a2a4b1e0a",
+      "name": "Validate & Guard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c93f3530-49a2-45d9-9fea-28297ea61d04",
+      "name": "Should Process?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        240,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.gatingUrl }}/gating/ethical-route",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"user_id\": \"{{ $json.userId }}\",\n  \"text\": {{ JSON.stringify($json.text) }},\n  \"database_url\": \"{{ $json.databaseUrl }}\",\n  \"metadata\": {{ JSON.stringify($json.metadata) }}\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "1432289a-d70a-43a6-9f8b-a5f6b2297991",
+      "name": "Call Gating Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        464,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const gatingResult = $input.first().json;\nconst prev = $('Validate & Guard').first().json;\n\nif (!gatingResult || gatingResult.error || gatingResult.detail) {\n  console.error('[WF5-B] Gating service error:', gatingResult?.detail || gatingResult?.error);\n  return {\n    json: {\n      ...prev,\n      gatingSuccess: false,\n      gatingError: gatingResult?.detail || gatingResult?.error || 'unknown_error',\n      routing: 'error',\n      needsAlert: false\n    }\n  };\n}\n\nconst routing = gatingResult.routing || 'neutral_interaction';\nconst ethicalScores = gatingResult.ethical_scores || {};\nconst growthStage = gatingResult.growth_stage || 2;\nconst detectedLanguage = gatingResult.detected_language || prev.metadata?.language || 'th';\nconst memoryId = gatingResult.memory_id || null;\nconst moments = gatingResult.moments || [];\n\nconst needsAlert = routing === 'needs_support' ||\n  moments.some(m => m.type === 'crisis');\n\nconsole.log(`[WF5-B] ✅ | routing=${routing} | stage=${growthStage} | needsAlert=${needsAlert} | memoryId=${memoryId}`);\n\nreturn {\n  json: {\n    ...prev,\n    gatingSuccess: true,\n    routing, ethicalScores, growthStage, detectedLanguage, memoryId, moments,\n    reflectionPrompt: gatingResult.reflection_prompt || null,\n    gentleGuidance: gatingResult.gentle_guidance || null,\n    needsAlert,\n    reasoning: gatingResult.reasoning || null\n  }\n};"
+      },
+      "id": "721950dc-6939-49d5-8a18-9fdf54f791f2",
+      "name": "Parse Gating Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst dbUrl = item.databaseUrl || process.env.DATABASE_URL || '';\n\nif (!dbUrl) {\n  console.log('[WF5-B Log] No DB URL, skipping log');\n  return { json: { ...item, logged: false } };\n}\n\ntry {\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n\n  // Log to heartbeat_log — WF-Heartbeat reads this\n  await pool.query(\n    `INSERT INTO user_data_schema.heartbeat_log\n       (user_id, heartbeat_type, trigger_type, action, urgency, message_sent, delivered, channel, created_at)\n     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,\n    [\n      item.userId,\n      'gating_' + (item.routing || 'unknown'),\n      item.metadata?.source || 'wf2',\n      item.gatingSuccess ? 'gated' : 'gating_failed',\n      item.needsAlert ? 'high' : 'low',\n      item.gatingSuccess ? `routing=${item.routing}|stage=${item.growthStage}|memoryId=${item.memoryId}` : item.gatingError || null,\n      true,\n      null\n    ]\n  );\n\n  // Update ethical_summary on User.persona for fast WF2 reads\n  if (item.gatingSuccess) {\n    await pool.query(\n      `UPDATE \"User\"\n       SET persona = jsonb_set(\n         COALESCE(persona, '{}'::jsonb),\n         '{ethical_summary}',\n         $1::jsonb\n       ),\n       updated_at = NOW()\n       WHERE id = $2`,\n      [\n        JSON.stringify({\n          growth_stage: item.growthStage,\n          last_routing: item.routing,\n          last_gated_at: new Date().toISOString(),\n          detected_language: item.detectedLanguage\n        }),\n        item.userId\n      ]\n    );\n  }\n\n  await pool.end();\n  console.log(`[WF5-B Log] ✅ Logged | routing=${item.routing}`);\n  return { json: { ...item, logged: true } };\n\n} catch(err) {\n  console.error('[WF5-B Log] DB error:', err.message);\n  return { json: { ...item, logged: false, logError: err.message } };\n}"
+      },
+      "id": "98f4d9f3-a6df-416b-8c8d-8fbbe01b6038",
+      "name": "Log to DB",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.needsAlert }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5a56fb0f-e44c-4d3c-99ee-052afa83a224",
+      "name": "Needs Support Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst n8nBase = process.env.N8N_BASE_URL || 'http://localhost:5678';\nconst heartbeatEventUrl = `${n8nBase}/webhook/wf-heartbeat-event`;\n\nconst eventPayload = {\n  eventType: 'needs_support',\n  userId: item.userId,\n  data: {\n    routing: item.routing,\n    ethical_scores: item.ethicalScores,\n    growth_stage: item.growthStage,\n    moments: item.moments,\n    gentle_guidance: item.gentleGuidance,\n    source: item.metadata?.source || 'unknown',\n    detected_language: item.detectedLanguage,\n    memory_id: item.memoryId\n  }\n};\n\ntry {\n  const res = await fetch(heartbeatEventUrl, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify(eventPayload)\n  });\n  console.log(`[WF5-B] 🚨 needs_support alert sent to Heartbeat | status=${res.status}`);\n  return { json: { ...item, alertSent: true } };\n} catch(e) {\n  console.error('[WF5-B] Alert send failed:', e.message);\n  return { json: { ...item, alertSent: false, alertError: e.message } };\n}"
+      },
+      "id": "6c5d919f-f8cf-4029-92cd-589c94604e74",
+      "name": "Emit Alert to Heartbeat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconsole.log(`[WF5-B] ✅ Done | routing=${item.routing} | stage=${item.growthStage} | logged=${item.logged}`);\nreturn { json: { status: 'ok', routing: item.routing } };"
+      },
+      "id": "f849229a-03ce-488c-87f0-cb73b5bee540",
+      "name": "Silent End",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconsole.log('[WF5-B] Skipped:', item.reason);\nreturn { json: { status: 'skipped', reason: item.reason } };"
+      },
+      "id": "fea3fa76-64b8-4a1c-a1f3-28bdf6109aae",
+      "name": "Skip End",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        224
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gating Queue Entry": {
+      "main": [
+        [
+          {
+            "node": "Validate & Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Guard": {
+      "main": [
+        [
+          {
+            "node": "Should Process?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Process?": {
+      "main": [
+        [
+          {
+            "node": "Call Gating Service",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Gating Service": {
+      "main": [
+        [
+          {
+            "node": "Parse Gating Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gating Result": {
+      "main": [
+        [
+          {
+            "node": "Log to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to DB": {
+      "main": [
+        [
+          {
+            "node": "Needs Support Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Support Alert?": {
+      "main": [
+        [
+          {
+            "node": "Emit Alert to Heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Silent End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emit Alert to Heartbeat": {
+      "main": [
+        [
+          {
+            "node": "Silent End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "executionTimeout": 90,
+    "timezone": "Asia/Bangkok",
+    "availableInMCP": true
+  },
+  "versionId": "872c9985-f35b-41e8-b454-a6a5d6e06bcb",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "autoActivate": true,
+    "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
+  },
+  "id": "Hrg9xV7LFkkkrFNq",
+  "tags": []
+}
