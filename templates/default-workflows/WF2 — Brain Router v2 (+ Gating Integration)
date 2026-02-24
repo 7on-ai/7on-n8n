@@ -1,0 +1,281 @@
+{
+  "name": "WF2 — Brain Router v2 (+ Gating Integration)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# WF2 — Brain Router v2\n\n### Flow:\nWebhook → Extract → Load Context (Enriched) → Load Tokens\n→ Smart Router (LLM) → Parse (agent_id|gating)\n→ Gating Emitter (async) → Forward to WF3\n\n### Load Context ดึง 4 ชั้น:\n1. `\"User\"` → base identity + WF5-A persona\n2. `ethical_profiles` → growth_stage (WF5-B)\n3. `memory_facts` → key_facts (WF5-A)\n4. `interaction_memories` → relevant_memories (WF5-B)\n\n### Gating:\n- LLM ตัดสิน agent_id|true/false ในครั้งเดียว\n- Async emit ไป WF5-B (/webhook/wf5b-gating-queue)\n- ไม่ block user response\n\n### ENV Required:\n- DATABASE_URL\n- N8N_BASE_URL, N8N_USER_EMAIL, N8N_USER_PASSWORD\n- GATING_SERVICE_URL",
+        "height": 320,
+        "width": 400,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        0
+      ],
+      "id": "fe20426a-e34b-461f-bb0a-aeef928cfd3f",
+      "name": "WF2 v2 Overview"
+    },
+    {
+      "parameters": {
+        "content": "## Persona ที่ส่งให้ WF3 ทุกตัว\n\n```\npersona:\n  name, language, timezone, tier\n  interests[]         ← WF5-A\n  preferences{}       ← WF5-A\n  physical_stats{}    ← WF5-A\n  personality_notes   ← WF5-A\n  key_facts[]         ← WF5-A\n  ethical_profile:\n    growth_stage 1-5  ← WF5-B\n    growth_stage_label\n    top_strengths[]\n    last_routing\n  relevant_memories[] ← WF5-B\n  tokens{}            ← Load Tokens\n```\n\n## DB Tables Read:\n- `\"User\"` (persona JSONB)\n- `ethical_profiles`\n- `memory_facts`\n- `interaction_memories`",
+        "height": 320,
+        "width": 360,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "8f5efd68-e773-450e-8788-4a925d42f22d",
+      "name": "Persona Structure"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf2-brain",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "7c5b1d20-aacb-4e94-aea2-7a695213bb4e",
+      "name": "WF2 Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        560
+      ],
+      "webhookId": "wf2-brain-entry"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.first().json.body || $input.first().json;\nreturn {\n  json: {\n    userId: payload.userId,\n    sessionId: payload.sessionId,\n    source: payload.source,\n    message: payload.message,\n    originalMessage: payload.originalMessage,\n    timestamp: payload.timestamp,\n    replyTarget: payload.replyTarget,\n    replyToken: payload.replyToken,\n    rawPayload: payload\n  }\n};"
+      },
+      "id": "c027e0bc-59f2-4846-be34-9bf3ec79c58f",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const userId = $input.first().json.userId;\n\nif (!userId) {\n  return { json: { error: 'No userId provided' } };\n}\n\nconst dbUrl = process.env.DATABASE_URL || '';\n\nif (!dbUrl) {\n  console.log('[Load Context] DATABASE_URL not configured, using empty persona');\n  return {\n    json: {\n      ...$input.first().json,\n      persona: { userId, language_preference: 'th', tokens: {} }\n    }\n  };\n}\n\n// Helper: top 2 ethical strengths from scores\nfunction getTopStrengths(profile) {\n  const scores = {\n    self_awareness: profile.self_awareness,\n    emotional_regulation: profile.emotional_regulation,\n    compassion: profile.compassion,\n    integrity: profile.integrity,\n    growth_mindset: profile.growth_mindset,\n    wisdom: profile.wisdom,\n    transcendence: profile.transcendence\n  };\n  return Object.entries(scores)\n    .filter(([, v]) => v != null)\n    .sort(([, a], [, b]) => b - a)\n    .slice(0, 2)\n    .map(([k]) => k);\n}\n\ntry {\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n\n  // ── 1. User base + WF5-A persona ─────────────────────────\n  const userResult = await pool.query(\n    `SELECT id, name, email, language_preference, timezone,\n            \"subscriptionTier\", persona, updated_at\n     FROM \"User\" WHERE id = $1 LIMIT 1`,\n    [userId]\n  );\n\n  if (userResult.rows.length === 0) {\n    await pool.end();\n    console.log('[Load Context] User not found:', userId);\n    return {\n      json: {\n        ...$input.first().json,\n        persona: { userId, language_preference: 'th', tokens: {} }\n      }\n    };\n  }\n\n  const user = userResult.rows[0];\n\n  // Parse persona JSONB (WF5-A + WF5-B write here)\n  let personaData = {};\n  try {\n    const raw = user.persona;\n    personaData = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});\n  } catch (e) { personaData = {}; }\n\n  // ── 2. Ethical Profile (WF5-B writes here) ───────────────\n  let ethicalProfile = null;\n  try {\n    const ethResult = await pool.query(\n      `SELECT self_awareness, emotional_regulation, compassion,\n              integrity, growth_mindset, wisdom, transcendence,\n              growth_stage, total_interactions\n       FROM user_data_schema.ethical_profiles\n       WHERE user_id = $1 LIMIT 1`,\n      [userId]\n    );\n    if (ethResult.rows.length > 0) {\n      const ep = ethResult.rows[0];\n      ethicalProfile = {\n        growth_stage: ep.growth_stage || 2,\n        growth_stage_label: ['', 'Beginner', 'Developing', 'Growing', 'Advanced', 'Wise'][ep.growth_stage || 2],\n        top_strengths: getTopStrengths(ep),\n        total_interactions: ep.total_interactions || 0,\n        last_routing: personaData.ethical_summary?.last_routing || null\n      };\n    }\n  } catch (e) {\n    console.log('[Load Context] ethical_profiles skip:', e.message);\n  }\n\n  // ── 3. Key Facts (WF5-A writes here) ─────────────────────\n  let keyFacts = [];\n  try {\n    const factsResult = await pool.query(\n      `SELECT fact FROM user_data_schema.memory_facts\n       WHERE user_id = $1\n       ORDER BY created_at DESC LIMIT 10`,\n      [userId]\n    );\n    keyFacts = factsResult.rows.map(r => r.fact);\n  } catch (e) {\n    console.log('[Load Context] memory_facts skip:', e.message);\n  }\n\n  // ── 4. Relevant Emotional Memories (WF5-B writes here) ───\n  let relevantMemories = [];\n  try {\n    const memoriesResult = await pool.query(\n      `SELECT text, classification, reflection_prompt, created_at\n       FROM user_data_schema.interaction_memories\n       WHERE user_id = $1\n         AND classification IN ('growth_memory', 'wisdom_moment', 'challenge_memory')\n       ORDER BY created_at DESC LIMIT 3`,\n      [userId]\n    );\n    relevantMemories = memoriesResult.rows.map(r => ({\n      summary: (r.text || '').slice(0, 120) + (r.text?.length > 120 ? '...' : ''),\n      type: r.classification,\n      insight: r.reflection_prompt || null,\n      date: r.created_at\n    }));\n  } catch (e) {\n    console.log('[Load Context] interaction_memories skip:', e.message);\n  }\n\n  await pool.end();\n\n  // ── 5. Build enriched persona for WF3 ────────────────────\n  const persona = {\n    userId: user.id,\n    email: user.email,\n    name: user.name || user.email?.split('@')[0],\n    language_preference: user.language_preference || 'th',\n    timezone: user.timezone || 'Asia/Bangkok',\n    subscriptionTier: user.subscriptionTier || 'FREE',\n    // WF5-A: structured personality\n    interests: personaData.interests || [],\n    preferences: personaData.preferences || {},\n    physical_stats: personaData.physical_stats || {},\n    personality_notes: personaData.personality_notes || null,\n    key_facts: keyFacts,\n    // WF5-B: ethical growth\n    ethical_profile: ethicalProfile,\n    // WF5-B: relevant emotional memories\n    relevant_memories: relevantMemories,\n    // metadata\n    _persona_updated: personaData._last_memory_update || null,\n    // populated by Load Tokens node\n    tokens: {}\n  };\n\n  console.log('[Load Context] ✅ Enriched persona:', {\n    userId: userId.substring(0, 8) + '...',\n    language: persona.language_preference,\n    interests: persona.interests.length,\n    key_facts: persona.key_facts.length,\n    growth_stage: persona.ethical_profile?.growth_stage || 'N/A',\n    memories: persona.relevant_memories.length\n  });\n\n  return { json: { ...$input.first().json, persona } };\n\n} catch (err) {\n  console.error('[Load Context] Database error:', err.message);\n  return {\n    json: {\n      ...$input.first().json,\n      persona: { userId, language_preference: 'th', tokens: {}, _error: err.message }\n    }\n  };\n}"
+      },
+      "id": "e461f6ac-d36e-429e-bba3-ca98e2445b34",
+      "name": "Load Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const context = $input.first().json;\nconst userId = context.userId;\n\nif (!userId) {\n  console.log('[Load Tokens] No userId found');\n  return { json: { ...context, persona: { ...context.persona, tokens: {} } } };\n}\n\nconst n8nUrl = process.env.N8N_BASE_URL || '';\nconst n8nEmail = process.env.N8N_USER_EMAIL || '';\nconst n8nPassword = process.env.N8N_USER_PASSWORD || '';\n\nif (!n8nUrl || !n8nEmail || !n8nPassword) {\n  console.log('[Load Tokens] n8n config missing');\n  return { json: { ...context, persona: { ...context.persona, tokens: {} } } };\n}\n\ntry {\n  const loginRes = await fetch(`${n8nUrl}/rest/login`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ emailOrLdapLoginId: n8nEmail, password: n8nPassword })\n  });\n\n  if (!loginRes.ok) {\n    console.log('[Load Tokens] n8n login failed');\n    return { json: { ...context, persona: { ...context.persona, tokens: {} } } };\n  }\n\n  const cookies = loginRes.headers.get('set-cookie') || '';\n\n  const credsRes = await fetch(`${n8nUrl}/rest/credentials`, {\n    headers: { Cookie: cookies }\n  });\n\n  if (!credsRes.ok) {\n    console.log('[Load Tokens] Failed to fetch credentials');\n    return { json: { ...context, persona: { ...context.persona, tokens: {} } } };\n  }\n\n  const allCreds = await credsRes.json();\n  const userCreds = (allCreds.data || []).filter(c =>\n    c.name && c.name.startsWith(`${userId}:`)\n  );\n\n  console.log(`[Load Tokens] Found ${userCreds.length} credentials for user`);\n\n  const tokens = {};\n  const metadata = {};\n\n  for (const cred of userCreds) {\n    try {\n      const detailRes = await fetch(`${n8nUrl}/rest/credentials/${cred.id}`, {\n        headers: { Cookie: cookies }\n      });\n      if (!detailRes.ok) continue;\n\n      const detail = await detailRes.json();\n      const data = detail.data || {};\n      const service = cred.name.split(':')[1];\n\n      if (data.oauthTokenData) {\n        const prefix = service === 'google' ? 'google' : service;\n        tokens[`${prefix}_access_token`] = data.oauthTokenData.access_token;\n        tokens[`${prefix}_refresh_token`] = data.oauthTokenData.refresh_token;\n      }\n      if (service === 'line_notify' && data.value) tokens.line_notify_token = data.value.replace('Bearer ', '');\n      if (service === 'youtube_api' && data.apiKey) tokens.youtube_api_key = data.apiKey;\n      if (service === 'google_maps' && data.apiKey) tokens.google_maps_key = data.apiKey;\n      if (service === 'openweathermap' && data.accessToken) tokens.openweathermap_key = data.accessToken;\n      if (service === 'brave_search' && data.value) tokens.brave_api_key = data.value;\n      if (service === 'finnhub' && data.apiKey) tokens.finnhub_api_key = data.apiKey;\n      if (service === 'nutritionix') {\n        tokens.nutritionix_app_id = data.value || '';\n        tokens.nutritionix_api_key = data.additionalHeaders?.['x-app-key'] || '';\n      }\n      if (service === 'fal_ai' && data.value) tokens.fal_api_key = data.value.replace('Key ', '');\n      if (service === 'elevenlabs' && data.apiKey) {\n        tokens.elevenlabs_api_key = data.apiKey;\n        try { const m = JSON.parse(detail.refreshToken || '{}'); if (m.voice_id) metadata.elevenlabs_voice_id = m.voice_id; } catch(e) {}\n      }\n      if (service === 'unsplash' && data.value) tokens.unsplash_access_key = data.value.replace('Client-ID ', '');\n      if (service === 'lastfm') {\n        tokens.lastfm_api_key = data.value || '';\n        try { const m = JSON.parse(detail.refreshToken || '{}'); if (m.username) metadata.lastfm_username = m.username; if (m.session_key) metadata.lastfm_session_key = m.session_key; } catch(e) {}\n      }\n      if (service === 'home_assistant' && data.value) {\n        tokens.ha_token = data.value.replace('Bearer ', '');\n        try { const m = JSON.parse(detail.refreshToken || '{}'); if (m.url) metadata.ha_url = m.url; } catch(e) {}\n      }\n      if (service === 'sonos') {\n        try { const m = JSON.parse(detail.refreshToken || '{}'); if (m.url) metadata.sonos_api_url = m.url; } catch(e) {}\n      }\n    } catch (err) {\n      console.log(`[Load Tokens] Error processing ${cred.name}:`, err.message);\n    }\n  }\n\n  console.log(`[Load Tokens] Extracted ${Object.keys(tokens).length} tokens`);\n\n  return {\n    json: {\n      ...context,\n      persona: { ...context.persona, tokens: { ...tokens, ...metadata } }\n    }\n  };\n\n} catch (err) {\n  console.error('[Load Tokens] Error:', err.message);\n  return { json: { ...context, persona: { ...context.persona, tokens: {} } } };\n}"
+      },
+      "id": "b7a5de35-e1ce-48f6-a808-ec35836990c4",
+      "name": "Load Tokens",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-haiku-4-5",
+        "options": {
+          "maxTokens": 60
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        672,
+        800
+      ],
+      "id": "d4fc6b67-651b-4555-a233-5f6fd76966e1",
+      "name": "LLM Router (Haiku)",
+      "credentials": {
+        "openRouterApi": {
+          "id": "FUm3Fg9B8euy8cH3",
+          "name": "OpenRouter - 2026-02-14T03:30"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message }}",
+        "options": {
+          "systemMessage": "=You are a smart router for a personal AI assistant system.\n\nYour job: Read the user message and return TWO decisions in ONE response.\n\n## DECISION 1 — Agent ID:\n\n**wf3a** — Secretary\n- Calendar, email, tasks, meetings\n- Chat platforms (Telegram, Discord, Slack)\n- Social media (Twitter, Facebook, LinkedIn)\n- LINE notifications\n\n**wf3b** — Soul\n- Journal entries, reflection\n- Habits, streaks, mindfulness\n- Personal growth, emotional support\n- Memory management\n\n**wf3c** — Career Coach\n- Finance, expenses, income tracking\n- Stock market, crypto, forex\n- Tax calculations, invoices\n- Thai labor law, business registration\n\n**wf3d** — Explorer+\n- Web search, Wikipedia\n- Weather forecasts\n- Maps, places, navigation\n- Developer tools (GitHub, npm, PyPI)\n\n**wf3e** — Creator\n- Image generation (AI art)\n- Text-to-speech\n- Stock photos (Unsplash)\n- Writing assistance, translation\n\n**wf3f** — Home Mate\n- Music (Spotify, Sonos)\n- Smart home (Home Assistant)\n- Ambient modes, lighting\n\n**wf3g** — Health Coach\n- Nutrition, calories\n- Exercise, workouts\n- Medicine information\n- Health tracking (BMI, TDEE)\n\n## DECISION 2 — Needs Gating (true/false):\n\nGating stores messages for personal growth AI training (LoRA fine-tuning).\n\nReturn TRUE if message contains:\n- Personal feelings, emotions, mood state\n- Life events, struggles, achievements\n- Reflection, self-awareness, journaling\n- Relationship issues, existential thoughts\n- Mental health signals (stress, anxiety, joy, sadness)\n- Crisis signals (hopelessness, self-harm hints)\n\nReturn FALSE if message is:\n- A simple command or request (play music, check weather, search web)\n- A short acknowledgement or greeting (any language)\n- Pure numeric/factual data with no emotional context\n- Follow-up to a previous command (ok, done, cancel)\n\nThis applies to ALL languages: Thai, English, Japanese, Chinese, etc.\n\n## OUTPUT FORMAT:\nReturn ONLY this exact format — no explanation, no markdown:\nagent_id|true\nor\nagent_id|false\n\n## EXAMPLES:\n\"วันนี้เครียดมากเลย ทำงานไม่ออก\" → wf3b|true\n\"สวัสดี\" → wf3b|false\n\"I feel really lost today\" → wf3b|true\n\"log น้ำหนัก 70kg\" → wf3g|false\n\"รู้สึกท้อแท้กับชีวิต\" → wf3b|true\n\"play jazz music\" → wf3f|false\n\"check my email\" → wf3a|false\n\"Track lunch 500cal\" → wf3g|false\n\"今日はとても悲しいです\" → wf3b|true\n\"今日の天気は？\" → wf3d|false\n\"search for Bangkok restaurants\" → wf3d|false\n\"ขอบคุณนะ โอเค\" → wf3b|false\n\"generate image of sunset\" → wf3e|false\n\"อยากเขียนบันทึกวันนี้\" → wf3b|true\n\"stock price AAPL\" → wf3c|false\n\"set alarm 7am\" → wf3a|false\n\"ทะเลาะกับแฟน เจ็บปวดมาก\" → wf3b|true\n\"turn off the lights\" → wf3f|false\n\"我今天很开心\" → wf3b|true\n\"BMI คำนวณให้หน่อย\" → wf3g|false\n\n## CURRENT USER:\nLanguage preference: {{ $json.persona.language_preference || 'th' }}\nMessage: {{ $json.message }}"
+        }
+      },
+      "id": "6c122ba5-e786-4949-9d26-f474b1b2ec7c",
+      "name": "Smart Router Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        672,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.first().json;\nconst raw = (payload.output || payload.text || 'wf3a|false').replace(/```|`/g, '').trim().toLowerCase();\n\nconst parts = raw.split('|');\nlet targetAgent = (parts[0] || 'wf3a').trim();\nlet needsGating = (parts[1] || 'false').trim() === 'true';\n\nconst validAgents = ['wf3a', 'wf3b', 'wf3c', 'wf3d', 'wf3e', 'wf3f', 'wf3g'];\nif (!validAgents.includes(targetAgent)) {\n  console.log('[Router] Invalid agent from LLM:', targetAgent, '→ fallback to wf3a');\n  targetAgent = 'wf3a';\n  needsGating = false;\n}\n\nconst n8nBase = process.env.N8N_BASE_URL || 'http://localhost:5678';\nconst agentUrls = {\n  wf3a: process.env.N8N_WF3A_URL || `${n8nBase}/webhook/wf3a-secretary`,\n  wf3b: process.env.N8N_WF3B_URL || `${n8nBase}/webhook/wf3b-soul`,\n  wf3c: process.env.N8N_WF3C_URL || `${n8nBase}/webhook/wf3c-careercoach`,\n  wf3d: process.env.N8N_WF3D_URL || `${n8nBase}/webhook/wf3d-explorer`,\n  wf3e: process.env.N8N_WF3E_URL || `${n8nBase}/webhook/wf3e-creator`,\n  wf3f: process.env.N8N_WF3F_URL || `${n8nBase}/webhook/wf3f-homemate`,\n  wf3g: process.env.N8N_WF3G_URL || `${n8nBase}/webhook/wf3g-healthcoach`\n};\n\nconsole.log(`[Router] agent=${targetAgent} | gating=${needsGating} | msg_len=${(payload.message||'').length}`);\n\nreturn {\n  json: { ...payload, targetAgent, targetUrl: agentUrls[targetAgent], needsGating }\n};"
+      },
+      "id": "08aebd44-331d-415b-ae45-9e7bba294627",
+      "name": "Parse Router Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Async Gating Emitter — fire-and-forget ไป WF5-B\n// ไม่ block user response\nconst payload = $input.first().json;\n\nif (payload.needsGating) {\n  const n8nBase = process.env.N8N_BASE_URL || 'http://localhost:5678';\n  // ✅ path ตรงกับ WF5-B webhook\n  const gatingQueueUrl = `${n8nBase}/webhook/wf5b-gating-queue`;\n  const dbUrl = process.env.DATABASE_URL || '';\n  const gatingServiceUrl = process.env.GATING_SERVICE_URL || '';\n\n  if (!gatingServiceUrl) {\n    console.log('[Gating Emitter] GATING_SERVICE_URL not set — skipping');\n  } else if (!dbUrl) {\n    console.log('[Gating Emitter] DATABASE_URL not set — skipping');\n  } else {\n    const gatingPayload = {\n      user_id: payload.userId,\n      text: payload.message,\n      database_url: dbUrl,\n      metadata: {\n        session_id: payload.sessionId,\n        source: payload.targetAgent,\n        language: payload.persona?.language_preference || 'th',\n        timestamp: payload.timestamp || new Date().toISOString()\n      }\n    };\n\n    // Fire and forget — do NOT await\n    fetch(gatingQueueUrl, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify(gatingPayload)\n    }).then(r => {\n      console.log(`[Gating Emitter] ✅ Queued → WF5-B | agent=${payload.targetAgent} | status=${r.status}`);\n    }).catch(e => {\n      console.log('[Gating Emitter] ⚠️ Queue failed (non-blocking):', e.message);\n    });\n\n    console.log(`[Gating Emitter] Fired | userId=${payload.userId?.substring(0,8)}... | agent=${payload.targetAgent}`);\n  }\n} else {\n  console.log(`[Gating Emitter] Skipped | agent=${payload.targetAgent} | needsGating=false`);\n}\n\n// Always pass through — gating never blocks\nreturn { json: payload };"
+      },
+      "id": "04a0e9c0-33f9-4c1d-a4a9-18ecca6af8ff",
+      "name": "Gating Emitter (Async)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.targetUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fe230cc5-d716-4732-987f-1bf688fe8301",
+      "name": "Forward to WF3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1408,
+        560
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WF2 Entry": {
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payload": {
+      "main": [
+        [
+          {
+            "node": "Load Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Context": {
+      "main": [
+        [
+          {
+            "node": "Load Tokens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Tokens": {
+      "main": [
+        [
+          {
+            "node": "Smart Router Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Router (Haiku)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Smart Router Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Smart Router Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Router Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Router Response": {
+      "main": [
+        [
+          {
+            "node": "Gating Emitter (Async)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gating Emitter (Async)": {
+      "main": [
+        [
+          {
+            "node": "Forward to WF3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "25f4d15e-3318-4a54-ae8f-178525cf5b7a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
+  },
+  "id": "X207owXpSeTrfjeN",
+  "tags": []
+}
