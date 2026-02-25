@@ -1,20 +1,19 @@
 {
-  "name": "WF5-B — Gating Queue (Ethical Memory + LoRA)",
   "nodes": [
     {
       "parameters": {
-        "content": "# WF5-B — Gating Queue (Ethical Memory + LoRA)\n## รับ async emit จาก WF2 Gating Emitter\n\n### Flow:\n1. Webhook รับ payload จาก WF2 (respond immediately)\n2. Validate: userId, text ≥ 10 chars, dbUrl, gatingUrl\n3. Call Gating Service → /gating/ethical-route\n4. Gating เขียน DB เอง:\n   - memory_embeddings (pgvector)\n   - interaction_memories (LoRA training data)\n   - ethical_profiles (growth_stage, 7 scores)\n5. Log: heartbeat_log + User.persona.ethical_summary\n6. Detect needs_support → emit alert to WF-Heartbeat\n\n### ENV Required:\n- GATING_SERVICE_URL\n- DATABASE_URL\n- N8N_BASE_URL",
-        "height": 340,
-        "width": 400,
+        "content": "# WF5-B — Gating Queue v2 (Inline)\n\n### Flow:\n1. Webhook รับ payload จาก WF2 (respond immediately)\n2. Validate: userId, text ≥ 10 chars, dbUrl\n3. **Process Gating (inline):**\n   - Embed via OpenAI text-embedding-3-small (user key)\n   - Classify via OpenRouter Haiku (structured JSON)\n   - Keyword fallback (Thai/EN)\n   - Save: memory_embeddings + interaction_memories + ethical_profiles\n4. Log: heartbeat_log + User.persona.ethical_summary\n5. Detect needs_support → emit alert to WF-Heartbeat\n\n### ลบออกได้:\n- ❌ Gating Service (Northflank)\n- ❌ Ollama shared service\n\n### DB Schema Change:\n```sql\n-- dim 768 → 1536 (text-embedding-3-small)\nALTER TABLE user_data_schema.memory_embeddings\n  ALTER COLUMN embedding TYPE vector(1536);\n```\n\n### ENV Required:\n- DATABASE_URL\n- OPENROUTER_API_KEY (system-level classify fallback)\n- N8N_BASE_URL\n\n### User Keys (from WF2 Load Tokens):\n- metadata.openai_key → embedding",
+        "height": 520,
+        "width": 420,
         "color": 6
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -400,
-        -192
+        -368,
+        -224
       ],
-      "id": "597d4f1a-ebb4-459f-93aa-6f24f36831f1",
+      "id": "8e80bf95-1ab2-4b36-980a-b8fa25ca4020",
       "name": "WF5-B Overview"
     },
     {
@@ -24,27 +23,27 @@
         "responseMode": "immediately",
         "options": {}
       },
-      "id": "16b5453b-7f6e-48a7-91e9-008d46656dec",
+      "id": "9d841cbc-e9b2-4796-b5d7-2c1c4f14d510",
       "name": "Gating Queue Entry",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -224,
-        224
+        32,
+        400
       ],
       "webhookId": "wf5b-gating-queue-entry"
     },
     {
       "parameters": {
-        "jsCode": "// Validate gating payload\nconst body = $input.first().json.body || $input.first().json;\n\nconst userId = body.user_id;\nconst text = (body.text || '').trim();\nconst databaseUrl = body.database_url || process.env.DATABASE_URL || '';\nconst metadata = body.metadata || {};\n\nif (!userId) {\n  return { json: { skip: true, reason: 'no_user_id' } };\n}\nif (!text || text.length < 10) {\n  return { json: { skip: true, reason: 'text_too_short', length: text.length } };\n}\nif (!databaseUrl) {\n  return { json: { skip: true, reason: 'no_database_url' } };\n}\n\nconst gatingUrl = process.env.GATING_SERVICE_URL || '';\nif (!gatingUrl) {\n  return { json: { skip: true, reason: 'gating_service_url_not_configured' } };\n}\n\nconsole.log(`[WF5-B] Processing | userId=${userId.substring(0,8)}... | len=${text.length} | source=${metadata.source}`);\n\nreturn {\n  json: { userId, text, databaseUrl, gatingUrl, metadata, skip: false }\n};"
+        "jsCode": "// Validate gating payload\nconst body = $input.first().json.body || $input.first().json;\n\nconst userId = body.user_id;\nconst text = (body.text || '').trim();\nconst databaseUrl = body.database_url || process.env.DATABASE_URL || '';\nconst metadata = body.metadata || {};\n\nif (!userId) {\n  return { json: { skip: true, reason: 'no_user_id' } };\n}\nif (!text || text.length < 10) {\n  return { json: { skip: true, reason: 'text_too_short', length: text.length } };\n}\nif (!databaseUrl) {\n  return { json: { skip: true, reason: 'no_database_url' } };\n}\n\nconsole.log(`[WF5-B] Received | userId=${userId.substring(0,8)}... | len=${text.length} | source=${metadata.source}`);\n\nreturn { json: { userId, text, databaseUrl, metadata, skip: false } };"
       },
-      "id": "98ea8ae5-70f4-43c1-933d-0c4a2a4b1e0a",
+      "id": "83dfda61-ab5c-4ecb-82cd-3910b00e9156",
       "name": "Validate & Guard",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        16,
-        224
+        272,
+        400
       ]
     },
     {
@@ -66,63 +65,39 @@
         },
         "options": {}
       },
-      "id": "c93f3530-49a2-45d9-9fea-28297ea61d04",
+      "id": "46d1f83a-8b47-48d3-91e0-a0a8c6dc0ddd",
       "name": "Should Process?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        240,
-        224
+        496,
+        400
       ]
     },
     {
       "parameters": {
-        "url": "={{ $json.gatingUrl }}/gating/ethical-route",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"user_id\": \"{{ $json.userId }}\",\n  \"text\": {{ JSON.stringify($json.text) }},\n  \"database_url\": \"{{ $json.databaseUrl }}\",\n  \"metadata\": {{ JSON.stringify($json.metadata) }}\n}",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          },
-          "timeout": 60000
-        }
+        "jsCode": "// ════════════════════════════════════════════════════════════\n// WF5-B: Process Gating — Full Gating Logic (No External Service)\n// Replaces: Call Gating Service + Parse Gating Result\n// Uses: OpenAI embedding (user key) + OpenRouter Haiku (classify)\n// ════════════════════════════════════════════════════════════\nconst item = $input.first().json;\nconst { userId, text, databaseUrl, metadata } = item;\n\nconst openaiKey = metadata?.openai_key || process.env.OPENAI_API_KEY || '';\nconst openrouterKey = process.env.OPENROUTER_API_KEY || '';\nconst dbUrl = databaseUrl || process.env.DATABASE_URL || '';\n\n// ── 1. Detect Language ────────────────────────────────────────\nfunction detectLanguage(t) {\n  if (/[\\u0E00-\\u0E7F]/.test(t)) return 'th';\n  if (/[\\u4E00-\\u9FFF]/.test(t)) return 'zh';\n  if (/[\\u3040-\\u309F\\u30A0-\\u30FF]/.test(t)) return 'ja';\n  return 'en';\n}\n\n// ── 2. Keyword Fallback Classification ───────────────────────\nfunction keywordClassify(t, lang) {\n  const tl = t.toLowerCase();\n  const kw = {\n    th: {\n      growth:    ['รัก','ขอบคุณ','เรียนรู้','สำเร็จ','ดีใจ','สุข','ภูมิใจ','พัฒนา','เติบโต','ก้าวหน้า','ทำได้'],\n      challenge: ['โกรธ','เกลียด','เครียด','ผิดหวัง','เสียใจ','เหงา','ท้อแท้','ล้มเหลว','ทะเลาะ'],\n      wisdom:    ['ปัญญา','สติ','สมาธิ','ธรรมะ','ยอมรับ','สงบ'],\n      crisis:    ['อยากตาย','ฆ่าตัว','สิ้นหวัง','ทนไม่ไหว','หมดแรง']\n    },\n    en: {\n      growth:    ['love','thank','grateful','happy','joy','proud','success','learn','improve','achieve'],\n      challenge: ['angry','hate','stress','sad','lonely','discourage','fail','lost','argue','hurt'],\n      wisdom:    ['wisdom','insight','meditation','truth','awareness','accept','peaceful'],\n      crisis:    ['want to die','kill myself','hopeless','cant go on','give up on life']\n    }\n  };\n  const k = kw[lang] || kw['en'];\n  if (k.crisis.some(w => tl.includes(w)))    return 'needs_support';\n  if (k.challenge.some(w => tl.includes(w))) return 'challenge_memory';\n  if (k.wisdom.some(w => tl.includes(w)))    return 'wisdom_moment';\n  if (k.growth.some(w => tl.includes(w)))    return 'growth_memory';\n  return 'neutral_interaction';\n}\n\n// ── 3. Default Ethical Scores ─────────────────────────────────\nfunction defaultScores(cls) {\n  const map = {\n    growth_memory:       { self_awareness:0.7, emotional_regulation:0.7, compassion:0.7, integrity:0.6, growth_mindset:0.8, wisdom:0.6, transcendence:0.6 },\n    challenge_memory:    { self_awareness:0.4, emotional_regulation:0.3, compassion:0.5, integrity:0.5, growth_mindset:0.4, wisdom:0.4, transcendence:0.3 },\n    wisdom_moment:       { self_awareness:0.8, emotional_regulation:0.7, compassion:0.7, integrity:0.7, growth_mindset:0.7, wisdom:0.9, transcendence:0.8 },\n    needs_support:       { self_awareness:0.3, emotional_regulation:0.2, compassion:0.4, integrity:0.4, growth_mindset:0.3, wisdom:0.3, transcendence:0.2 },\n    neutral_interaction: { self_awareness:0.5, emotional_regulation:0.5, compassion:0.5, integrity:0.5, growth_mindset:0.5, wisdom:0.5, transcendence:0.4 }\n  };\n  return map[cls] || map['neutral_interaction'];\n}\n\n// ── 4. Growth Stage ───────────────────────────────────────────\nfunction growthStage(scores) {\n  const avg = Object.values(scores).reduce((a,b) => a+b, 0) / Object.values(scores).length;\n  if (avg < 0.3) return 1;\n  if (avg < 0.5) return 2;\n  if (avg < 0.7) return 3;\n  if (avg < 0.85) return 4;\n  return 5;\n}\n\n// ── 5. Detect Moments ─────────────────────────────────────────\nfunction detectMoments(scores, cls) {\n  if (cls === 'needs_support') return [{ type:'crisis', severity:'critical', description:'User needs support' }];\n  if (['growth_memory','wisdom_moment'].includes(cls)) return [{ type:'growth', severity:'positive', description:'Positive development' }];\n  return [];\n}\n\n// ── 6. i18n Guidance & Reflection ────────────────────────────\nfunction getGuidance(cls, lang) {\n  const m = {\n    growth_memory:       { en:'Wonderful progress! Keep nurturing this growth.', th:'ยอดเยี่ยมมาก! เดินหน้าต่อไปนะคะ' },\n    challenge_memory:    { en:'I understand. Take it one step at a time.', th:'ฉันเข้าใจ ทีละขั้นตอนนะคะ' },\n    wisdom_moment:       { en:'Beautiful insight. This wisdom will guide you.', th:'ข้อคิดที่สวยงาม ปัญญานี้จะนำทางคุณ' },\n    needs_support:       { en:\"I'm here for you. Please reach out to someone you trust.\", th:'ฉันอยู่ตรงนี้ กรุณาติดต่อคนที่คุณไว้ใจ' },\n    neutral_interaction: { en:'Thank you for sharing.', th:'ขอบคุณที่แบ่งปัน' }\n  };\n  return (m[cls] || m['neutral_interaction'])[lang] || (m[cls] || m['neutral_interaction'])['en'];\n}\n\nfunction getReflection(cls, lang) {\n  const m = {\n    growth_memory:       { en:'What did you learn from this experience?', th:'คุณเรียนรู้อะไรจากประสบการณ์นี้บ้าง?' },\n    challenge_memory:    { en:'How can you grow from this challenge?', th:'คุณจะเติบโตจากความท้าทายนี้ได้อย่างไร?' },\n    wisdom_moment:       { en:'How will this insight change your perspective?', th:'ข้อคิดนี้จะเปลี่ยนมุมมองของคุณอย่างไร?' },\n    needs_support:       { en:'What support do you need right now?', th:'คุณต้องการการสนับสนุนอะไรตอนนี้?' },\n    neutral_interaction: { en:'What are you thinking about?', th:'คุณกำลังคิดอะไรอยู่?' }\n  };\n  return (m[cls] || m['neutral_interaction'])[lang] || (m[cls] || m['neutral_interaction'])['en'];\n}\n\n// ════════════════════════════════════════════════════════════\n// MAIN EXECUTION\n// ════════════════════════════════════════════════════════════\n\nconst lang = detectLanguage(text);\nconsole.log(`[WF5-B Process] userId=${userId.substring(0,8)}... | lang=${lang} | len=${text.length}`);\n\nlet embedding = null;\nlet classification = null;\nlet ethicalScores = null;\nlet reasoning = 'keyword_fallback';\n\n// ── Step A: Generate Embedding (OpenAI) ───────────────────────\nif (openaiKey) {\n  try {\n    const embedRes = await fetch('https://api.openai.com/v1/embeddings', {\n      method: 'POST',\n      headers: {\n        'Authorization': `Bearer ${openaiKey}`,\n        'Content-Type': 'application/json'\n      },\n      body: JSON.stringify({\n        model: 'text-embedding-3-small',\n        input: text,\n        dimensions: 1536\n      })\n    });\n    if (embedRes.ok) {\n      const embedData = await embedRes.json();\n      embedding = embedData.data?.[0]?.embedding;\n      console.log(`[WF5-B] ✅ Embedding generated | dim=${embedding?.length}`);\n    } else {\n      console.warn(`[WF5-B] ⚠️ OpenAI embed failed: ${embedRes.status}`);\n    }\n  } catch(e) {\n    console.warn(`[WF5-B] ⚠️ Embed error: ${e.message}`);\n  }\n} else {\n  console.warn('[WF5-B] No OpenAI key — skipping embedding');\n}\n\n// ── Step B: Classify (OpenRouter Haiku) ──────────────────────\nif (openrouterKey) {\n  try {\n    const prompt = `Classify this text into ONE category for ethical growth tracking.\n\nText: \"${text}\"\nLanguage: ${lang.toUpperCase()}\n\nCategories:\n- growth_memory: Positive emotions, learning, achievement, gratitude\n- challenge_memory: Negative emotions, stress, conflict, disappointment  \n- wisdom_moment: Deep insights, philosophical reflection, self-awareness\n- needs_support: Crisis signals, severe distress, hopelessness\n- neutral_interaction: Casual conversation, commands, requests\n\nRespond ONLY with valid JSON (no markdown, no explanation):\n{\n  \"classification\": \"category_name\",\n  \"self_awareness\": 0.0-1.0,\n  \"emotional_regulation\": 0.0-1.0,\n  \"compassion\": 0.0-1.0,\n  \"integrity\": 0.0-1.0,\n  \"growth_mindset\": 0.0-1.0,\n  \"wisdom\": 0.0-1.0,\n  \"transcendence\": 0.0-1.0,\n  \"reasoning\": \"brief explanation\"\n}`;\n\n    const llmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {\n      method: 'POST',\n      headers: {\n        'Authorization': `Bearer ${openrouterKey}`,\n        'Content-Type': 'application/json'\n      },\n      body: JSON.stringify({\n        model: 'anthropic/claude-haiku-4-5',\n        messages: [{ role: 'user', content: prompt }],\n        max_tokens: 300,\n        temperature: 0.2\n      })\n    });\n\n    if (llmRes.ok) {\n      const llmData = await llmRes.json();\n      const raw = llmData.choices?.[0]?.message?.content || '';\n      const jsonMatch = raw.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) {\n        const parsed = JSON.parse(jsonMatch[0]);\n        const valid = ['growth_memory','challenge_memory','wisdom_moment','needs_support','neutral_interaction'];\n        if (valid.includes(parsed.classification)) {\n          classification = parsed.classification;\n          ethicalScores = {\n            self_awareness:       Math.min(1, Math.max(0, parsed.self_awareness || 0.5)),\n            emotional_regulation: Math.min(1, Math.max(0, parsed.emotional_regulation || 0.5)),\n            compassion:           Math.min(1, Math.max(0, parsed.compassion || 0.5)),\n            integrity:            Math.min(1, Math.max(0, parsed.integrity || 0.5)),\n            growth_mindset:       Math.min(1, Math.max(0, parsed.growth_mindset || 0.5)),\n            wisdom:               Math.min(1, Math.max(0, parsed.wisdom || 0.5)),\n            transcendence:        Math.min(1, Math.max(0, parsed.transcendence || 0.5))\n          };\n          reasoning = parsed.reasoning || 'openrouter_haiku';\n          console.log(`[WF5-B] ✅ LLM classified: ${classification}`);\n        }\n      }\n    } else {\n      console.warn(`[WF5-B] ⚠️ OpenRouter failed: ${llmRes.status}`);\n    }\n  } catch(e) {\n    console.warn(`[WF5-B] ⚠️ LLM error: ${e.message}`);\n  }\n}\n\n// ── Step C: Keyword Fallback ──────────────────────────────────\nif (!classification) {\n  classification = keywordClassify(text, lang);\n  ethicalScores = defaultScores(classification);\n  reasoning = 'keyword_fallback';\n  console.log(`[WF5-B] ⚠️ Fallback classification: ${classification}`);\n}\n\n// ── Step D: Derived values ────────────────────────────────────\nconst stage = growthStage(ethicalScores);\nconst moments = detectMoments(ethicalScores, classification);\nconst reflectionPrompt = getReflection(classification, lang);\nconst gentleGuidance = getGuidance(classification, lang);\nconst needsAlert = classification === 'needs_support' || moments.some(m => m.type === 'crisis');\n\n// ── Step E: Save to DB ────────────────────────────────────────\nlet memoryId = null;\n\nif (dbUrl) {\n  try {\n    const { Pool } = require('pg');\n    const pool = new Pool({ connectionString: dbUrl });\n\n    // 5a. Save memory_embeddings (with or without vector)\n    if (embedding) {\n      const vectorStr = `[${embedding.join(',')}]`;\n      const embResult = await pool.query(\n        `INSERT INTO user_data_schema.memory_embeddings\n           (user_id, content, embedding, metadata, created_at)\n         VALUES ($1, $2, $3::vector, $4, NOW())\n         RETURNING id`,\n        [\n          userId, text, vectorStr,\n          JSON.stringify({ classification, language: lang, source: metadata?.source || 'wf5b' })\n        ]\n      );\n      memoryId = String(embResult.rows[0].id);\n      console.log(`[WF5-B] ✅ Embedding saved | id=${memoryId}`);\n    } else {\n      // Save without embedding (text-only fallback)\n      const embResult = await pool.query(\n        `INSERT INTO user_data_schema.memory_embeddings\n           (user_id, content, metadata, created_at)\n         VALUES ($1, $2, $3, NOW())\n         RETURNING id`,\n        [\n          userId, text,\n          JSON.stringify({ classification, language: lang, no_embedding: true })\n        ]\n      );\n      memoryId = String(embResult.rows[0].id);\n    }\n\n    // 5b. Save interaction_memories\n    const weightMap = {\n      growth_memory: 1.5, challenge_memory: 2.0, wisdom_moment: 2.5,\n      neutral_interaction: 0.8, needs_support: 1.0\n    };\n    await pool.query(\n      `INSERT INTO user_data_schema.interaction_memories\n         (user_id, text, classification, ethical_scores, moments, reflection_prompt,\n          gentle_guidance, training_weight, approved_for_training, metadata, created_at)\n       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())`,\n      [\n        userId, text, classification,\n        JSON.stringify(ethicalScores),\n        JSON.stringify(moments),\n        reflectionPrompt, gentleGuidance,\n        weightMap[classification] || 1.0,\n        classification !== 'needs_support',\n        JSON.stringify({ source: 'wf5b_inline', memory_embedding_id: memoryId })\n      ]\n    );\n\n    // 5c. Upsert ethical_profiles\n    await pool.query(\n      `INSERT INTO user_data_schema.ethical_profiles\n         (user_id, self_awareness, emotional_regulation, compassion, integrity,\n          growth_mindset, wisdom, transcendence, growth_stage, updated_at)\n       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())\n       ON CONFLICT (user_id) DO UPDATE SET\n         self_awareness       = EXCLUDED.self_awareness,\n         emotional_regulation = EXCLUDED.emotional_regulation,\n         compassion           = EXCLUDED.compassion,\n         integrity            = EXCLUDED.integrity,\n         growth_mindset       = EXCLUDED.growth_mindset,\n         wisdom               = EXCLUDED.wisdom,\n         transcendence        = EXCLUDED.transcendence,\n         growth_stage         = EXCLUDED.growth_stage,\n         total_interactions   = ethical_profiles.total_interactions + 1,\n         updated_at           = NOW()`,\n      [\n        userId,\n        ethicalScores.self_awareness, ethicalScores.emotional_regulation,\n        ethicalScores.compassion, ethicalScores.integrity,\n        ethicalScores.growth_mindset, ethicalScores.wisdom,\n        ethicalScores.transcendence, stage\n      ]\n    );\n\n    await pool.end();\n    console.log(`[WF5-B] ✅ DB saved | cls=${classification} | stage=${stage}`);\n\n  } catch(err) {\n    console.error(`[WF5-B] ❌ DB error: ${err.message}`);\n  }\n}\n\n// ── Return same shape as old Gating Service response ─────────\nreturn {\n  json: {\n    ...item,\n    gatingSuccess: true,\n    routing: classification,\n    ethicalScores,\n    growthStage: stage,\n    detectedLanguage: lang,\n    memoryId,\n    moments,\n    reflectionPrompt,\n    gentleGuidance,\n    needsAlert,\n    reasoning\n  }\n};"
       },
-      "id": "1432289a-d70a-43a6-9f8b-a5f6b2297991",
-      "name": "Call Gating Service",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        464,
-        64
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const gatingResult = $input.first().json;\nconst prev = $('Validate & Guard').first().json;\n\nif (!gatingResult || gatingResult.error || gatingResult.detail) {\n  console.error('[WF5-B] Gating service error:', gatingResult?.detail || gatingResult?.error);\n  return {\n    json: {\n      ...prev,\n      gatingSuccess: false,\n      gatingError: gatingResult?.detail || gatingResult?.error || 'unknown_error',\n      routing: 'error',\n      needsAlert: false\n    }\n  };\n}\n\nconst routing = gatingResult.routing || 'neutral_interaction';\nconst ethicalScores = gatingResult.ethical_scores || {};\nconst growthStage = gatingResult.growth_stage || 2;\nconst detectedLanguage = gatingResult.detected_language || prev.metadata?.language || 'th';\nconst memoryId = gatingResult.memory_id || null;\nconst moments = gatingResult.moments || [];\n\nconst needsAlert = routing === 'needs_support' ||\n  moments.some(m => m.type === 'crisis');\n\nconsole.log(`[WF5-B] ✅ | routing=${routing} | stage=${growthStage} | needsAlert=${needsAlert} | memoryId=${memoryId}`);\n\nreturn {\n  json: {\n    ...prev,\n    gatingSuccess: true,\n    routing, ethicalScores, growthStage, detectedLanguage, memoryId, moments,\n    reflectionPrompt: gatingResult.reflection_prompt || null,\n    gentleGuidance: gatingResult.gentle_guidance || null,\n    needsAlert,\n    reasoning: gatingResult.reasoning || null\n  }\n};"
-      },
-      "id": "721950dc-6939-49d5-8a18-9fdf54f791f2",
-      "name": "Parse Gating Result",
+      "id": "1f9235a6-795a-400f-8c18-b6d1bb7c6493",
+      "name": "Process Gating",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        688,
-        64
+        720,
+        240
       ]
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst dbUrl = item.databaseUrl || process.env.DATABASE_URL || '';\n\nif (!dbUrl) {\n  console.log('[WF5-B Log] No DB URL, skipping log');\n  return { json: { ...item, logged: false } };\n}\n\ntry {\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n\n  // Log to heartbeat_log — WF-Heartbeat reads this\n  await pool.query(\n    `INSERT INTO user_data_schema.heartbeat_log\n       (user_id, heartbeat_type, trigger_type, action, urgency, message_sent, delivered, channel, created_at)\n     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,\n    [\n      item.userId,\n      'gating_' + (item.routing || 'unknown'),\n      item.metadata?.source || 'wf2',\n      item.gatingSuccess ? 'gated' : 'gating_failed',\n      item.needsAlert ? 'high' : 'low',\n      item.gatingSuccess ? `routing=${item.routing}|stage=${item.growthStage}|memoryId=${item.memoryId}` : item.gatingError || null,\n      true,\n      null\n    ]\n  );\n\n  // Update ethical_summary on User.persona for fast WF2 reads\n  if (item.gatingSuccess) {\n    await pool.query(\n      `UPDATE \"User\"\n       SET persona = jsonb_set(\n         COALESCE(persona, '{}'::jsonb),\n         '{ethical_summary}',\n         $1::jsonb\n       ),\n       updated_at = NOW()\n       WHERE id = $2`,\n      [\n        JSON.stringify({\n          growth_stage: item.growthStage,\n          last_routing: item.routing,\n          last_gated_at: new Date().toISOString(),\n          detected_language: item.detectedLanguage\n        }),\n        item.userId\n      ]\n    );\n  }\n\n  await pool.end();\n  console.log(`[WF5-B Log] ✅ Logged | routing=${item.routing}`);\n  return { json: { ...item, logged: true } };\n\n} catch(err) {\n  console.error('[WF5-B Log] DB error:', err.message);\n  return { json: { ...item, logged: false, logError: err.message } };\n}"
+        "jsCode": "const item = $input.first().json;\nconst dbUrl = item.databaseUrl || process.env.DATABASE_URL || '';\n\nif (!dbUrl) {\n  console.log('[WF5-B Log] No DB URL, skipping log');\n  return { json: { ...item, logged: false } };\n}\n\ntry {\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n\n  // Log to heartbeat_log\n  await pool.query(\n    `INSERT INTO user_data_schema.heartbeat_log\n       (user_id, heartbeat_type, trigger_type, action, urgency, message_sent, delivered, channel, created_at)\n     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,\n    [\n      item.userId,\n      'gating_' + (item.routing || 'unknown'),\n      item.metadata?.source || 'wf2',\n      item.gatingSuccess ? 'gated' : 'gating_failed',\n      item.needsAlert ? 'high' : 'low',\n      item.gatingSuccess\n        ? `routing=${item.routing}|stage=${item.growthStage}|memoryId=${item.memoryId}`\n        : item.gatingError || null,\n      true,\n      null\n    ]\n  );\n\n  // Update User.persona.ethical_summary\n  if (item.gatingSuccess) {\n    await pool.query(\n      `UPDATE \"User\"\n       SET persona = jsonb_set(\n         COALESCE(persona, '{}'::jsonb),\n         '{ethical_summary}',\n         $1::jsonb\n       ),\n       updated_at = NOW()\n       WHERE id = $2`,\n      [\n        JSON.stringify({\n          growth_stage: item.growthStage,\n          last_routing: item.routing,\n          last_gated_at: new Date().toISOString(),\n          detected_language: item.detectedLanguage\n        }),\n        item.userId\n      ]\n    );\n  }\n\n  await pool.end();\n  console.log(`[WF5-B Log] ✅ Logged | routing=${item.routing}`);\n  return { json: { ...item, logged: true } };\n\n} catch(err) {\n  console.error('[WF5-B Log] DB error:', err.message);\n  return { json: { ...item, logged: false, logError: err.message } };\n}"
       },
-      "id": "98f4d9f3-a6df-416b-8c8d-8fbbe01b6038",
+      "id": "75126948-e6c0-4709-9141-1cb1c8d77e9c",
       "name": "Log to DB",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        912,
-        64
+        944,
+        240
       ]
     },
     {
@@ -144,56 +119,55 @@
         },
         "options": {}
       },
-      "id": "5a56fb0f-e44c-4d3c-99ee-052afa83a224",
+      "id": "3f80e632-5dfb-40f8-83e4-39d509ce3f86",
       "name": "Needs Support Alert?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1136,
-        64
+        1168,
+        240
       ]
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst n8nBase = process.env.N8N_BASE_URL || 'http://localhost:5678';\nconst heartbeatEventUrl = `${n8nBase}/webhook/wf-heartbeat-event`;\n\nconst eventPayload = {\n  eventType: 'needs_support',\n  userId: item.userId,\n  data: {\n    routing: item.routing,\n    ethical_scores: item.ethicalScores,\n    growth_stage: item.growthStage,\n    moments: item.moments,\n    gentle_guidance: item.gentleGuidance,\n    source: item.metadata?.source || 'unknown',\n    detected_language: item.detectedLanguage,\n    memory_id: item.memoryId\n  }\n};\n\ntry {\n  const res = await fetch(heartbeatEventUrl, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify(eventPayload)\n  });\n  console.log(`[WF5-B] 🚨 needs_support alert sent to Heartbeat | status=${res.status}`);\n  return { json: { ...item, alertSent: true } };\n} catch(e) {\n  console.error('[WF5-B] Alert send failed:', e.message);\n  return { json: { ...item, alertSent: false, alertError: e.message } };\n}"
+        "jsCode": "const item = $input.first().json;\nconst n8nBase = process.env.N8N_BASE_URL || 'http://localhost:5678';\nconst heartbeatEventUrl = `${n8nBase}/webhook/wf-heartbeat-event`;\n\nconst eventPayload = {\n  eventType: 'needs_support',\n  userId: item.userId,\n  data: {\n    routing: item.routing,\n    ethical_scores: item.ethicalScores,\n    growth_stage: item.growthStage,\n    moments: item.moments,\n    gentle_guidance: item.gentleGuidance,\n    source: item.metadata?.source || 'unknown',\n    detected_language: item.detectedLanguage,\n    memory_id: item.memoryId\n  }\n};\n\ntry {\n  const res = await fetch(heartbeatEventUrl, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify(eventPayload)\n  });\n  console.log(`[WF5-B] 🚨 needs_support alert sent | status=${res.status}`);\n  return { json: { ...item, alertSent: true } };\n} catch(e) {\n  console.error('[WF5-B] Alert send failed:', e.message);\n  return { json: { ...item, alertSent: false, alertError: e.message } };\n}"
       },
-      "id": "6c5d919f-f8cf-4029-92cd-589c94604e74",
+      "id": "9be4325b-f370-4ed5-bdad-d95cb7216fd2",
       "name": "Emit Alert to Heartbeat",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1360,
-        -16
+        1392,
+        160
       ]
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconsole.log(`[WF5-B] ✅ Done | routing=${item.routing} | stage=${item.growthStage} | logged=${item.logged}`);\nreturn { json: { status: 'ok', routing: item.routing } };"
+        "jsCode": "const item = $input.first().json;\nconsole.log(`[WF5-B] ✅ Done | routing=${item.routing} | stage=${item.growthStage} | logged=${item.logged} | memoryId=${item.memoryId}`);\nreturn { json: { status: 'ok', routing: item.routing, stage: item.growthStage } };"
       },
-      "id": "f849229a-03ce-488c-87f0-cb73b5bee540",
+      "id": "de9a6c68-2b3c-4c57-a6fb-21c84b0239ae",
       "name": "Silent End",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1360,
-        144
+        1392,
+        320
       ]
     },
     {
       "parameters": {
         "jsCode": "const item = $input.first().json;\nconsole.log('[WF5-B] Skipped:', item.reason);\nreturn { json: { status: 'skipped', reason: item.reason } };"
       },
-      "id": "fea3fa76-64b8-4a1c-a1f3-28bdf6109aae",
+      "id": "0158e5df-aae6-4c29-808e-8b61b1402140",
       "name": "Skip End",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        464,
-        224
+        720,
+        400
       ]
     }
   ],
-  "pinData": {},
   "connections": {
     "Gating Queue Entry": {
       "main": [
@@ -221,7 +195,7 @@
       "main": [
         [
           {
-            "node": "Call Gating Service",
+            "node": "Process Gating",
             "type": "main",
             "index": 0
           }
@@ -235,18 +209,7 @@
         ]
       ]
     },
-    "Call Gating Service": {
-      "main": [
-        [
-          {
-            "node": "Parse Gating Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Gating Result": {
+    "Process Gating": {
       "main": [
         [
           {
@@ -298,21 +261,10 @@
       ]
     }
   },
-  "active": true,
-  "settings": {
-    "executionOrder": "v1",
-    "saveExecutionProgress": true,
-    "saveManualExecutions": true,
-    "executionTimeout": 90,
-    "timezone": "Asia/Bangkok",
-    "availableInMCP": true
-  },
-  "versionId": "872c9985-f35b-41e8-b454-a6a5d6e06bcb",
+  "pinData": {},
   "meta": {
     "templateCredsSetupCompleted": true,
     "autoActivate": true,
     "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
-  },
-  "id": "Hrg9xV7LFkkkrFNq",
-  "tags": []
+  }
 }
