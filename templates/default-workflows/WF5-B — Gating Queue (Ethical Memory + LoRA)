@@ -1,4 +1,5 @@
 {
+  "name": "WF5-B — Gating Queue (Inline: OpenAI + OpenRouter)",
   "nodes": [
     {
       "parameters": {
@@ -168,6 +169,7 @@
       ]
     }
   ],
+  "pinData": {},
   "connections": {
     "Gating Queue Entry": {
       "main": [
@@ -261,10 +263,21 @@
       ]
     }
   },
-  "pinData": {},
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "executionTimeout": 90,
+    "timezone": "Asia/Bangkok",
+    "availableInMCP": true
+  },
+  "versionId": "7ccdd793-8c42-4780-9838-24f042f6b2e9",
   "meta": {
     "templateCredsSetupCompleted": true,
     "autoActivate": true,
     "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
-  }
+  },
+  "id": "Hrg9xV7LFkkkrFNq",
+  "tags": []
 }
