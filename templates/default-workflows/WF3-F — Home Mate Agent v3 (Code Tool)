@@ -98,7 +98,7 @@
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
       "position": [
-        1760,
+        1712,
         464
       ]
     },
@@ -113,7 +113,7 @@
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
       "position": [
-        1936,
+        1984,
         464
       ]
     },
@@ -196,6 +196,21 @@
           "name": "OpenRouter - 2026-02-14T03:30"
         }
       }
+    },
+    {
+      "parameters": {
+        "name": "search_memories",
+        "description": "Search past conversations and memories semantically using vector similarity. Use when user asks about: past experiences, places visited, previous discussions, things they mentioned before, personal preferences they stated in the past.",
+        "jsCode": "// search_memories — OpenAI embedding + pgvector cosine search\n// dim=1536 (text-embedding-3-small) — ตรงกับ WF5-B Process Gating\nconst input = JSON.parse($input.first().json.query || '{}');\nconst query = input.query || input.q || '';\nconst limit = input.limit || 3;\n\nconst creds = $('Load Credentials').first().json.credentials || {};\nconst i18n = $('Load Credentials').first().json.i18n || {};\nconst userId = $('Load Credentials').first().json.userId;\nconst dbUrl = creds.database_url || process.env.DATABASE_URL || '';\nconst openaiKey = creds.google_access_token\n  ? null  // will be overridden below\n  : null;\n\n// Get OpenAI key from user tokens\nconst persona = $('Load Credentials').first().json.persona || {};\nconst tokens = persona.tokens || {};\nconst oaiKey = tokens.openai_api_key || process.env.OPENAI_API_KEY || '';\n\nif (!dbUrl) {\n  return { json: { error: `Database ${i18n.not_connected || 'not connected'}`, memories: [] } };\n}\nif (!query || query.length < 3) {\n  return { json: { error: 'Query too short (min 3 chars)', memories: [] } };\n}\nif (!oaiKey) {\n  return { json: { error: 'OpenAI key not configured', memories: [] } };\n}\n\ntry {\n  // ── Step 1: Generate embedding via OpenAI ─────────────────\n  const embedRes = await fetch('https://api.openai.com/v1/embeddings', {\n    method: 'POST',\n    headers: {\n      'Authorization': `Bearer ${oaiKey}`,\n      'Content-Type': 'application/json'\n    },\n    body: JSON.stringify({\n      model: 'text-embedding-3-small',\n      input: query,\n      dimensions: 1536\n    })\n  });\n\n  if (!embedRes.ok) {\n    const err = await embedRes.text();\n    return { json: { error: `OpenAI embed failed: ${embedRes.status} ${err}`, memories: [] } };\n  }\n\n  const embedData = await embedRes.json();\n  const embedding = embedData.data?.[0]?.embedding;\n\n  if (!embedding || !Array.isArray(embedding)) {\n    return { json: { error: 'No embedding returned', memories: [] } };\n  }\n\n  console.log(`[search_memories] dim=${embedding.length} query=\"${query}\"`);\n\n  // ── Step 2: pgvector cosine similarity search ─────────────\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n\n  const vectorStr = `[${embedding.join(',')}]`;\n\n  const result = await pool.query(\n    `SELECT\n       content,\n       metadata,\n       created_at,\n       1 - (embedding <=> $1::vector) AS similarity\n     FROM user_data_schema.memory_embeddings\n     WHERE user_id = $2\n       AND embedding IS NOT NULL\n       AND 1 - (embedding <=> $1::vector) > 0.6\n     ORDER BY embedding <=> $1::vector\n     LIMIT $3`,\n    [vectorStr, userId, limit]\n  );\n\n  await pool.end();\n\n  const memories = result.rows.map(r => ({\n    content: r.content,\n    similarity: parseFloat(r.similarity.toFixed(3)),\n    metadata: r.metadata || {},\n    date: new Date(r.created_at).toLocaleDateString('th-TH')\n  }));\n\n  console.log(`[search_memories] Found ${memories.length} | top=${memories[0]?.similarity || 0}`);\n\n  if (memories.length === 0) {\n    return { json: { message: 'No relevant memories found', memories: [], query } };\n  }\n\n  return { json: { memories, count: memories.length, query } };\n\n} catch(err) {\n  console.error('[search_memories] Error:', err.message);\n  return { json: { error: `${i18n.error || 'Error'}: ${err.message}`, memories: [] } };\n}"
+      },
+      "id": "825ce2f4-99c4-4a29-87d0-0491123f6f88",
+      "name": "search_memories",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        1840,
+        464
+      ]
     }
   ],
   "pinData": {},
@@ -320,6 +335,17 @@
           }
         ]
       ]
+    },
+    "search_memories": {
+      "ai_tool": [
+        [
+          {
+            "node": "Home Mate Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -328,7 +354,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "161151ef-b471-4cd7-b6e8-069186bafbc9",
+  "versionId": "1f5c4634-0245-43f2-9c9e-29f28dcae4f8",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
