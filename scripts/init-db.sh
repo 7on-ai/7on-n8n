@@ -3,7 +3,6 @@ set -e
 
 echo "📊 Initializing PostgreSQL database schema..."
 
-# ✅ FIX: รับ connection string จาก argument แทน environment variable
 DB_URI="$1"
 
 if [ -z "$DB_URI" ]; then
@@ -12,27 +11,22 @@ if [ -z "$DB_URI" ]; then
   exit 0
 fi
 
-# แสดง connection string (ซ่อน password)
 SAFE_URI=$(echo "$DB_URI" | sed 's/:\/\/[^:]*:[^@]*@/:\/\/***:***@/')
 echo "🔗 Using: $SAFE_URI"
 
-# ทดสอบ connection
 echo "🔌 Testing database connection..."
 if ! psql "$DB_URI" -c 'SELECT current_user, current_database();' 2>&1; then
   echo "❌ Cannot connect to database"
   exit 1
 fi
 
-# ตรวจสอบ permissions
 echo "🔐 Checking permissions..."
 psql "$DB_URI" -c "
-  SELECT 
+  SELECT
     has_database_privilege(current_database(), 'CREATE') as can_create_schema,
     has_database_privilege(current_database(), 'CONNECT') as can_connect;
 " || {
   echo "❌ Insufficient permissions!"
-  echo "📋 User: $(psql "$DB_URI" -tAc 'SELECT current_user;')"
-  echo "📋 Database: $(psql "$DB_URI" -tAc 'SELECT current_database();')"
   exit 1
 }
 
@@ -49,6 +43,7 @@ psql "$DB_URI" -c 'CREATE SCHEMA IF NOT EXISTS user_data_schema;' || {
 
 echo "📋 Creating tables..."
 psql "$DB_URI" << 'EOSQL'
+
 CREATE TABLE IF NOT EXISTS user_data_schema.ethical_profiles (
   user_id TEXT PRIMARY KEY,
   self_awareness FLOAT DEFAULT 0.3,
@@ -67,11 +62,11 @@ CREATE TABLE IF NOT EXISTS user_data_schema.ethical_profiles (
   last_calculated_at TIMESTAMPTZ
 );
 
+-- NOTE: No embedding column — embeddings stored in memory_embeddings only
 CREATE TABLE IF NOT EXISTS user_data_schema.interaction_memories (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT NOT NULL,
   text TEXT NOT NULL,
-  embedding vector(768),
   classification TEXT NOT NULL,
   ethical_scores JSONB NOT NULL DEFAULT '{}',
   moments JSONB DEFAULT '[]',
@@ -84,11 +79,13 @@ CREATE TABLE IF NOT EXISTS user_data_schema.interaction_memories (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- dim=1536: text-embedding-3-small (OpenAI)
+-- Written by WF5-B Process Gating, read by WF3 search_memories
 CREATE TABLE IF NOT EXISTS user_data_schema.memory_embeddings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id TEXT NOT NULL,
   content TEXT NOT NULL,
-  embedding vector(768),
+  embedding vector(1536),
   interaction_memory_id BIGINT,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -110,6 +107,7 @@ CREATE TABLE IF NOT EXISTS user_data_schema.chat_sessions (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- processed_for_memory: WF5-A marks TRUE after consolidation
 CREATE TABLE IF NOT EXISTS user_data_schema.raw_messages (
   id SERIAL PRIMARY KEY,
   session_id TEXT NOT NULL,
@@ -117,7 +115,32 @@ CREATE TABLE IF NOT EXISTS user_data_schema.raw_messages (
   role TEXT NOT NULL,
   content TEXT NOT NULL,
   timestamp TIMESTAMP DEFAULT NOW(),
+  processed_for_memory BOOLEAN DEFAULT FALSE,
   metadata JSONB
+);
+
+-- Written by WF5-A Memory Consolidator
+CREATE TABLE IF NOT EXISTS user_data_schema.memory_facts (
+  id SERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  fact TEXT NOT NULL,
+  source TEXT DEFAULT 'wf5a',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, fact)
+);
+
+-- Written by WF5-B Log to DB, read by WF-Heartbeat
+CREATE TABLE IF NOT EXISTS user_data_schema.heartbeat_log (
+  id BIGSERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  heartbeat_type TEXT,
+  trigger_type TEXT,
+  action TEXT,
+  urgency TEXT DEFAULT 'low',
+  message_sent TEXT,
+  delivered BOOLEAN DEFAULT FALSE,
+  channel TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS user_data_schema.growth_milestones (
@@ -166,32 +189,56 @@ CREATE TABLE IF NOT EXISTS user_data_schema.gating_logs (
   processing_time_ms INT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
 EOSQL
 
 echo "🔍 Creating indexes..."
 psql "$DB_URI" << 'EOSQL'
-CREATE INDEX IF NOT EXISTS idx_interaction_user ON user_data_schema.interaction_memories(user_id);
-CREATE INDEX IF NOT EXISTS idx_interaction_classification ON user_data_schema.interaction_memories(classification);
-CREATE INDEX IF NOT EXISTS idx_interaction_embedding ON user_data_schema.interaction_memories USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX IF NOT EXISTS idx_memory_embeddings_vector ON user_data_schema.memory_embeddings USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_status ON user_data_schema.chat_sessions(user_id, status);
-CREATE INDEX IF NOT EXISTS idx_raw_messages_session ON user_data_schema.raw_messages(session_id);
-CREATE INDEX IF NOT EXISTS idx_raw_messages_user_time ON user_data_schema.raw_messages(user_id, timestamp DESC);
+
+CREATE INDEX IF NOT EXISTS idx_interaction_user
+  ON user_data_schema.interaction_memories(user_id);
+CREATE INDEX IF NOT EXISTS idx_interaction_classification
+  ON user_data_schema.interaction_memories(classification);
+
+CREATE INDEX IF NOT EXISTS idx_memory_embeddings_user
+  ON user_data_schema.memory_embeddings(user_id);
+CREATE INDEX IF NOT EXISTS idx_memory_embeddings_vector
+  ON user_data_schema.memory_embeddings
+  USING ivfflat (embedding vector_cosine_ops)
+  WITH (lists = 100);
+
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_status
+  ON user_data_schema.chat_sessions(user_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_raw_messages_session
+  ON user_data_schema.raw_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_raw_messages_user_time
+  ON user_data_schema.raw_messages(user_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_raw_messages_unprocessed
+  ON user_data_schema.raw_messages(user_id)
+  WHERE processed_for_memory = FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_memory_facts_user
+  ON user_data_schema.memory_facts(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_heartbeat_log_user
+  ON user_data_schema.heartbeat_log(user_id, created_at DESC);
+
 EOSQL
 
 echo "🔗 Creating foreign keys..."
 psql "$DB_URI" << 'EOSQL'
-DO $$ 
-BEGIN 
+DO $$
+BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'raw_messages_session_fk'
-  ) THEN 
-    ALTER TABLE user_data_schema.raw_messages 
-    ADD CONSTRAINT raw_messages_session_fk 
-    FOREIGN KEY (session_id) 
-    REFERENCES user_data_schema.chat_sessions(id) 
-    ON DELETE CASCADE; 
-  END IF; 
+  ) THEN
+    ALTER TABLE user_data_schema.raw_messages
+    ADD CONSTRAINT raw_messages_session_fk
+    FOREIGN KEY (session_id)
+    REFERENCES user_data_schema.chat_sessions(id)
+    ON DELETE CASCADE;
+  END IF;
 END $$;
 EOSQL
 
