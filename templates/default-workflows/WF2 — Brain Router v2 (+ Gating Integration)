@@ -1,5 +1,4 @@
 {
-  "name": "WF2 — Brain Router v2 (+ Gating Integration)",
   "nodes": [
     {
       "parameters": {
@@ -143,7 +142,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Async Gating Emitter — fire-and-forget ไป WF5-B\n// ไม่ block user response\nconst payload = $input.first().json;\n\nif (payload.needsGating) {\n  const n8nBase = process.env.N8N_BASE_URL || 'http://localhost:5678';\n  // ✅ path ตรงกับ WF5-B webhook\n  const gatingQueueUrl = `${n8nBase}/webhook/wf5b-gating-queue`;\n  const dbUrl = process.env.DATABASE_URL || '';\n  const gatingServiceUrl = process.env.GATING_SERVICE_URL || '';\n\n  if (!gatingServiceUrl) {\n    console.log('[Gating Emitter] GATING_SERVICE_URL not set — skipping');\n  } else if (!dbUrl) {\n    console.log('[Gating Emitter] DATABASE_URL not set — skipping');\n  } else {\n    const gatingPayload = {\n      user_id: payload.userId,\n      text: payload.message,\n      database_url: dbUrl,\n      metadata: {\n        session_id: payload.sessionId,\n        source: payload.targetAgent,\n        language: payload.persona?.language_preference || 'th',\n        timestamp: payload.timestamp || new Date().toISOString()\n      }\n    };\n\n    // Fire and forget — do NOT await\n    fetch(gatingQueueUrl, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify(gatingPayload)\n    }).then(r => {\n      console.log(`[Gating Emitter] ✅ Queued → WF5-B | agent=${payload.targetAgent} | status=${r.status}`);\n    }).catch(e => {\n      console.log('[Gating Emitter] ⚠️ Queue failed (non-blocking):', e.message);\n    });\n\n    console.log(`[Gating Emitter] Fired | userId=${payload.userId?.substring(0,8)}... | agent=${payload.targetAgent}`);\n  }\n} else {\n  console.log(`[Gating Emitter] Skipped | agent=${payload.targetAgent} | needsGating=false`);\n}\n\n// Always pass through — gating never blocks\nreturn { json: payload };"
+        "jsCode": "//Async Gating Emitter — fire-and-forget ไป WF5-B\n// ไม่ block user response\n\nconst payload = $input.first().json;\nif (payload.needsGating) {\n  const n8nBase = process.env.N8N_BASE_URL || 'http://localhost:5678';\n  // ✅ path ตรงกับ WF5-B webhook\n  const gatingQueueUrl = `${n8nBase}/webhook/wf5b-gating-queue`;\n  const dbUrl = process.env.DATABASE_URL || '';\n  const gatingServiceUrl = process.env.GATING_SERVICE_URL || '';\n  \n  if (!gatingServiceUrl) {\n    console.log('[Gating Emitter] GATING_SERVICE_URL not set — skipping');\n  } else if (!dbUrl) {\n    console.log('[Gating Emitter] DATABASE_URL not set — skipping');\n  } else {\n    const gatingPayload = {\n      user_id: payload.userId,\n      text: payload.message,\n      database_url: dbUrl,\n      metadata: {\n        session_id: payload.sessionId,\n        source: payload.targetAgent,\n        language: payload.persona?.language_preference || 'th',\n        timestamp: payload.timestamp || new Date().toISOString(),\n        openai_key: $('Load Tokens').first().json.openai_api_key || ''\n      }\n    };\n    \n    // Fire and forget — do NOT await\n    fetch(gatingQueueUrl, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify(gatingPayload)\n    }).then(r => {\n      console.log(`[Gating Emitter] ✅ Queued → WF5-B | agent=${payload.targetAgent} | status=${r.status}`);\n    }).catch(e => {\n      console.log('[Gating Emitter] ⚠️ Queue failed (non-blocking):', e.message);\n    });\n    console.log(`[Gating Emitter] Fired | userId=${payload.userId?.substring(0,8)}... | agent=${payload.targetAgent}`);\n  }\n} else {\n  console.log(`[Gating Emitter] Skipped | agent=${payload.targetAgent} | needsGating=false`);\n}\n\n// Always pass through — gating never blocks\nreturn { json: payload };"
       },
       "id": "04a0e9c0-33f9-4c1d-a4a9-18ecca6af8ff",
       "name": "Gating Emitter (Async)",
@@ -174,7 +173,6 @@
       ]
     }
   ],
-  "pinData": {},
   "connections": {
     "WF2 Entry": {
       "main": [
@@ -265,17 +263,9 @@
       ]
     }
   },
-  "active": true,
-  "settings": {
-    "executionOrder": "v1",
-    "binaryMode": "separate",
-    "availableInMCP": false
-  },
-  "versionId": "25f4d15e-3318-4a54-ae8f-178525cf5b7a",
+  "pinData": {},
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
-  },
-  "id": "X207owXpSeTrfjeN",
-  "tags": []
+  }
 }
