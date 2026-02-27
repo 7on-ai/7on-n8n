@@ -1,11 +1,11 @@
 {
-  "name": "WF5-A — Memory Consolidator (Persona Builder)",
+  "name": "WF5-A — Memory Consolidator v2 (Persona Builder)",
   "nodes": [
     {
       "parameters": {
-        "content": "# WF5-A — Memory Consolidator (Persona Builder)\n## รัน Cron ทุก 6 ชั่วโมง\n\n### หน้าที่:\nอ่าน raw_messages → LLM สกัด → อัพเดต User.persona\nเพื่อให้ WF2 Load Context ส่งข้อมูลครบให้ WF3 ทุกตัว\n\n### เขียนลง DB:\n→ `\"User\".persona` (JSONB)\n  interests[], preferences{}, physical_stats{},\n  personality_notes, _last_memory_update\n→ `user_data_schema.memory_facts` (key facts deduped)\n→ `user_data_schema.raw_messages` (mark processed=true)\n\n### ไม่เขียน heartbeat_log (WF5-B รับผิดชอบ)\n\n### Fixes จาก WF5 เดิม:\n1. ชื่อ → WF5-A\n2. LLM Chain มี systemMessage ครบถ้วน\n3. Save to DB: ลบ heartbeat_log ออก\n4. Save to DB: source = 'wf5a'\n5. SQL parameterized ทั้งหมด",
-        "height": 360,
-        "width": 400,
+        "content": "# WF5-A — Memory Consolidator v2\n## รัน Cron ทุก 6 ชั่วโมง\n\n### ✅ v2 Fixes:\n1. Parse Memory Update: 'skip: True' → 'skip: true' (JS boolean)\n2. LLM Chain (Memory Extract): เพิ่ม systemMessage ครบถ้วน\n   → LLM รู้ว่าต้อง extract อะไร และ return JSON format อะไร\n\n### หน้าที่:\nอ่าน raw_messages → LLM สกัด → อัพเดต User.persona\n\n### เขียนลง DB:\n→ User.persona (JSONB)\n→ user_data_schema.memory_facts\n→ user_data_schema.raw_messages (mark processed)\n\n### ไม่เขียน heartbeat_log (WF5-B รับผิดชอบ)",
+        "height": 380,
+        "width": 420,
         "color": 3
       },
       "type": "n8n-nodes-base.stickyNote",
@@ -59,6 +59,9 @@
       "parameters": {
         "promptType": "define",
         "text": "=Analyze this conversation and extract memory updates.\n\nUSER INFO:\nName: {{ $json.userMeta.name }}\nLanguage: {{ $json.userMeta.language }}\nTimezone: {{ $json.userMeta.timezone }}\n\nCURRENT PERSONA:\n{{ JSON.stringify($json.currentPersona, null, 2) }}\n\nCONVERSATION (last 7 hours, {{ $json.messageCount }} messages):\n{{ $json.conversation }}",
+        "options": {
+          "systemMessage": "You are a Memory Extraction AI. Analyze the conversation and extract structured memory updates.\n\n## TASK:\nExtract what you learn about the user from this conversation to build a persistent persona.\n\n## RESPONSE FORMAT (JSON ONLY — no markdown, no preamble):\n{\n  \"persona_updates\": {\n    \"interests\": [\"topic1\", \"topic2\"],\n    \"preferences\": {\n      \"key\": \"value\"\n    },\n    \"physical_stats\": {\n      \"weight_kg\": null,\n      \"height_cm\": null,\n      \"age\": null,\n      \"gender\": null\n    },\n    \"personality_notes\": \"brief description of personality/communication style\"\n  },\n  \"key_facts\": [\n    \"Fact 1 about the user (e.g. works as software engineer)\",\n    \"Fact 2 about the user\"\n  ],\n  \"emotional_patterns\": [\n    \"pattern1\"\n  ],\n  \"language_detected\": \"th\"\n}\n\n## RULES:\n- Only include fields with new information found in this conversation\n- key_facts: concrete, specific facts (job, location, family, goals, etc.)\n- interests: topics the user discussed or showed interest in\n- preferences: things they like/dislike, habits, settings\n- physical_stats: only if explicitly mentioned (weight, height, age, gender)\n- personality_notes: communication style, personality traits observed\n- language_detected: th, en, ja, or zh based on primary language used\n- If nothing new found, return empty arrays/objects\n- Return ONLY valid JSON, no explanation text"
+        },
         "batching": {}
       },
       "id": "1d002c84-1b38-4168-a701-7f1aef8e1948",
@@ -235,7 +238,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst rawOutput = item.text || item.output || item.response || '{}';\nconst userId = $('Merge for Analysis').item.json.userId;\nconst currentPersona = $('Merge for Analysis').item.json.currentPersona;\nconst userMeta = $('Merge for Analysis').item.json.userMeta;\n\nlet memoryUpdate = {};\ntry {\n  const cleaned = rawOutput.replace(/```json|```/g, '').trim();\n  memoryUpdate = JSON.parse(cleaned);\n} catch(e) {\n  console.error('[WF5-A Parse] JSON parse error:', e.message, '| raw:', rawOutput.slice(0, 200));\n  return {\n    json: {\n      userId, updatedPersona: currentPersona,\n      keyFacts: [], emotionalPatterns: [],\n      languageDetected: userMeta.language,\n      skip: True, skipReason: 'json_parse_error'\n    }\n  };\n}\n\nconst pu = memoryUpdate.persona_updates || {};\n\nconst mergedInterests = [...new Set([...(currentPersona.interests || []), ...(pu.interests || [])])];\nconst mergedPreferences = { ...(currentPersona.preferences || {}), ...(pu.preferences || {}) };\nconst mergedPhysicalStats = {\n  ...(currentPersona.physical_stats || {}),\n  ...(Object.keys(pu.physical_stats || {}).length > 0 ? pu.physical_stats : {})\n};\n\nconst updatedPersona = {\n  ...currentPersona,\n  interests: mergedInterests,\n  preferences: mergedPreferences,\n  physical_stats: mergedPhysicalStats,\n  personality_notes: pu.personality_notes || currentPersona.personality_notes || null,\n  language_preference: memoryUpdate.language_detected || currentPersona.language_preference || userMeta.language,\n  _last_memory_update: new Date().toISOString()\n};\n\nconsole.log(`[WF5-A Parse] userId: ${userId.substring(0,8)}... | facts: ${(memoryUpdate.key_facts || []).length} | interests_new: ${(pu.interests || []).length}`);\n\nreturn {\n  json: {\n    userId, updatedPersona,\n    keyFacts: memoryUpdate.key_facts || [],\n    emotionalPatterns: memoryUpdate.emotional_patterns || [],\n    languageDetected: memoryUpdate.language_detected || userMeta.language,\n    skip: false\n  }\n};"
+        "jsCode": "const item = $input.first().json;\nconst rawOutput = item.text || item.output || item.response || '{}';\nconst userId = $('Merge for Analysis').item.json.userId;\nconst currentPersona = $('Merge for Analysis').item.json.currentPersona;\nconst userMeta = $('Merge for Analysis').item.json.userMeta;\n\nlet memoryUpdate = {};\ntry {\n  const cleaned = rawOutput.replace(/```json|```/g, '').trim();\n  memoryUpdate = JSON.parse(cleaned);\n} catch(e) {\n  console.error('[WF5-A Parse] JSON parse error:', e.message, '| raw:', rawOutput.slice(0, 200));\n  return {\n    json: {\n      userId, updatedPersona: currentPersona,\n      keyFacts: [], emotionalPatterns: [],\n      languageDetected: userMeta.language,\n      skip: true,  // ✅ FIXED: JavaScript true (not Python True)\n      skipReason: 'json_parse_error'\n    }\n  };\n}\n\nconst pu = memoryUpdate.persona_updates || {};\n\nconst mergedInterests = [...new Set([...(currentPersona.interests || []), ...(pu.interests || [])])];\nconst mergedPreferences = { ...(currentPersona.preferences || {}), ...(pu.preferences || {}) };\nconst mergedPhysicalStats = {\n  ...(currentPersona.physical_stats || {}),\n  ...(Object.keys(pu.physical_stats || {}).length > 0 ? pu.physical_stats : {})\n};\n\nconst updatedPersona = {\n  ...currentPersona,\n  interests: mergedInterests,\n  preferences: mergedPreferences,\n  physical_stats: mergedPhysicalStats,\n  personality_notes: pu.personality_notes || currentPersona.personality_notes || null,\n  language_preference: memoryUpdate.language_detected || currentPersona.language_preference || userMeta.language,\n  _last_memory_update: new Date().toISOString()\n};\n\nconsole.log(`[WF5-A Parse] userId: ${userId.substring(0,8)}... | facts: ${(memoryUpdate.key_facts || []).length} | interests_new: ${(pu.interests || []).length}`);\n\nreturn {\n  json: {\n    userId, updatedPersona,\n    keyFacts: memoryUpdate.key_facts || [],\n    emotionalPatterns: memoryUpdate.emotional_patterns || [],\n    languageDetected: memoryUpdate.language_detected || userMeta.language,\n    skip: false\n  }\n};"
       },
       "id": "d42f1854-4870-4b15-898d-dd48f450f411",
       "name": "Parse Memory Update",
@@ -247,7 +250,6 @@
       ]
     }
   ],
-  "pinData": {},
   "connections": {
     "LLM Memory Extractor (Haiku)": {
       "ai_languageModel": [
@@ -372,6 +374,7 @@
       ]
     }
   },
+  "pinData": {},
   "active": true,
   "settings": {
     "executionOrder": "v1",
