@@ -1,0 +1,364 @@
+{
+  "name": "WF3-G — Health Coach Agent v1 (OpenRouter)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# WF3-G — HEALTH COACH v1\n## 5 Code Tools\n1. lookup_nutrition  → Nutritionix food + exercise calories\n2. lookup_exercise   → Wger exercise database\n3. lookup_medicine   → OpenFDA drug information\n4. track_health      → log/view health data + BMI/BMR/TDEE\n5. search_memories   → Past conversations (OpenRouter embed)\n\nModel: Claude Sonnet\n⚠️ ไม่ใช่คำแนะนำทางการแพทย์\n\n## KEY CHANGES:\n- search_memories: ใช้ OpenRouter embed (user key)\n- ไม่ต้องการ GATING_SERVICE_URL อีกต่อไป\n- model: claude-sonnet-4-5 (แก้ไข 4.5 → 4-5)\n\n## MULTILINGUAL: th / en / ja / zh",
+        "height": 300,
+        "width": 380,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        16
+      ],
+      "id": "658de1bc-353d-4571-9738-931a6edd8d29",
+      "name": "Health Coach v1 Overview1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf3g-healthcoach",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "eeafb588-7c52-42a5-be4b-0aeab42e774f",
+      "name": "WF3-G Entry1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        672,
+        368
+      ],
+      "webhookId": "wf3g-healthcoach-entry"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json.body || $input.first().json;\nreturn { json: {\n  userId: p.userId, sessionId: p.sessionId, source: p.source,\n  message: p.message || p.enrichedMessage,\n  originalMessage: p.originalMessage || p.message,\n  persona: typeof p.persona === 'string' ? JSON.parse(p.persona) : (p.persona || {}),\n  replyTarget: p.replyTarget, replyToken: p.replyToken, timestamp: p.timestamp\n}};"
+      },
+      "id": "7d4563ea-c13b-43e0-aea2-0a80c12e1ca1",
+      "name": "Extract Payload1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Load Credentials — MULTILINGUAL + i18n\nconst prev = $('Extract Payload1').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\n\nconst i18nMap = {\n  th: {\n    not_connected: 'ยังไม่ได้เชื่อมต่อ',\n    configure: 'กรุณาตั้งค่าที่ /dashboard/api-settings',\n    success: 'สำเร็จ',\n    error: 'เกิดข้อผิดพลาด',\n    completed: 'เสร็จแล้ว',\n    query_required: 'กรุณาระบุคำค้นหา',\n    drug_required: 'กรุณาระบุชื่อยา',\n    metric_required: 'กรุณาระบุ metric_type และ value',\n    weight_height_required: 'กรุณาระบุ weight_kg และ height_cm (หรือตั้งค่าใน persona)',\n    disclaimer_medical: '⚠️ ข้อมูลนี้เป็นเพื่อการศึกษาเท่านั้น ไม่ใช่คำแนะนำทางการแพทย์ กรุณาปรึกษาแพทย์หรือเภสัชกรก่อนใช้ยา'\n  },\n  en: {\n    not_connected: 'Not connected',\n    configure: 'Please configure at /dashboard/api-settings',\n    success: 'Success',\n    error: 'Error occurred',\n    completed: 'Completed',\n    query_required: 'query is required',\n    drug_required: 'drug_name is required',\n    metric_required: 'metric_type and value are required',\n    weight_height_required: 'weight_kg and height_cm are required (or set in persona)',\n    disclaimer_medical: '⚠️ For educational purposes only. Not medical advice. Please consult a doctor or pharmacist before use.'\n  },\n  ja: {\n    not_connected: '接続されていません',\n    configure: '/dashboard/api-settingsで設定してください',\n    success: '成功しました',\n    error: 'エラーが発生しました',\n    completed: '完了しました',\n    query_required: '検索クエリが必要です',\n    drug_required: '薬名が必要です',\n    metric_required: 'metric_typeとvalueが必要です',\n    weight_height_required: 'weight_kgとheight_cmが必要です（またはpersonaに設定）',\n    disclaimer_medical: '⚠️ 教育目的のみです。医療アドバイスではありません。使用前に医師または薬剤師にご相談ください。'\n  },\n  zh: {\n    not_connected: '未连接',\n    configure: '请在 /dashboard/api-settings 配置',\n    success: '成功',\n    error: '发生错误',\n    completed: '已完成',\n    query_required: '需要搜索关键词',\n    drug_required: '需要药品名称',\n    metric_required: '需要metric_type和value',\n    weight_height_required: '需要weight_kg和height_cm（或在persona中设置）',\n    disclaimer_medical: '⚠️ 仅供教育目的。非医疗建议。使用前请咨询医生或药剂师。'\n  }\n};\n\nconst i18n = i18nMap[lang] || i18nMap['en'];\nconst get = (envKey, payloadKey) => t[payloadKey] || p[payloadKey] || process.env[envKey] || '';\n\nconst creds = {\n  google_access_token:    get('GOOGLE_ACCESS_TOKEN',    'google_access_token'),\n  google_refresh_token:   get('GOOGLE_REFRESH_TOKEN',   'google_refresh_token'),\n  microsoft_access_token: get('MICROSOFT_ACCESS_TOKEN', 'microsoft_access_token'),\n  outlook_access_token:   get('MICROSOFT_ACCESS_TOKEN', 'microsoft_access_token'),\n  telegram_bot_token:     get('TELEGRAM_BOT_TOKEN',     'telegram_bot_token'),\n  discord_bot_token:      get('DISCORD_BOT_TOKEN',      'discord_bot_token'),\n  slack_bot_token:        get('SLACK_BOT_TOKEN',        'slack_bot_token'),\n  twitter_bearer_token:   get('TWITTER_BEARER_TOKEN',   'twitter_bearer_token'),\n  facebook_access_token:  get('FACEBOOK_ACCESS_TOKEN',  'facebook_access_token'),\n  linkedin_access_token:  get('LINKEDIN_ACCESS_TOKEN',  'linkedin_access_token'),\n  spotify_access_token:   get('SPOTIFY_ACCESS_TOKEN',   'spotify_access_token'),\n  youtube_api_key:        get('YOUTUBE_API_KEY',        'youtube_api_key'),\n  line_notify_token:      get('LINE_NOTIFY_TOKEN',      'line_notify_token'),\n  google_maps_key:        get('GOOGLE_MAPS_API_KEY',    'google_maps_key'),\n  brave_api_key:          get('BRAVE_API_KEY',          'brave_api_key'),\n  openweathermap_key:     get('OPENWEATHERMAP_API_KEY', 'openweathermap_key'),\n  fal_api_key:            get('FAL_API_KEY',            'fal_api_key'),\n  elevenlabs_api_key:     get('ELEVENLABS_API_KEY',     'elevenlabs_api_key'),\n  unsplash_access_key:    get('UNSPLASH_ACCESS_KEY',    'unsplash_access_key'),\n  nutritionix_app_id:     get('NUTRITIONIX_APP_ID',     'nutritionix_app_id'),\n  nutritionix_api_key:    get('NUTRITIONIX_API_KEY',    'nutritionix_api_key'),\n  finnhub_api_key:        get('FINNHUB_API_KEY',        'finnhub_api_key'),\n  ha_url:                 get('HOME_ASSISTANT_URL',      'ha_url'),\n  ha_token:               get('HOME_ASSISTANT_TOKEN',    'ha_token'),\n  sonos_api_url:          get('SONOS_HTTP_API_URL',     'sonos_api_url'),\n  lastfm_api_key:         get('LASTFM_API_KEY',         'lastfm_api_key'),\n  internal_auth_token:    get('INTERNAL_AUTH_TOKEN',    'internal_auth_token'),\n  n8n_base_url:           get('N8N_BASE_URL',           'n8n_base_url'),\n  database_url:           get('DATABASE_URL',           'database_url')\n};\n\nconst connected = Object.entries(creds).filter(([k,v]) => v).map(([k]) => k);\nconsole.log('[Load Credentials]', { userId: prev.userId?.substring(0, 8) + '...', connected: connected.length, lang });\nreturn { json: { ...prev, credentials: creds, lang, i18n, _connected: connected } };"
+      },
+      "id": "d1584e04-008e-40e8-ac54-6be22f18205b",
+      "name": "Load Credentials",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message }}",
+        "options": {
+          "systemMessage": "=You are Health Coach — supportive wellness companion.\n\nUser: {{ $json.persona.name || 'User' }}\nLanguage: {{ $json.persona.language_preference || 'th' }}\nStats: {{ $json.persona.physical_stats }}\n\n## LANGUAGE RULES:\n**ALWAYS respond in user's preferred language: {{ $json.persona.language_preference }}**\n- If 'th' → Thai\n- If 'en' → English\n- If 'ja' → Japanese\n- If 'zh' → Chinese\n\n## DISCLAIMER (include in EVERY response about nutrition, medicine, or health metrics):\n- Thai: 'ข้อมูลเป็นเพื่อการศึกษา ไม่ใช่คำแนะนำทางการแพทย์ กรุณาปรึกษาแพทย์'\n- English: 'For educational purposes only. Not medical advice. Consult a doctor.'\n- Japanese: '教育目的のみ。医療アドバイスではありません。医師にご相談ください。'\n- Chinese: '仅供教育目的。非医疗建议。请咨询医生。'\n\n## TOOLS:\nlookup_nutrition, lookup_exercise, lookup_medicine, track_health, search_memories, think"
+        }
+      },
+      "id": "788bb980-ee3e-49f2-bfed-c762aa979e3d",
+      "name": "Health Coach Agent1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        1712,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Load Credentials').item.json.sessionId }}"
+      },
+      "id": "19a27ad0-d14a-41c7-bb43-9764de0d11c2",
+      "name": "Session Memory1",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1664,
+        496
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ace7afab-8914-41e5-93f0-e7dcf1907476",
+      "name": "think1",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "name": "search_memories",
+        "description": "Search past conversations and memories semantically using vector similarity. Use when user asks about: past experiences, places visited, previous discussions, things they mentioned before, personal preferences they stated in the past.",
+        "jsCode": "// search_memories — OpenAI embedding + pgvector cosine search\n// dim=1536 (text-embedding-3-small) — ตรงกับ WF5-B Process Gating\nconst input = JSON.parse($input.first().json.query || '{}');\nconst query = input.query || input.q || '';\nconst limit = input.limit || 3;\n\nconst creds = $('Load Credentials').first().json.credentials || {};\nconst i18n = $('Load Credentials').first().json.i18n || {};\nconst userId = $('Load Credentials').first().json.userId;\nconst dbUrl = creds.database_url || process.env.DATABASE_URL || '';\nconst openaiKey = creds.google_access_token\n  ? null  // will be overridden below\n  : null;\n\n// Get OpenRouter key from user tokens (ใช้ key เดิมที่มีอยู่แล้ว)\nconst persona = $('Load Credentials').first().json.persona || {};\nconst tokens = persona.tokens || {};\nconst embedKey = tokens.openrouter_access_token || process.env.OPENROUTER_API_KEY || '';\n\nif (!dbUrl) {\n  return { json: { error: `Database ${i18n.not_connected || 'not connected'}`, memories: [] } };\n}\nif (!query || query.length < 3) {\n  return { json: { error: 'Query too short (min 3 chars)', memories: [] } };\n}\nif (!embedKey) {\n  return { json: { error: 'OpenRouter key not configured', memories: [] } };\n}\n\ntry {\n  // ── Step 1: Generate embedding via OpenRouter ─────────────\n  const embedRes = await fetch('https://openrouter.ai/api/v1/embeddings', {\n    method: 'POST',\n    headers: {\n      'Authorization': `Bearer ${embedKey}`,\n      'Content-Type': 'application/json'\n    },\n    body: JSON.stringify({\n      model: 'openai/text-embedding-3-small',\n      input: query\n    })\n  });\n\n  if (!embedRes.ok) {\n    const err = await embedRes.text();\n    return { json: { error: `OpenRouter embed failed: ${embedRes.status} ${err}`, memories: [] } };\n  }\n\n  const embedData = await embedRes.json();\n  const embedding = embedData.data?.[0]?.embedding;\n\n  if (!embedding || !Array.isArray(embedding)) {\n    return { json: { error: 'No embedding returned', memories: [] } };\n  }\n\n  console.log(`[search_memories] dim=${embedding.length} query=\"${query}\"`);\n\n  // ── Step 2: pgvector cosine similarity search ─────────────\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n\n  const vectorStr = `[${embedding.join(',')}]`;\n\n  const result = await pool.query(\n    `SELECT\n       content,\n       metadata,\n       created_at,\n       1 - (embedding <=> $1::vector) AS similarity\n     FROM user_data_schema.memory_embeddings\n     WHERE user_id = $2\n       AND embedding IS NOT NULL\n       AND 1 - (embedding <=> $1::vector) > 0.6\n     ORDER BY embedding <=> $1::vector\n     LIMIT $3`,\n    [vectorStr, userId, limit]\n  );\n\n  await pool.end();\n\n  const memories = result.rows.map(r => ({\n    content: r.content,\n    similarity: parseFloat(r.similarity.toFixed(3)),\n    metadata: r.metadata || {},\n    date: new Date(r.created_at).toLocaleDateString('th-TH')\n  }));\n\n  console.log(`[search_memories] Found ${memories.length} | top=${memories[0]?.similarity || 0}`);\n\n  if (memories.length === 0) {\n    return { json: { message: 'No relevant memories found', memories: [], query } };\n  }\n\n  return { json: { memories, count: memories.length, query } };\n\n} catch(err) {\n  console.error('[search_memories] Error:', err.message);\n  return { json: { error: `${i18n.error || 'Error'}: ${err.message}`, memories: [] } };\n}"
+      },
+      "id": "5196eb55-25b5-4b79-b512-b95177e1b5f6",
+      "name": "search_memories",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        1904,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "name": "lookup_nutrition",
+        "description": "Look up food nutrition data or exercise calorie burn. lookup_type: food_search (requires: query), exercise_calories (requires: exercise, duration_min, optional: weight_kg).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst lookupType = (input.lookup_type || 'food_search').toLowerCase();\nconst nxAppId = creds.nutritionix_app_id || '';\nconst nxKey = creds.nutritionix_api_key || '';\n\nif (!nxAppId || !nxKey) return { json: { error: `Nutritionix ${i18n.not_connected}`, help: i18n.configure } };\nconst headers = { 'x-app-id': nxAppId, 'x-app-key': nxKey, 'Content-Type': 'application/json' };\n\ntry {\n  if (lookupType === 'food_search') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required (e.g. fried rice 1 plate)' } };\n    const res = await fetch('https://trackapi.nutritionix.com/v2/natural/nutrients', {\n      method: 'POST', headers,\n      body: JSON.stringify({ query: input.query, timezone: 'Asia/Bangkok' })\n    });\n    if (!res.ok) return { json: { error: `Nutritionix HTTP ${res.status}` } };\n    const data = await res.json();\n    const foods = (data.foods || []).map(f => ({ name: f.food_name, serving: `${f.serving_qty} ${f.serving_unit}`, calories: Math.round(f.nf_calories), protein_g: Math.round(f.nf_protein * 10) / 10, carbs_g: Math.round(f.nf_total_carbohydrate * 10) / 10, fat_g: Math.round(f.nf_total_fat * 10) / 10, fiber_g: Math.round((f.nf_dietary_fiber || 0) * 10) / 10 }));\n    const total_cal = foods.reduce((s, f) => s + f.calories, 0);\n    return { json: { foods, total_calories: total_cal, count: foods.length } };\n  }\n  if (lookupType === 'exercise_calories') {\n    if (!input.exercise) return { json: { error: 'exercise required' } };\n    const weight = parseFloat(input.weight_kg || ctx.persona?.physical_stats?.weight_kg || 70);\n    const query = input.duration_min ? `${input.exercise} for ${input.duration_min} minutes` : input.exercise;\n    const res = await fetch('https://trackapi.nutritionix.com/v2/natural/exercise', {\n      method: 'POST', headers,\n      body: JSON.stringify({ query, weight_kg: weight })\n    });\n    if (!res.ok) return { json: { error: `Nutritionix HTTP ${res.status}` } };\n    const data = await res.json();\n    const exercises = (data.exercises || []).map(e => ({ name: e.name, duration_min: e.duration_min, calories_burned: Math.round(e.nf_calories) }));\n    return { json: { exercises, total_calories_burned: exercises.reduce((s,e) => s + e.calories_burned, 0), weight_used_kg: weight } };\n  }\n  return { json: { error: `Unknown lookup_type: ${lookupType}. Use: food_search, exercise_calories` } };\n} catch(e) {\n  return { json: { error: e.message } };\n}"
+      },
+      "id": "8696fac8-3a04-45d8-9b49-82184f9cd467",
+      "name": "lookup_nutrition1",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2048,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "name": "lookup_exercise",
+        "description": "Search exercise database with instructions and muscle groups. lookup_type: search_exercise (requires: query, optional: muscle_group like chest|back|legs|shoulders|arms|core), exercise_detail (requires: exercise_id from search results).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst i18n = ctx.i18n || {};\nconst lookupType = (input.lookup_type || 'search_exercise').toLowerCase();\n\ntry {\n  if (lookupType === 'search_exercise') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const url = `https://wger.de/api/v2/exercise/search/?term=${encodeURIComponent(input.query)}&language=english&format=json`;\n    const res = await fetch(url);\n    const data = await res.json();\n    const results = (data.suggestions || []).slice(0, 8).map(s => ({ id: s.data?.id, name: s.value, category: s.data?.category?.name }));\n    return { json: { results, count: results.length, tip: 'Use exercise_detail with id for full instructions' } };\n  }\n  if (lookupType === 'exercise_detail') {\n    if (!input.exercise_id) return { json: { error: 'exercise_id required' } };\n    const res = await fetch(`https://wger.de/api/v2/exerciseinfo/${input.exercise_id}/?format=json`);\n    if (!res.ok) return { json: { error: `Exercise ${input.exercise_id} not found` } };\n    const d = await res.json();\n    const engInfo = d.translations?.find(t => t.language === 2) || d.translations?.[0] || {};\n    return { json: { id: d.id, name: engInfo.name || d.name, category: d.category?.name, muscles: d.muscles?.map(m => m.name_en) || [], muscles_secondary: d.muscles_secondary?.map(m => m.name_en) || [], equipment: d.equipment?.map(e => e.name) || [], description: engInfo.description?.replace(/<[^>]+>/g,' ').replace(/\\s+/g,' ').trim().slice(0,500) || 'No description available' } };\n  }\n  return { json: { error: `Unknown lookup_type: ${lookupType}. Use: search_exercise, exercise_detail` } };\n} catch(e) {\n  return { json: { error: e.message } };\n}"
+      },
+      "id": "4dfa13fd-cfbd-492c-83d2-fa61c08e5031",
+      "name": "lookup_exercise1",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2240,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "name": "lookup_medicine",
+        "description": "Look up FDA drug information. Requires: drug_name. Returns drug label info, warnings, and interactions. Always include medical disclaimer in response.",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst i18n = ctx.i18n || {};\n\nif (!input.drug_name) return { json: { error: i18n.drug_required || 'drug_name required' } };\nconst disclaimer = i18n.disclaimer_medical || '⚠️ For educational purposes only. Not medical advice. Consult a doctor.';\n\ntry {\n  const q = encodeURIComponent(input.drug_name);\n  let result;\n  const res1 = await fetch(`https://api.fda.gov/drug/label.json?search=openfda.brand_name:${q}+openfda.generic_name:${q}&limit=1`);\n  if (res1.ok) { const d1 = await res1.json(); result = d1.results?.[0]; }\n  if (!result) {\n    const res2 = await fetch(`https://api.fda.gov/drug/label.json?search=${q}&limit=1`);\n    if (!res2.ok) return { json: { error: `Drug '${input.drug_name}' not found in FDA database`, disclaimer } };\n    const d2 = await res2.json();\n    if (!d2.results?.length) return { json: { error: 'No results found', disclaimer } };\n    result = d2.results[0];\n  }\n  return { json: { brand_name: result.openfda?.brand_name?.[0] || input.drug_name, generic_name: result.openfda?.generic_name?.[0] || 'N/A', manufacturer: result.openfda?.manufacturer_name?.[0] || 'N/A', purpose: result.purpose?.[0]?.slice(0, 300) || 'N/A', indications: result.indications_and_usage?.[0]?.slice(0, 400) || 'N/A', warnings: result.warnings?.[0]?.slice(0, 400) || result.warnings_and_cautions?.[0]?.slice(0, 400) || 'N/A', dosage: result.dosage_and_administration?.[0]?.slice(0, 300) || 'N/A', drug_interactions: result.drug_interactions?.[0]?.slice(0, 300) || 'N/A', disclaimer } };\n} catch(e) {\n  return { json: { error: e.message, disclaimer } };\n}"
+      },
+      "id": "cf87ff63-bfa0-404a-af45-ebb978a44b16",
+      "name": "lookup_medicine1",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2416,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "name": "track_health",
+        "description": "Log or view personal health metrics, or calculate BMI/TDEE. action: log_health (requires: metric_type e.g. weight_kg|sleep_hours|water_ml|steps|mood_score, value), view_history (requires: metric_type, optional: days 7|30|90), calculate_bmi, calculate_bmr_tdee (requires: activity_level sedentary|light|moderate|active|very_active).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst lang = ctx.lang || 'th';\nconst action = (input.action || 'calculate_bmi').toLowerCase();\nconst stats = ctx.persona?.physical_stats || {};\nconst pgUrl = (creds.n8n_base_url || process.env.N8N_BASE_URL || '') + '/webhook/internal-pg-query';\nconst headers = { 'Content-Type': 'application/json', 'x-internal-auth': creds.internal_auth_token || '' };\n\nconst bmiCategories = {\n  underweight: { th: 'น้ำหนักน้อย (Underweight)', en: 'Underweight', ja: '低体重', zh: '体重过轻' },\n  normal:      { th: 'ปกติ (Normal)', en: 'Normal', ja: '標準', zh: '正常' },\n  overweight:  { th: 'เริ่มอ้วน (Overweight)', en: 'Overweight', ja: '過体重', zh: '超重' },\n  obese1:      { th: 'อ้วน (Obese class 1)', en: 'Obese class 1', ja: '肥満1度', zh: '肥胖一级' },\n  obese2:      { th: 'อ้วนมาก (Obese class 2+)', en: 'Obese class 2+', ja: '肥満2度以上', zh: '肥胖二级以上' }\n};\nconst localLang = ['th','en','ja','zh'].includes(lang) ? lang : 'en';\nconst getBmiCategory = (bmi) => {\n  const key = bmi < 18.5 ? 'underweight' : bmi < 23 ? 'normal' : bmi < 25 ? 'overweight' : bmi < 30 ? 'obese1' : 'obese2';\n  return bmiCategories[key][localLang] || bmiCategories[key]['en'];\n};\n\ntry {\n  if (action === 'calculate_bmi') {\n    const weight = parseFloat(input.weight_kg || stats.weight_kg || 0);\n    const height = parseFloat(input.height_cm || stats.height_cm || 0);\n    if (!weight || !height) return { json: { error: i18n.weight_height_required || 'weight_kg and height_cm required (or set in persona)' } };\n    const bmi = weight / Math.pow(height / 100, 2);\n    const bmiRound = Math.round(bmi * 10) / 10;\n    return { json: { bmi: bmiRound, category: getBmiCategory(bmi), weight_kg: weight, height_cm: height } };\n  }\n  if (action === 'calculate_bmr_tdee') {\n    const weight = parseFloat(input.weight_kg || stats.weight_kg || 0);\n    const height = parseFloat(input.height_cm || stats.height_cm || 0);\n    const age = parseInt(input.age || stats.age || 0);\n    const gender = (input.gender || stats.gender || 'male').toLowerCase();\n    if (!weight || !height || !age) return { json: { error: 'weight_kg, height_cm, age required' } };\n    const bmr = gender === 'female' ? (10 * weight) + (6.25 * height) - (5 * age) - 161 : (10 * weight) + (6.25 * height) - (5 * age) + 5;\n    const activityMap = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 };\n    const factor = activityMap[(input.activity_level || 'moderate').toLowerCase()] || 1.55;\n    const tdee = Math.round(bmr * factor);\n    return { json: { bmr: Math.round(bmr), tdee, activity_level: input.activity_level || 'moderate', weight_loss_cal: tdee - 500, weight_gain_cal: tdee + 300 } };\n  }\n  if (action === 'log_health') {\n    if (!input.metric_type || input.value === undefined) return { json: { error: i18n.metric_required || 'metric_type and value required' } };\n    const metric = input.metric_type.toLowerCase();\n    const value = parseFloat(input.value);\n    const notes = (input.notes || '').replace(/'/g, \"''\");\n    const res = await fetch(pgUrl, { method: 'POST', headers, body: JSON.stringify({ query: `INSERT INTO user_data_schema.health_log (user_id, metric_type, value, notes, logged_at) VALUES ('${ctx.userId}', '${metric}', ${value}, '${notes}', NOW()) RETURNING id, metric_type, value` }) });\n    const data = await res.json();\n    return { json: { success: true, message: i18n.success, logged: data.rows?.[0], metric, value } };\n  }\n  if (action === 'view_history') {\n    if (!input.metric_type) return { json: { error: i18n.metric_required || 'metric_type required' } };\n    const days = parseInt(input.days || 7);\n    const metric = input.metric_type.toLowerCase();\n    const res = await fetch(pgUrl, { method: 'POST', headers, body: JSON.stringify({ query: `SELECT value, notes, logged_at FROM user_data_schema.health_log WHERE user_id = '${ctx.userId}' AND metric_type = '${metric}' AND logged_at >= NOW() - INTERVAL '${days} days' ORDER BY logged_at ASC` }) });\n    const data = await res.json();\n    const rows = data.rows || [];\n    const values = rows.map(r => parseFloat(r.value));\n    const avg = values.length ? Math.round(values.reduce((a,b) => a+b,0) / values.length * 10) / 10 : null;\n    return { json: { metric, days, records: rows, count: rows.length, avg, min: values.length ? Math.min(...values) : null, max: values.length ? Math.max(...values) : null } };\n  }\n  return { json: { error: `Unknown action: ${action}. Use: calculate_bmi, calculate_bmr_tdee, log_health, view_history` } };\n} catch(e) {\n  return { json: { error: e.message } };\n}"
+      },
+      "id": "590e2329-c51d-4330-9551-b1b71c23ca10",
+      "name": "track_health1",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        2592,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = $input.first().json.output || $input.first().json.text || 'ดำเนินการแล้วครับ';\nconst prev = $('Extract Payload1').item.json;\nreturn { json: { ...prev, agentOutput: out, agentCategory: 'health-coach', processedAt: new Date().toISOString() } };"
+      },
+      "id": "e9e5a07c-6b2c-4c52-9763-786f9a9bf76b",
+      "name": "Format Output1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4-5",
+        "options": {
+          "maxTokens": 3000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        496
+      ],
+      "id": "796b7807-3c65-4b2f-ab93-3886044347f2",
+      "name": "OpenRouter Chat Model (Sonnet)",
+      "credentials": {
+        "openRouterApi": {
+          "id": "FUm3Fg9B8euy8cH3",
+          "name": "OpenRouter - 2026-02-14T03:30"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "WF3-G Entry1": {
+      "main": [
+        [
+          {
+            "node": "Extract Payload1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payload1": {
+      "main": [
+        [
+          {
+            "node": "Load Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Credentials": {
+      "main": [
+        [
+          {
+            "node": "Health Coach Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Coach Agent1": {
+      "main": [
+        [
+          {
+            "node": "Format Output1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "Health Coach Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "think1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Health Coach Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_memories": {
+      "ai_tool": [
+        [
+          {
+            "node": "Health Coach Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "lookup_nutrition1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Health Coach Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "lookup_exercise1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Health Coach Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "lookup_medicine1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Health Coach Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "track_health1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Health Coach Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model (Sonnet)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Health Coach Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "a096be36-4809-4494-a6df-f72cb2191ea6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
+  },
+  "id": "4cY5pVPCqbtZm45u",
+  "tags": []
+}
