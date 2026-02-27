@@ -1,0 +1,485 @@
+{
+  "name": "WF4-Heartbeat — Proactive Engine v2",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# WF4-Heartbeat — Proactive Engine v2\n\n## ✅ v2 Fixes:\n1. Context Builder: i18n self-reference bug แก้แล้ว\n   → เปลี่ยนจาก const i18n = {...}[lang] || i18n.th\n   → เป็น i18nMap pattern (เหมือน WF3 ทุกตัว)\n\n## Triggers:\n- Every 30min → Smart checks\n- 07:00 → Morning Brief\n- 22:00 → Evening Summary\n- Event Webhook → Real-time\n\n## Flow:\nTrigger → Users → Pre-filter → Context+Tokens\n→ LLM Brain → Action → Deliver/Dispatch → Log",
+        "height": 340,
+        "width": 400,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        32
+      ],
+      "id": "030b42b4-27f8-4ef7-910a-ec7c9f6c67bc",
+      "name": "Overview"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "a0a804b7-74c7-4fdd-8032-d5492e7c2473",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        96,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "c6718cec-253b-4072-b10d-48d1b00e13c2",
+      "name": "Morning Brief (07:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        96,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 22 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a17c9889-4b64-426a-bbb5-e0efac826cb8",
+      "name": "Evening Summary (22:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        96,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf-heartbeat-event",
+        "responseMode": "immediately",
+        "options": {}
+      },
+      "id": "4253322a-e827-420b-99d4-bc0c793f0a9f",
+      "name": "Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        96,
+        672
+      ],
+      "webhookId": "wf-heartbeat-event"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst hour = now.getHours();\n\nlet triggerType = 'interval_30min';\ntry {\n  const raw = $('Event Webhook').first().json;\n  if (raw && raw.eventType) { triggerType = 'event'; }\n} catch(e) {}\n\nif (hour === 7) triggerType = 'morning_brief';\nelse if (hour === 22) triggerType = 'evening_summary';\n\nreturn { json: { triggerType, triggeredAt: now.toISOString(), hour, dayOfWeek: now.getDay() } };"
+      },
+      "id": "8a4589f6-6c7a-45a4-831e-57465c3569af",
+      "name": "Identify Trigger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const trigger = $input.first().json;\nconst dbUrl = process.env.DATABASE_URL || '';\n\nif (!dbUrl) {\n  return [{ json: { ...trigger, userId: process.env.TEST_USER_ID || 'test', persona: { userId: 'test', name: 'Test', language_preference: 'th', timezone: 'Asia/Bangkok', tokens: {} }, replyTarget: 'line:test', prefs: { proactive_enabled: true } } }];\n}\n\ntry {\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n\n  const result = await pool.query(`\n    SELECT \n      u.id, u.name, u.email, u.language_preference, u.timezone,\n      u.line_user_id, u.telegram_chat_id, u.discord_user_id,\n      up.proactive_enabled, up.morning_brief_enabled,\n      up.evening_summary_enabled, up.market_alert_threshold_pct,\n      up.dismissed_today\n    FROM \"User\" u\n    LEFT JOIN user_proactive_prefs up ON up.user_id = u.id\n    WHERE \n      (up.proactive_enabled = true OR up.proactive_enabled IS NULL)\n      AND u.last_active_at > NOW() - INTERVAL '7 days'\n    LIMIT 50\n  `);\n\n  await pool.end();\n\n  if (result.rows.length === 0) {\n    return [{ json: { ...trigger, skip: true, reason: 'no_users' } }];\n  }\n\n  return result.rows.map(user => ({\n    json: {\n      ...trigger,\n      userId: user.id,\n      persona: {\n        userId: user.id,\n        name: user.name || user.email?.split('@')[0],\n        language_preference: user.language_preference || 'th',\n        timezone: user.timezone || 'Asia/Bangkok',\n        tokens: {}\n      },\n      replyTarget: user.line_user_id ? `line:${user.line_user_id}`\n        : user.telegram_chat_id ? `telegram:${user.telegram_chat_id}`\n        : user.discord_user_id ? `discord:${user.discord_user_id}` : null,\n      prefs: {\n        proactive_enabled: user.proactive_enabled !== false,\n        morning_brief_enabled: user.morning_brief_enabled !== false,\n        evening_summary_enabled: user.evening_summary_enabled !== false,\n        market_alert_threshold_pct: user.market_alert_threshold_pct || 3,\n        dismissed_today: user.dismissed_today || []\n      }\n    }\n  }));\n\n} catch(err) {\n  return [{ json: { ...trigger, skip: true, reason: err.message } }];\n}"
+      },
+      "id": "0710a131-963e-4f0a-ba5c-4890cddae2b6",
+      "name": "Load Active Users",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nif (item.skip) return { json: { ...item, decision: 'skip' } };\nif (!item.replyTarget) return { json: { ...item, decision: 'skip', reason: 'no_target' } };\n\nconst prefs = item.prefs || {};\nconst type = item.triggerType;\nconst hour = item.hour;\n\nif (type === 'morning_brief' && !prefs.morning_brief_enabled) {\n  return { json: { ...item, decision: 'skip', reason: 'morning_disabled' } };\n}\nif (type === 'evening_summary' && !prefs.evening_summary_enabled) {\n  return { json: { ...item, decision: 'skip', reason: 'evening_disabled' } };\n}\nif (type === 'interval_30min' && (hour < 6 || hour > 23)) {\n  return { json: { ...item, decision: 'skip', reason: 'outside_hours' } };\n}\n\nreturn { json: { ...item, decision: 'proceed' } };"
+      },
+      "id": "5fd764c1-cbfd-4211-b26b-a1ea79f7b9ce",
+      "name": "Pre-filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.decision }}",
+              "rightValue": "proceed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a94f6d34-d094-4e9d-ad7a-9a5fd5d58c45",
+      "name": "Should Proceed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ FIXED: i18nMap pattern (no self-reference) + loads tokens + builds context\nconst item = $input.first().json;\nconst userId = item.userId;\nconst triggerType = item.triggerType;\nconst persona = item.persona || {};\nconst lang = persona.language_preference || 'th';\n\n// ✅ FIXED: use i18nMap to avoid self-reference bug\nconst i18nMap = {\n  th: {\n    morning_greeting: '🌅 สวัสดีตอนเช้า',\n    tasks_due: 'งานที่ต้องทำวันนี้',\n    weather: 'อากาศวันนี้',\n    unread_emails: 'อีเมลที่ยังไม่ได้อ่าน',\n    completed: 'ทำเสร็จแล้ว',\n    market_alert: '⚠️ แจ้งเตือนตลาด'\n  },\n  en: {\n    morning_greeting: '🌅 Good morning',\n    tasks_due: 'Tasks due today',\n    weather: \"Today's weather\",\n    unread_emails: 'Unread emails',\n    completed: 'Completed',\n    market_alert: '⚠️ Market alert'\n  },\n  ja: {\n    morning_greeting: '🌅 おはようございます',\n    tasks_due: '今日のタスク',\n    weather: '今日の天気',\n    unread_emails: '未読メール',\n    completed: '完了',\n    market_alert: '⚠️ 市場アラート'\n  },\n  zh: {\n    morning_greeting: '🌅 早安',\n    tasks_due: '今日任务',\n    weather: '今日天气',\n    unread_emails: '未读邮件',\n    completed: '已完成',\n    market_alert: '⚠️ 市场提醒'\n  }\n};\n\nconst i18n = i18nMap[lang] || i18nMap['th'];\n\n// ✅ LOAD TOKENS (like WF2)\nconst n8nUrl = process.env.N8N_BASE_URL || '';\nconst n8nEmail = process.env.N8N_USER_EMAIL || '';\nconst n8nPassword = process.env.N8N_USER_PASSWORD || '';\n\nlet tokens = {};\n\nif (n8nUrl && n8nEmail && n8nPassword) {\n  try {\n    const loginRes = await fetch(`${n8nUrl}/rest/login`, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({ emailOrLdapLoginId: n8nEmail, password: n8nPassword })\n    });\n\n    if (loginRes.ok) {\n      const cookies = loginRes.headers.get('set-cookie') || '';\n      const credsRes = await fetch(`${n8nUrl}/rest/credentials`, {\n        headers: { Cookie: cookies }\n      });\n\n      if (credsRes.ok) {\n        const allCreds = await credsRes.json();\n        const userCreds = (allCreds.data || []).filter(c =>\n          c.name && c.name.startsWith(`${userId}:`)\n        );\n\n        for (const cred of userCreds) {\n          const detailRes = await fetch(`${n8nUrl}/rest/credentials/${cred.id}`, {\n            headers: { Cookie: cookies }\n          });\n          if (!detailRes.ok) continue;\n\n          const detail = await detailRes.json();\n          const data = detail.data || {};\n          const service = cred.name.split(':')[1];\n\n          if (service === 'line_notify' && data.value) {\n            tokens.line_notify_token = data.value.replace('Bearer ', '');\n          }\n          if (service === 'telegram' && data.botToken) {\n            tokens.telegram_bot_token = data.botToken;\n          }\n          if (service === 'discord' && data.botToken) {\n            tokens.discord_bot_token = data.botToken;\n          }\n        }\n      }\n    }\n  } catch(e) {\n    console.log('[Heartbeat] Token load failed:', e.message);\n  }\n}\n\npersona.tokens = tokens;\n\n// Build context\nconst ctx = {\n  userId,\n  triggerType,\n  triggeredAt: item.triggeredAt,\n  persona: {\n    name: persona.name,\n    language: lang,\n    timezone: persona.timezone\n  },\n  i18n,\n  prefs: item.prefs || {},\n  data: {}\n};\n\n// Fetch context data\nconst pgUrl = n8nUrl + '/webhook/internal-pg-query';\nconst pgHeaders = { 'Content-Type': 'application/json', 'x-internal-auth': process.env.INTERNAL_AUTH_TOKEN || '' };\n\nconst pgQuery = async (query) => {\n  try {\n    const res = await fetch(pgUrl, {\n      method: 'POST', headers: pgHeaders,\n      body: JSON.stringify({ query })\n    });\n    const d = await res.json();\n    return d.rows || [];\n  } catch(e) {\n    return [];\n  }\n};\n\ntry {\n  // Always: pending tasks\n  const tasks = await pgQuery(\n    `SELECT title, due_date FROM user_data_schema.tasks\n     WHERE user_id = '${userId}' AND status = 'pending'\n     AND due_date <= NOW() + INTERVAL '24 hours'\n     LIMIT 5`\n  );\n  ctx.data.pending_tasks = tasks;\n\n  // Morning: calendar + weather\n  if (triggerType === 'morning_brief') {\n    const events = await pgQuery(\n      `SELECT title, start_time FROM user_data_schema.calendar_cache\n       WHERE user_id = '${userId}'\n       AND start_time BETWEEN NOW() AND NOW() + INTERVAL '12 hours'\n       LIMIT 5`\n    );\n    ctx.data.todays_events = events;\n\n    const weather = await pgQuery(\n      `SELECT city, temp_c, description FROM user_data_schema.weather_cache\n       WHERE user_id = '${userId}' AND updated_at > NOW() - INTERVAL '2 hours'\n       LIMIT 1`\n    );\n    ctx.data.weather = weather[0] || null;\n  }\n\n  // Evening: completed tasks\n  if (triggerType === 'evening_summary') {\n    const completed = await pgQuery(\n      `SELECT COUNT(*) as count FROM user_data_schema.tasks\n       WHERE user_id = '${userId}' AND status = 'done'\n       AND updated_at >= DATE_TRUNC('day', NOW())`\n    );\n    ctx.data.tasks_completed_today = parseInt(completed[0]?.count || 0);\n  }\n\n  // 30min: market alerts\n  if (triggerType === 'interval_30min' && ctx.prefs.market_alert_threshold_pct) {\n    const portfolio = await pgQuery(\n      `SELECT symbol, last_price, current_price,\n        ROUND(((current_price - last_price) / last_price * 100)::numeric, 2) as change_pct\n       FROM user_data_schema.portfolio_cache\n       WHERE user_id = '${userId}'\n       AND ABS((current_price - last_price) / last_price * 100) >= ${ctx.prefs.market_alert_threshold_pct}\n       LIMIT 5`\n    );\n    ctx.data.market_alerts = portfolio;\n  }\n\n  const dismissed = await pgQuery(\n    `SELECT heartbeat_type FROM user_data_schema.heartbeat_log\n     WHERE user_id = '${userId}' AND action = 'dismissed'\n     AND created_at > NOW() - INTERVAL '4 hours'`\n  );\n  ctx.recently_dismissed = dismissed.map(d => d.heartbeat_type);\n\n} catch(e) {\n  ctx.data._error = e.message;\n}\n\nreturn {\n  json: {\n    ...item,\n    persona, // ← with tokens now\n    heartbeatContext: ctx\n  }\n};"
+      },
+      "id": "badf6f3b-709a-4d57-ad7d-599291629240",
+      "name": "Context Builder (FIXED)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-haiku-4-5",
+        "options": {
+          "maxTokens": 1500
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        592
+      ],
+      "id": "fbc477c9-00ac-408f-a3d9-cc3284dd4c60",
+      "name": "LLM (Haiku)",
+      "credentials": {
+        "openRouterApi": {
+          "id": "FUm3Fg9B8euy8cH3",
+          "name": "OpenRouter - 2026-02-14T03:30"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.heartbeatContext, null, 2) }}",
+        "options": {
+          "systemMessage": "You are a Proactive AI Decision Engine.\n\n## USER LANGUAGE: {{ $json.heartbeatContext.persona.language }}\n\n## LANGUAGE RULES:\n**ALWAYS respond in user's preferred language**\n- If 'th' → Thai\n- If 'en' → English\n- If 'ja' → Japanese\n- If 'zh' → Chinese\n\nUse i18n templates from context when available.\n\n## TRIGGER: {{ $json.heartbeatContext.triggerType }}\n\n## RULES:\n1. If nothing important → do_nothing\n2. Be brief and actionable\n3. Don't repeat recently dismissed types\n4. Priority: urgent > market_alert > morning_brief > habit_nudge\n\n## RESPONSE FORMAT (JSON only):\n{\n  \"decision\": \"do_nothing\" | \"send_message\" | \"run_task\" | \"escalate\",\n  \"reason\": \"brief reason\",\n  \"message\": \"message in user's language (null if do_nothing)\",\n  \"urgency\": \"low\" | \"medium\" | \"high\",\n  \"heartbeat_type\": \"morning_brief\" | \"evening_summary\" | \"market_alert\" | \"habit_nudge\" | \"task_reminder\" | \"event_alert\",\n  \"run_task\": null | { \"target_agent\": \"wf3x\", \"action\": \"...\", \"params\": {} }\n}\n\nEXAMPLES:\n\nMorning brief (Thai user):\n{\"decision\":\"send_message\",\"reason\":\"2 meetings today\",\"message\":\"🌅 สวัสดีตอนเช้า! วันนี้มี 2 นัด: 10:00 ประชุมทีม, 14:00 คุยลูกค้า อากาศ 28°C แดดดี\",\"urgency\":\"medium\",\"heartbeat_type\":\"morning_brief\",\"run_task\":null}\n\nMarket alert (English user):\n{\"decision\":\"escalate\",\"reason\":\"BTC dropped 8%\",\"message\":\"⚠️ Bitcoin dropped 8% in 30 minutes (current: $82,000)\",\"urgency\":\"high\",\"heartbeat_type\":\"market_alert\",\"run_task\":null}\n\nNothing:\n{\"decision\":\"do_nothing\",\"reason\":\"No pending tasks or alerts\",\"message\":null,\"urgency\":\"low\",\"heartbeat_type\":\"custom\",\"run_task\":null}"
+        }
+      },
+      "id": "38def3f6-3434-4a91-86fc-aa3e230b3d94",
+      "name": "Proactive Brain (FIXED)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        1520,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst raw = item.output || item.text || '{}';\n\nlet decision;\ntry {\n  const cleaned = raw.replace(/```json|```/g, '').trim();\n  decision = JSON.parse(cleaned);\n} catch(e) {\n  decision = { decision: 'do_nothing', reason: 'parse_error', message: null, urgency: 'low', heartbeat_type: 'custom' };\n}\n\nreturn { json: { ...item, decision } };"
+      },
+      "id": "692cbf1c-ac3b-4f2e-8124-58f1902b78f8",
+      "name": "Parse Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.decision.decision }}",
+              "rightValue": "do_nothing",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e407cafa-1a71-46f9-a487-70bb39b51c10",
+      "name": "Action Needed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Uses loaded tokens from Context Builder\nconst item = $input.first().json;\nconst message = item.decision.message || '';\nconst replyTarget = item.replyTarget || '';\nconst persona = item.persona || {};\nconst tokens = persona.tokens || {};\n\nif (!message || !replyTarget) {\n  return { json: { ...item, delivered: false, reason: 'no_message_or_target' } };\n}\n\nif (replyTarget.startsWith('line:')) {\n  const lineToken = tokens.line_notify_token || process.env.LINE_NOTIFY_TOKEN || '';\n  if (!lineToken) return { json: { ...item, delivered: false, reason: 'no_line_token' } };\n\n  try {\n    const res = await fetch('https://notify-api.line.me/api/notify', {\n      method: 'POST',\n      headers: { 'Authorization': `Bearer ${lineToken}`, 'Content-Type': 'application/x-www-form-urlencoded' },\n      body: `message=${encodeURIComponent('\\n' + message)}`\n    });\n    const result = await res.json();\n    return { json: { ...item, delivered: res.ok, channel: 'line', result } };\n  } catch(e) {\n    return { json: { ...item, delivered: false, channel: 'line', error: e.message } };\n  }\n}\n\nif (replyTarget.startsWith('telegram:')) {\n  const chatId = replyTarget.replace('telegram:', '');\n  const botToken = tokens.telegram_bot_token || process.env.TELEGRAM_BOT_TOKEN || '';\n  if (!botToken) return { json: { ...item, delivered: false, reason: 'no_telegram_token' } };\n\n  try {\n    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'Markdown' })\n    });\n    const result = await res.json();\n    return { json: { ...item, delivered: result.ok, channel: 'telegram', result } };\n  } catch(e) {\n    return { json: { ...item, delivered: false, channel: 'telegram', error: e.message } };\n  }\n}\n\nif (replyTarget.startsWith('discord:')) {\n  const userId = replyTarget.replace('discord:', '');\n  const botToken = tokens.discord_bot_token || process.env.DISCORD_BOT_TOKEN || '';\n  if (!botToken) return { json: { ...item, delivered: false, reason: 'no_discord_token' } };\n\n  try {\n    const dmRes = await fetch('https://discord.com/api/v10/users/@me/channels', {\n      method: 'POST',\n      headers: { 'Authorization': `Bot ${botToken}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify({ recipient_id: userId })\n    });\n    const dm = await dmRes.json();\n    if (!dm.id) return { json: { ...item, delivered: false, reason: 'discord_dm_failed' } };\n\n    const msgRes = await fetch(`https://discord.com/api/v10/channels/${dm.id}/messages`, {\n      method: 'POST',\n      headers: { 'Authorization': `Bot ${botToken}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify({ content: message })\n    });\n    const result = await msgRes.json();\n    return { json: { ...item, delivered: !!result.id, channel: 'discord', result } };\n  } catch(e) {\n    return { json: { ...item, delivered: false, channel: 'discord', error: e.message } };\n  }\n}\n\nreturn { json: { ...item, delivered: false, reason: 'unknown_channel' } };"
+      },
+      "id": "a2ca7d2b-2a3e-41f4-8ffc-15eb5c3b8aaa",
+      "name": "Deliver Message (FIXED)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst decision = item.decision || {};\nconst n8nUrl = process.env.N8N_BASE_URL || '';\nconst pgUrl = n8nUrl + '/webhook/internal-pg-query';\nconst pgHeaders = { 'Content-Type': 'application/json', 'x-internal-auth': process.env.INTERNAL_AUTH_TOKEN || '' };\n\ntry {\n  await fetch(pgUrl, {\n    method: 'POST', headers: pgHeaders,\n    body: JSON.stringify({\n      query: `INSERT INTO user_data_schema.heartbeat_log\n        (user_id, heartbeat_type, trigger_type, action, urgency, message_sent, delivered, channel, created_at)\n        VALUES ('${item.userId}', '${decision.heartbeat_type}', '${item.triggerType}',\n                '${decision.decision}', '${decision.urgency}',\n                ${decision.message ? `'${decision.message.replace(/'/g, \"''\")}'` : 'NULL'},\n                ${item.delivered || false}, ${item.channel ? `'${item.channel}'` : 'NULL'}, NOW())`\n    })\n  });\n} catch(e) {\n  console.error('[Heartbeat Log] Failed:', e.message);\n}\n\nreturn { json: { ...item, logged: true } };"
+      },
+      "id": "b3d24fbd-8c9b-4e28-b1d3-d66e5d7c9b17",
+      "name": "Log Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return { json: { status: 'ok', action: 'do_nothing' } };"
+      },
+      "id": "4175f319-f09a-4054-a498-d09b04cc7ebd",
+      "name": "Silent End",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        592
+      ]
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Identify Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Morning Brief (07:00)": {
+      "main": [
+        [
+          {
+            "node": "Identify Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evening Summary (22:00)": {
+      "main": [
+        [
+          {
+            "node": "Identify Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Event Webhook": {
+      "main": [
+        [
+          {
+            "node": "Identify Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identify Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Active Users": {
+      "main": [
+        [
+          {
+            "node": "Pre-filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-filter": {
+      "main": [
+        [
+          {
+            "node": "Should Proceed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Proceed?": {
+      "main": [
+        [
+          {
+            "node": "Context Builder (FIXED)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Silent End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Context Builder (FIXED)": {
+      "main": [
+        [
+          {
+            "node": "Proactive Brain (FIXED)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM (Haiku)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Proactive Brain (FIXED)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proactive Brain (FIXED)": {
+      "main": [
+        [
+          {
+            "node": "Parse Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Decision": {
+      "main": [
+        [
+          {
+            "node": "Action Needed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Needed?": {
+      "main": [
+        [
+          {
+            "node": "Deliver Message (FIXED)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Silent End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deliver Message (FIXED)": {
+      "main": [
+        [
+          {
+            "node": "Log Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Action": {
+      "main": [
+        [
+          {
+            "node": "Silent End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "64c98f30-02d8-4dd2-9c82-e5a8b44a1c08",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "autoActivate": false,
+    "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
+  },
+  "id": "f1CRn19U0Uf1JCuO",
+  "tags": []
+}
