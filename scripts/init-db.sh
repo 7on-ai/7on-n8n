@@ -44,6 +44,41 @@ psql "$DB_URI" -c 'CREATE SCHEMA IF NOT EXISTS user_data_schema;' || {
 echo "📋 Creating tables..."
 psql "$DB_URI" << 'EOSQL'
 
+-- ============================================================
+-- PUBLIC SCHEMA: users + user_proactive_prefs
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS users (
+  id             TEXT PRIMARY KEY,
+  email          TEXT UNIQUE,
+  persona        JSONB DEFAULT '{}'::jsonb,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ DEFAULT NOW(),
+  last_active_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_last_active_at ON users(last_active_at);
+
+-- WF4: proactive preferences per user
+CREATE TABLE IF NOT EXISTS user_proactive_prefs (
+  user_id                    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  enabled                    BOOLEAN DEFAULT TRUE,
+  quiet_hours_start          INT DEFAULT 22,
+  quiet_hours_end            INT DEFAULT 7,
+  channels                   JSONB DEFAULT '["line"]'::jsonb,
+  morning_brief              BOOLEAN DEFAULT TRUE,
+  evening_summary            BOOLEAN DEFAULT TRUE,
+  market_alerts              BOOLEAN DEFAULT FALSE,
+  market_alert_threshold_pct NUMERIC(5,2) DEFAULT 5.0,
+  proactive_tasks            BOOLEAN DEFAULT TRUE,
+  created_at                 TIMESTAMPTZ DEFAULT NOW(),
+  updated_at                 TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- USER_DATA_SCHEMA: all per-user data tables
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS user_data_schema.ethical_profiles (
   user_id TEXT PRIMARY KEY,
   self_awareness FLOAT DEFAULT 0.3,
@@ -79,8 +114,8 @@ CREATE TABLE IF NOT EXISTS user_data_schema.interaction_memories (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- dim=1536: text-embedding-3-small (OpenAI)
--- Written by WF5-B Process Gating, read by WF3 search_memories
+-- dim=1536: text-embedding-3-small via OpenRouter
+-- Written by WF5-B, read by WF3 search_memories
 CREATE TABLE IF NOT EXISTS user_data_schema.memory_embeddings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id TEXT NOT NULL,
@@ -129,7 +164,7 @@ CREATE TABLE IF NOT EXISTS user_data_schema.memory_facts (
   UNIQUE(user_id, fact)
 );
 
--- Written by WF5-B Log to DB, read by WF-Heartbeat
+-- Written by WF5-B Log to DB + WF4 Log Action
 CREATE TABLE IF NOT EXISTS user_data_schema.heartbeat_log (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -190,6 +225,64 @@ CREATE TABLE IF NOT EXISTS user_data_schema.gating_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ============================================================
+-- WF3-A + WF4: tasks
+-- ============================================================
+CREATE TABLE IF NOT EXISTS user_data_schema.tasks (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     TEXT NOT NULL,
+  title       TEXT NOT NULL,
+  description TEXT,
+  status      TEXT DEFAULT 'pending' CHECK (status IN ('pending','in_progress','done','cancelled')),
+  priority    TEXT DEFAULT 'medium' CHECK (priority IN ('low','medium','high','urgent')),
+  due_date    TIMESTAMPTZ,
+  tags        TEXT[],
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- WF4 Context Builder: cache tables
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS user_data_schema.weather_cache (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     TEXT NOT NULL,
+  city        TEXT,
+  temp_c      NUMERIC(5,2),
+  feels_like  NUMERIC(5,2),
+  humidity    INT,
+  description TEXT,
+  icon        TEXT,
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_data_schema.calendar_cache (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     TEXT NOT NULL,
+  event_id    TEXT,
+  title       TEXT NOT NULL,
+  start_time  TIMESTAMPTZ NOT NULL,
+  end_time    TIMESTAMPTZ,
+  location    TEXT,
+  description TEXT,
+  calendar    TEXT DEFAULT 'primary',
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_data_schema.portfolio_cache (
+  id            BIGSERIAL PRIMARY KEY,
+  user_id       TEXT NOT NULL,
+  symbol        TEXT NOT NULL,
+  name          TEXT,
+  last_price    NUMERIC(18,6),
+  current_price NUMERIC(18,6),
+  currency      TEXT DEFAULT 'USD',
+  asset_type    TEXT DEFAULT 'stock',
+  updated_at    TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, symbol)
+);
+
 EOSQL
 
 echo "🔍 Creating indexes..."
@@ -223,6 +316,20 @@ CREATE INDEX IF NOT EXISTS idx_memory_facts_user
 
 CREATE INDEX IF NOT EXISTS idx_heartbeat_log_user
   ON user_data_schema.heartbeat_log(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_heartbeat_log_action
+  ON user_data_schema.heartbeat_log(user_id, action, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_user_status_due
+  ON user_data_schema.tasks(user_id, status, due_date);
+
+CREATE INDEX IF NOT EXISTS idx_weather_cache_user_updated
+  ON user_data_schema.weather_cache(user_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_calendar_cache_user_start
+  ON user_data_schema.calendar_cache(user_id, start_time);
+
+CREATE INDEX IF NOT EXISTS idx_portfolio_cache_user
+  ON user_data_schema.portfolio_cache(user_id);
 
 EOSQL
 
@@ -240,6 +347,31 @@ BEGIN
     ON DELETE CASCADE;
   END IF;
 END $$;
+EOSQL
+
+echo "🔧 Creating utility functions..."
+psql "$DB_URI" << 'EOSQL'
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'update_tasks_updated_at'
+  ) THEN
+    CREATE TRIGGER update_tasks_updated_at
+      BEFORE UPDATE ON user_data_schema.tasks
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+END;
+$$;
+
 EOSQL
 
 echo "🔐 Granting permissions..."
