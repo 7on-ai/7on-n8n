@@ -1,0 +1,217 @@
+{
+  "name": "WF-Internal-PG-Query (Secure DB Proxy)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## WF-Internal PG Query Webhook\n\n**Purpose**: Secure internal proxy for PostgreSQL queries\ncalled by WF3 agents (B/C/D/G) and WF4 Context Builder.\n\n**Security**: Requires `x-internal-auth` header matching `INTERNAL_AUTH_TOKEN` env var.\n\n**Tools using this webhook**:\n- WF3-B: manage_journal, manage_habits, manage_persona\n- WF3-C: manage_finances\n- WF3-D: rag_search\n- WF3-G: track_health\n- WF4: Context Builder (tasks, calendar, weather, portfolio, heartbeat_log)\n\n**Request format**: `{ query: string, params?: any[] }`\n\n**Response format**: `{ rows: any[], rowCount: number }`\n\n⚠️ IMPORTANT: This workflow must be active before deploying WF3/WF4",
+        "height": 280,
+        "width": 400
+      },
+      "id": "overview-node",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "internal-pg-query",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "internal-pg-query"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Authenticate: require x-internal-auth header\nconst req = $input.first().json;\nconst headers = $input.first().headers || {};\n\nconst authToken = process.env.INTERNAL_AUTH_TOKEN || '';\nconst providedToken = headers['x-internal-auth'] || headers['X-Internal-Auth'] || '';\n\nif (!authToken) {\n  return {\n    json: {\n      _authError: true,\n      error: 'INTERNAL_AUTH_TOKEN not configured on server'\n    }\n  };\n}\n\nif (providedToken !== authToken) {\n  return {\n    json: {\n      _authError: true,\n      error: 'Unauthorized: invalid x-internal-auth token'\n    }\n  };\n}\n\n// ✅ Validate query\nconst body = req.body || req;\nconst query = body.query;\nconst params = body.params || [];\n\nif (!query || typeof query !== 'string') {\n  return {\n    json: {\n      _authError: false,\n      _queryError: true,\n      error: 'Missing or invalid query field'\n    }\n  };\n}\n\n// ✅ Block dangerous operations (extra safety layer)\nconst queryUpper = query.trim().toUpperCase();\nconst dangerousOps = ['DROP ', 'TRUNCATE ', 'ALTER TABLE', 'CREATE TABLE', 'GRANT ', 'REVOKE '];\nconst isDangerous = dangerousOps.some(op => queryUpper.startsWith(op) || queryUpper.includes(op));\n\nif (isDangerous) {\n  return {\n    json: {\n      _authError: false,\n      _queryError: true,\n      error: 'DDL/DCL operations not allowed via this proxy'\n    }\n  };\n}\n\nreturn {\n  json: {\n    _authError: false,\n    _queryError: false,\n    query,\n    params\n  }\n};"
+      },
+      "id": "auth-validate-node",
+      "name": "Auth & Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auth-check",
+              "leftValue": "={{ $json._authError }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "query-check",
+              "leftValue": "={{ $json._queryError }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-errors-node",
+      "name": "Check Errors",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return auth/validation error\nconst item = $input.first().json;\nreturn {\n  json: {\n    success: false,\n    error: item.error || 'Authentication or validation failed',\n    rows: [],\n    rowCount: 0\n  }\n};"
+      },
+      "id": "error-response-node",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Execute PostgreSQL query securely\nconst item = $input.first().json;\nconst query = item.query;\nconst params = item.params || [];\n\nconst { Pool } = require('pg');\nconst pool = new Pool({\n  connectionString: process.env.DATABASE_URL,\n  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('localhost') \n    ? false \n    : { rejectUnauthorized: false }\n});\n\nlet result;\nlet queryError = null;\n\ntry {\n  if (params && params.length > 0) {\n    // Use parameterized query for safety\n    result = await pool.query(query, params);\n  } else {\n    result = await pool.query(query);\n  }\n} catch(e) {\n  queryError = e.message;\n} finally {\n  try { await pool.end(); } catch(e) {}\n}\n\nif (queryError) {\n  return {\n    json: {\n      success: false,\n      error: queryError,\n      rows: [],\n      rowCount: 0\n    }\n  };\n}\n\nreturn {\n  json: {\n    success: true,\n    rows: result.rows || [],\n    rowCount: result.rowCount || 0,\n    command: result.command || 'UNKNOWN'\n  }\n};"
+      },
+      "id": "execute-query-node",
+      "name": "Execute Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": "={{ $json.success ? 200 : ($json.error && $json.error.includes('Unauthorized') ? 401 : 400) }}"
+        }
+      },
+      "id": "respond-webhook-node",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Auth & Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth & Validate": {
+      "main": [
+        [
+          {
+            "node": "Check Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Errors": {
+      "main": [
+        [
+          {
+            "node": "Execute Query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Query": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "WF0-Error-Handler"
+  },
+  "versionId": "1.0.0",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "internal"
+    },
+    {
+      "name": "database"
+    },
+    {
+      "name": "security"
+    }
+  ]
+}
