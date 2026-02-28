@@ -1,5 +1,5 @@
 {
-  "name": "WF4-Heartbeat — Proactive Engine v2",
+  "name": "WF4 Heartbeat Proactive Engine v3 (Fixed: dedup + dispatch)",
   "nodes": [
     {
       "parameters": {
@@ -96,7 +96,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const now = new Date();\nconst hour = now.getHours();\n\nlet triggerType = 'interval_30min';\ntry {\n  const raw = $('Event Webhook').first().json;\n  if (raw && raw.eventType) { triggerType = 'event'; }\n} catch(e) {}\n\nif (hour === 7) triggerType = 'morning_brief';\nelse if (hour === 22) triggerType = 'evening_summary';\n\nreturn { json: { triggerType, triggeredAt: now.toISOString(), hour, dayOfWeek: now.getDay() } };"
+        "jsCode": "const now = new Date();\nconst hour = now.getHours();\n\n// ✅ FIX: Identify trigger type by source, NOT just by hour\n// This prevents double-send when 30min interval fires at same time as dedicated triggers\n\n// Default: interval\nlet triggerType = 'interval_30min';\n\n// Check for explicit event webhook\ntry {\n  const raw = $('Event Webhook').first().json;\n  if (raw && raw.eventType) {\n    triggerType = 'event';\n  }\n} catch(e) {}\n\n// Check for dedicated scheduled triggers\n// These only fire if the SCHEDULE trigger node actually ran\n// (30min running at 07:00 does NOT have Morning Brief node data)\ntry {\n  const mbData = $('Morning Brief (07:00)').first().json;\n  if (mbData && triggerType !== 'event') {\n    triggerType = 'morning_brief';\n  }\n} catch(e) {\n  // Morning Brief trigger did NOT fire this execution\n}\n\ntry {\n  const esData = $('Evening Summary (22:00)').first().json;\n  if (esData && triggerType !== 'event') {\n    triggerType = 'evening_summary';\n  }\n} catch(e) {\n  // Evening Summary trigger did NOT fire this execution\n}\n\n// ✅ DEDUP KEY: prevents same trigger type from being processed twice in same hour window\nconst dedupeKey = `${triggerType}_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,'0')}_${String(now.getDate()).padStart(2,'0')}_${String(hour).padStart(2,'0')}`;\n\nreturn {\n  json: {\n    triggerType,\n    triggeredAt: now.toISOString(),\n    hour,\n    dayOfWeek: now.getDay(),\n    _dedupeKey: dedupeKey\n  }\n};"
       },
       "id": "8a4589f6-6c7a-45a4-831e-57465c3569af",
       "name": "Identify Trigger",
@@ -286,6 +286,19 @@
         2224,
         592
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Dispatch run_task to appropriate WF3 agent\nconst item = $input.first().json;\nconst decision = item.decision || {};\nconst run_task = decision.run_task;\nconst userId = item.userId;\nconst persona = item.persona || {};\n\nif (!run_task || !run_task.agent) {\n  return { json: { ...item, dispatched: false, dispatch_reason: 'no run_task' } };\n}\n\nconst agentMap = {\n  secretary:    '/webhook/wf3-secretary',\n  soul:         '/webhook/wf3-soul',\n  career_coach: '/webhook/wf3-career-coach',\n  explorer:     '/webhook/wf3-explorer',\n  creator:      '/webhook/wf3-creator',\n  home_mate:    '/webhook/wf3-home-mate',\n  health_coach: '/webhook/wf3-health-coach'\n};\n\nconst agentPath = agentMap[run_task.agent];\nif (!agentPath) {\n  return { json: { ...item, dispatched: false, dispatch_reason: `unknown agent: ${run_task.agent}` } };\n}\n\nconst n8nUrl = process.env.N8N_BASE_URL || '';\nconst agentUrl = n8nUrl + agentPath;\n\ntry {\n  const res = await fetch(agentUrl, {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'x-internal-auth': process.env.INTERNAL_AUTH_TOKEN || ''\n    },\n    body: JSON.stringify({\n      userId,\n      sessionId: `heartbeat_${userId}_${Date.now()}`,\n      message: run_task.instruction || run_task.task || 'Proactive task from Heartbeat',\n      source: 'heartbeat',\n      proactive: true,\n      triggerType: item.triggerType,\n      persona\n    })\n  });\n  \n  return {\n    json: {\n      ...item,\n      dispatched: true,\n      dispatch_agent: run_task.agent,\n      dispatch_status: res.status,\n      dispatch_ok: res.ok\n    }\n  };\n} catch(e) {\n  return {\n    json: {\n      ...item,\n      dispatched: false,\n      dispatch_error: e.message\n    }\n  };\n}"
+      },
+      "id": "dispatch-run-task-node",
+      "name": "Dispatch run_task",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1976,
+        472
+      ]
     }
   ],
   "connections": {
@@ -422,6 +435,13 @@
         [
           {
             "node": "Action Needed?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispatch run_task",
             "type": "main",
             "index": 0
           }
