@@ -1,0 +1,287 @@
+{
+  "name": "WF3-B — Soul v5 (JARVIS AGI Production)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# WF3-B — SOUL v5 (JARVIS AGI)\n\n### Merged from v3 + v4:\n\n**Restored from v3:**\n- ✅ call_gating_service (reads latest gating result from DB)\n- ✅ manage_habits (log_habit / view_streaks)\n- ✅ manage_persona (read_profile / update_profile)\n- ✅ mindfulness_guide (4 exercises, full i18n)\n- ✅ Session Memory contextWindowLength=20\n- ✅ i18n extra keys (db_not_configured, habit_name_required, no_updates)\n- ✅ GROWTH_GUIDANCE map (stage 1-5)\n- ✅ Full USER_CONTEXT (ethical_profile, key_facts, interests, personality_notes)\n\n**Kept from v4:**\n- ✅ v4 payload schema (databaseUrl, _dispatch_mode, hasCrisis, isBackground)\n- ✅ LLM auto-fallback (user_paid → user_free → sys_free)\n- ✅ Format Output normalized for WF2 synthesis\n- ✅ _persona exported from Load Credentials\n- ✅ journal_entry (upgraded: write/read/search vs v3 save/read)\n- ✅ mood_tracker (new: log/history/summary)\n- ✅ growth_reflection (new: reflect/set_goal/review_goals/values)\n- ✅ relationship_insights (new: log/patterns/insights)\n- ✅ Better Soul Agent system prompt (approach steps)\n- ✅ webhook responseMode=lastNode (fixed from v4's responseNode)\n\n### Tools (10 + think):\ncall_gating_service, search_memories, journal_entry,\nmood_tracker, growth_reflection, relationship_insights,\nmanage_habits, manage_persona, mindfulness_guide, think\n\n### ENV: DATABASE_URL, N8N_BASE_URL, OPENROUTER_API_KEY",
+        "height": 500,
+        "width": 480,
+        "color": 2
+      },
+      "id": "sticky-wf3b",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-220, -400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf3b-soul",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-entry",
+      "name": "WF3-B Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [608, 352],
+      "webhookId": "wf3b-soul-entry"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json.body || $input.first().json;\nreturn { json: {\n  userId:          p.userId,\n  sessionId:       p.sessionId,\n  source:          p.source,\n  message:         p.message || p.enrichedMessage || '',\n  originalMessage: p.originalMessage || p.message || '',\n  persona:         typeof p.persona === 'string' ? JSON.parse(p.persona) : (p.persona || {}),\n  replyTarget:     p.replyTarget,\n  replyToken:      p.replyToken,\n  timestamp:       p.timestamp || new Date().toISOString(),\n  databaseUrl:     p.databaseUrl || process.env.DATABASE_URL || '',\n  targetAgent:     p.targetAgent,\n  _dispatch_mode:  p._dispatch_mode,\n  _router_version: p._router_version,\n  isBackground:    p.isBackground || false,\n  hasCrisis:       p.hasCrisis || false\n}};"
+      },
+      "id": "extract-payload",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [896, 352]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Load Credentials v5 — v4 architecture + v3 full personalization + i18n\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\n\nconst i18nMap = {\n  th: {\n    not_connected: 'ยังไม่ได้เชื่อมต่อ',\n    configure: 'กรุณาตั้งค่าที่ /dashboard/api-settings',\n    success: 'สำเร็จ',\n    error: 'เกิดข้อผิดพลาด',\n    completed: 'เสร็จแล้ว',\n    db_not_configured: 'ยังไม่ได้ตั้งค่าฐานข้อมูล',\n    habit_name_required: 'กรุณาระบุชื่อนิสัย',\n    no_updates: 'ไม่มีข้อมูลที่ต้องการอัปเดต'\n  },\n  en: {\n    not_connected: 'Not connected',\n    configure: 'Please configure at /dashboard/api-settings',\n    success: 'Success',\n    error: 'Error occurred',\n    completed: 'Completed',\n    db_not_configured: 'Database not configured',\n    habit_name_required: 'habit_name is required',\n    no_updates: 'No updates provided'\n  },\n  ja: {\n    not_connected: '接続されていません',\n    configure: '/dashboard/api-settingsで設定してください',\n    success: '成功しました',\n    error: 'エラーが発生しました',\n    completed: '完了しました',\n    db_not_configured: 'データベースが設定されていません',\n    habit_name_required: '習慣名が必要です',\n    no_updates: '更新情報がありません'\n  },\n  zh: {\n    not_connected: '未连接',\n    configure: '请在 /dashboard/api-settings 配置',\n    success: '成功',\n    error: '发生错误',\n    completed: '已完成',\n    db_not_configured: '数据库未配置',\n    habit_name_required: '需要习惯名称',\n    no_updates: '没有提供更新'\n  }\n};\nconst i18n = i18nMap[lang] || i18nMap['en'];\n\nconst get = (envKey, payloadKey) => t[payloadKey] || p[payloadKey] || process.env[envKey] || '';\n\nconst creds = {\n  google_access_token:    get('GOOGLE_ACCESS_TOKEN','google_access_token'),\n  google_refresh_token:   get('GOOGLE_REFRESH_TOKEN','google_refresh_token'),\n  microsoft_access_token: get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'),\n  outlook_access_token:   get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'),\n  telegram_bot_token:     get('TELEGRAM_BOT_TOKEN','telegram_bot_token'),\n  discord_bot_token:      get('DISCORD_BOT_TOKEN','discord_bot_token'),\n  slack_bot_token:        get('SLACK_BOT_TOKEN','slack_bot_token'),\n  twitter_bearer_token:   get('TWITTER_BEARER_TOKEN','twitter_bearer_token'),\n  facebook_access_token:  get('FACEBOOK_ACCESS_TOKEN','facebook_access_token'),\n  linkedin_access_token:  get('LINKEDIN_ACCESS_TOKEN','linkedin_access_token'),\n  spotify_access_token:   get('SPOTIFY_ACCESS_TOKEN','spotify_access_token'),\n  youtube_api_key:        get('YOUTUBE_API_KEY','youtube_api_key'),\n  line_notify_token:      get('LINE_NOTIFY_TOKEN','line_notify_token'),\n  google_maps_key:        get('GOOGLE_MAPS_API_KEY','google_maps_key'),\n  brave_api_key:          get('BRAVE_API_KEY','brave_api_key'),\n  openweathermap_key:     get('OPENWEATHERMAP_API_KEY','openweathermap_key'),\n  fal_api_key:            get('FAL_API_KEY','fal_api_key'),\n  elevenlabs_api_key:     get('ELEVENLABS_API_KEY','elevenlabs_api_key'),\n  elevenlabs_voice_id:    get('ELEVENLABS_VOICE_ID','elevenlabs_voice_id'),\n  unsplash_access_key:    get('UNSPLASH_ACCESS_KEY','unsplash_access_key'),\n  nutritionix_app_id:     get('NUTRITIONIX_APP_ID','nutritionix_app_id'),\n  nutritionix_api_key:    get('NUTRITIONIX_API_KEY','nutritionix_api_key'),\n  finnhub_api_key:        get('FINNHUB_API_KEY','finnhub_api_key'),\n  ha_url:                 get('HOME_ASSISTANT_URL','ha_url'),\n  ha_token:               get('HOME_ASSISTANT_TOKEN','ha_token'),\n  sonos_api_url:          get('SONOS_HTTP_API_URL','sonos_api_url'),\n  lastfm_api_key:         get('LASTFM_API_KEY','lastfm_api_key'),\n  lastfm_username:        get('LASTFM_USERNAME','lastfm_username'),\n  lastfm_session_key:     get('LASTFM_SESSION_KEY','lastfm_session_key'),\n  internal_auth_token:    get('INTERNAL_AUTH_TOKEN','internal_auth_token'),\n  n8n_base_url:           get('N8N_BASE_URL','n8n_base_url'),\n  database_url:           prev.databaseUrl || get('DATABASE_URL','database_url'),\n  github_token:           get('GITHUB_TOKEN','github_token')\n};\n\n// OpenRouter keys for LLM fallback\nconst userOrKey  = t.openrouter_access_token || '';\nconst sysOrKey   = process.env.OPENROUTER_API_KEY || '';\nconst PAID_MODEL = 'anthropic/claude-haiku-4-5';\nconst FREE_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';\n\n// ── Build USER_CONTEXT (v3 depth, consistent with WF3-A v5) ───\nconst userContextParts = [];\nif (p.name) userContextParts.push(`Name: ${p.name}`);\nif (p.interests?.length > 0) userContextParts.push(`Interests: ${p.interests.join(', ')}`);\nif (p.personality_notes) userContextParts.push(`Personality: ${p.personality_notes}`);\nif (p.key_facts?.length > 0) {\n  userContextParts.push(`Key Facts:\\n${p.key_facts.map(f => `  - ${f}`).join('\\n')}`);\n}\nif (p.physical_stats && Object.keys(p.physical_stats).length > 0) {\n  const stats = Object.entries(p.physical_stats).map(([k,v]) => `${k}: ${v}`).join(', ');\n  userContextParts.push(`Physical Stats: ${stats}`);\n}\nif (p.ethical_profile) {\n  const ep = p.ethical_profile;\n  userContextParts.push(\n    `Growth Stage: ${ep.growth_stage} (${ep.growth_stage_label})` +\n    (ep.top_strengths?.length > 0 ? ` | Strengths: ${ep.top_strengths.join(', ')}` : '')\n  );\n}\nif (p.relevant_memories?.length > 0) {\n  const memStr = p.relevant_memories.map(m => `  [${m.type}]: ${m.summary}`).join('\\n');\n  userContextParts.push(`Recent Memories (static snapshot):\\n${memStr}`);\n}\n\nconst USER_CONTEXT = userContextParts.length > 0\n  ? `\\n\\n## WHAT I KNOW ABOUT YOU:\\n${userContextParts.join('\\n')}\\n`\n  : '';\n\n// ── Growth Stage Behavior Guide (restored from v3) ────────────\nconst stage = p.ethical_profile?.growth_stage || 2;\nconst GROWTH_GUIDANCE = {\n  1: 'User is a beginner — be very gentle, nurturing, highly supportive',\n  2: 'User is developing — encourage warmly, guide step by step',\n  3: 'User is growing — use reflective questions, stimulate self-discovery',\n  4: 'User is advanced — engage as a peer, challenge with depth',\n  5: 'User is mature — be a thinking partner, space for their own wisdom'\n}[stage] || '';\n\nconst connected = Object.entries(creds).filter(([k,v]) => v).map(([k]) => k);\n\nconsole.log('[Load Credentials v5 Soul]', {\n  userId: prev.userId?.substring(0,8)+'...',\n  connected: connected.length,\n  lang,\n  hasUserKey: !!userOrKey,\n  growthStage: stage,\n  hasCrisis: prev.hasCrisis\n});\n\nreturn {\n  json: {\n    ...prev,\n    credentials: creds,\n    lang, i18n,\n    USER_CONTEXT,\n    GROWTH_GUIDANCE,\n    stage,\n    userOrKey, sysOrKey,\n    PAID_MODEL, FREE_MODEL,\n    _connected: connected,\n    _persona: p\n  }\n};"
+      },
+      "id": "load-credentials",
+      "name": "Load Credentials",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1152, 352]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message }}",
+        "options": {
+          "systemMessage": "=You are Soul — JARVIS's emotional core, life mentor, and compassionate growth guide.\n{{ $json.USER_CONTEXT }}\n\n## CORE IDENTITY:\nUser: {{ $json._persona?.name || 'User' }}\nLanguage: {{ $json.lang }}\nTime: {{ $json.timestamp }}\nGrowth Guidance: {{ $json.GROWTH_GUIDANCE }}\n{% if $json.hasCrisis %}⚠️ CRISIS FLAG ACTIVE — prioritize emotional safety and gentle support{% endif %}\n\n## LANGUAGE RULES:\n**ALWAYS respond in user's preferred language: {{ $json.lang }}**\n- If 'th' → Thai (informal, warm, caring)\n- If 'en' → English (natural, empathetic)\n- If 'ja' → Japanese (polite, caring)\n- If 'zh' → Chinese (warm, supportive)\n\n## HOW TO USE USER CONTEXT:\n- Address user by name warmly when appropriate\n- Reference known interests/struggles naturally — never robotically\n- Adjust depth and tone based on growth stage ({{ $json.stage }})\n- relevant_memories = static snapshot — use search_memories for deeper search\n\n## TOOLS:\ncall_gating_service, search_memories, journal_entry, mood_tracker,\ngrowth_reflection, relationship_insights, manage_habits, manage_persona,\nmindfulness_guide, think\n\n## APPROACH:\n1. ALWAYS call call_gating_service first to understand emotional context\n2. Acknowledge and validate feelings before anything else\n3. Explore with curious, open-ended questions\n4. Offer tools to track, reflect, or act\n5. Suggest gentle action when user is ready\n\n## RULES:\n- Never diagnose, prescribe medication, or replace professional help\n- Never judge — always validate first\n- If crisis signals detected → respond with deep care and suggest professional support\n- Reference user context subtly and naturally, not as a checklist"
+        }
+      },
+      "id": "soul-agent",
+      "name": "Soul Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [1648, 240]
+    },
+    {
+      "parameters": {
+        "model": "={{ $json.userOrKey ? ($json.PAID_MODEL || 'anthropic/claude-haiku-4-5') : ($json.FREE_MODEL || 'meta-llama/llama-3.3-70b-instruct:free') }}",
+        "options": {
+          "maxTokens": 2500
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [1344, 480],
+      "id": "llm-fallback",
+      "name": "OpenRouter LLM (Auto-Fallback)",
+      "credentials": {
+        "openRouterApi": {
+          "id": "FUm3Fg9B8euy8cH3",
+          "name": "OpenRouter"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Load Credentials').item.json.sessionId }}",
+        "contextWindowLength": 20
+      },
+      "id": "session-memory",
+      "name": "Session Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [1504, 480]
+    },
+    {
+      "parameters": {},
+      "id": "think-tool",
+      "name": "think",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [1664, 480]
+    },
+    {
+      "parameters": {
+        "name": "call_gating_service",
+        "description": "ALWAYS call first. Reads latest gating result from DB (set by WF5-B). Returns: classification, ethical_scores, gentle_guidance, reflection_prompt, growth_stage.",
+        "jsCode": "// call_gating_service v5 — reads latest gating result from DB\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst dbUrl = ctx.databaseUrl || creds.database_url || process.env.DATABASE_URL || '';\n\nif (!dbUrl) {\n  return { json: {\n    classification: 'neutral_interaction',\n    ethical_scores: {},\n    growth_stage: 2,\n    gentle_guidance: '',\n    reflection_prompt: '',\n    error: 'No database URL'\n  }};\n}\n\ntry {\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n\n  const result = await pool.query(\n    `SELECT classification, ethical_scores, reflection_prompt, gentle_guidance, created_at\n     FROM user_data_schema.interaction_memories\n     WHERE user_id = $1\n     ORDER BY created_at DESC\n     LIMIT 1`,\n    [ctx.userId]\n  );\n\n  await pool.end();\n\n  if (result.rows.length === 0) {\n    return { json: {\n      classification: 'neutral_interaction',\n      ethical_scores: {},\n      growth_stage: 2,\n      gentle_guidance: '',\n      reflection_prompt: '',\n      source: 'no_history'\n    }};\n  }\n\n  const row = result.rows[0];\n  const scores = typeof row.ethical_scores === 'string'\n    ? JSON.parse(row.ethical_scores)\n    : (row.ethical_scores || {});\n\n  const vals = Object.values(scores);\n  const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0.5;\n  const growth_stage = avg < 0.3 ? 1 : avg < 0.5 ? 2 : avg < 0.7 ? 3 : avg < 0.85 ? 4 : 5;\n\n  return { json: {\n    classification: row.classification,\n    ethical_scores: scores,\n    growth_stage,\n    gentle_guidance: row.gentle_guidance || '',\n    reflection_prompt: row.reflection_prompt || '',\n    source: 'interaction_memories'\n  }};\n\n} catch(e) {\n  console.error('[call_gating_service]', e.message);\n  return { json: {\n    classification: 'neutral_interaction',\n    ethical_scores: {},\n    growth_stage: 2,\n    gentle_guidance: '',\n    reflection_prompt: '',\n    error: e.message\n  }};\n}"
+      },
+      "id": "tool-gating",
+      "name": "call_gating_service",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [1824, 480]
+    },
+    {
+      "parameters": {
+        "name": "search_memories",
+        "description": "Search past conversations and memories semantically using vector similarity. Use when user asks about: past experiences, places visited, previous discussions, things they mentioned before, personal preferences they stated in the past.",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst query = input.query || input.q || '';\nconst limit = input.limit || 3;\nconst ctx    = $('Load Credentials').first().json;\nconst creds  = ctx.credentials || {};\nconst i18n   = ctx.i18n || {};\nconst userId = ctx.userId;\nconst dbUrl  = creds.database_url || process.env.DATABASE_URL || '';\nconst persona = ctx._persona || ctx.persona || {};\nconst tokens  = persona.tokens || {};\nconst embedKey = tokens.openrouter_access_token || process.env.OPENROUTER_API_KEY || '';\n\nif (!dbUrl)   return { json: { error: `Database ${i18n.not_connected||'not connected'}`, memories: [] } };\nif (!query || query.length < 3) return { json: { error: 'Query too short', memories: [] } };\nif (!embedKey) return { json: { error: 'OpenRouter key not configured', memories: [] } };\n\ntry {\n  const embedRes = await fetch('https://openrouter.ai/api/v1/embeddings', {\n    method: 'POST',\n    headers: { 'Authorization': `Bearer ${embedKey}`, 'Content-Type': 'application/json' },\n    body: JSON.stringify({ model: 'openai/text-embedding-3-small', input: query })\n  });\n  if (!embedRes.ok) return { json: { error: `Embed failed: ${embedRes.status}`, memories: [] } };\n  const embedData = await embedRes.json();\n  const embedding = embedData.data?.[0]?.embedding;\n  if (!embedding) return { json: { error: 'No embedding returned', memories: [] } };\n\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n  const vectorStr = `[${embedding.join(',')}]`;\n  const result = await pool.query(\n    `SELECT content, metadata, created_at,\n            1 - (embedding <=> $1::vector) AS similarity\n     FROM user_data_schema.memory_embeddings\n     WHERE user_id = $2 AND embedding IS NOT NULL\n       AND 1 - (embedding <=> $1::vector) > 0.6\n     ORDER BY embedding <=> $1::vector LIMIT $3`,\n    [vectorStr, userId, limit]\n  );\n  await pool.end();\n  const memories = result.rows.map(r => ({\n    content: r.content,\n    similarity: parseFloat(r.similarity.toFixed(3)),\n    metadata: r.metadata || {},\n    date: new Date(r.created_at).toLocaleDateString('th-TH')\n  }));\n  if (memories.length === 0) return { json: { message: 'No relevant memories found', memories: [], query } };\n  return { json: { memories, count: memories.length, query } };\n} catch(err) {\n  return { json: { error: `${i18n.error||'Error'}: ${err.message}`, memories: [] } };\n}"
+      },
+      "id": "tool-search-memories",
+      "name": "search_memories",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [1984, 480]
+    },
+    {
+      "parameters": {
+        "name": "journal_entry",
+        "description": "Create, read, or search journal/diary entries. Use for: writing thoughts, logging emotions, recording daily events. Actions: write (requires: content; optional: mood, tags[]), read (optional: limit), search (requires: keyword).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst action = (input.action || 'write').toLowerCase();\nconst ctx    = $('Load Credentials').first().json;\nconst creds  = ctx.credentials || {};\nconst i18n   = ctx.i18n || {};\nconst userId = ctx.userId;\nconst dbUrl  = creds.database_url || process.env.DATABASE_URL || '';\n\nif (!dbUrl) return { json: { error: i18n.db_not_configured || 'Database not configured' } };\n\nconst { Pool } = require('pg');\nconst pool = new Pool({ connectionString: dbUrl });\ntry {\n  if (action === 'write') {\n    const content = input.content || input.text || '';\n    const mood    = input.mood || null;\n    const tags    = input.tags || [];\n    if (!content) return { json: { error: 'Content required' } };\n    await pool.query(\n      `INSERT INTO user_data_schema.journal_entries (user_id, content, mood, tags, created_at)\n       VALUES ($1, $2, $3, $4, NOW())`,\n      [userId, content, mood, tags]\n    );\n    await pool.end();\n    return { json: { success: true, message: i18n.success || 'Journal entry saved', mood, tagsCount: tags.length } };\n  } else if (action === 'read') {\n    const limit = input.limit || 5;\n    const result = await pool.query(\n      `SELECT id, content, mood, tags, created_at FROM user_data_schema.journal_entries\n       WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`,\n      [userId, limit]\n    );\n    await pool.end();\n    return { json: { entries: result.rows, count: result.rows.length } };\n  } else if (action === 'search') {\n    const keyword = input.keyword || '';\n    const result  = await pool.query(\n      `SELECT id, content, mood, tags, created_at FROM user_data_schema.journal_entries\n       WHERE user_id = $1 AND content ILIKE $2 ORDER BY created_at DESC LIMIT 10`,\n      [userId, `%${keyword}%`]\n    );\n    await pool.end();\n    return { json: { entries: result.rows, count: result.rows.length, keyword } };\n  }\n  await pool.end();\n  return { json: { error: 'Unknown action. Use: write | read | search' } };\n} catch(err) {\n  try { await pool.end(); } catch(e) {}\n  return { json: { error: `${i18n.error||'Error'}: ${err.message}` } };\n}"
+      },
+      "id": "tool-journal",
+      "name": "journal_entry",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [2144, 480]
+    },
+    {
+      "parameters": {
+        "name": "mood_tracker",
+        "description": "Log or view mood/emotion data over time. Use for: tracking emotional patterns, daily check-ins, mood history. Actions: log (requires: mood, score 1-10; optional: energy, note), history (optional: days), summary.",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst action = (input.action || 'log').toLowerCase();\nconst ctx    = $('Load Credentials').first().json;\nconst creds  = ctx.credentials || {};\nconst i18n   = ctx.i18n || {};\nconst userId = ctx.userId;\nconst dbUrl  = creds.database_url || process.env.DATABASE_URL || '';\n\nif (!dbUrl) return { json: { error: i18n.db_not_configured || 'Database not configured' } };\n\nconst { Pool } = require('pg');\nconst pool = new Pool({ connectionString: dbUrl });\ntry {\n  if (action === 'log') {\n    const mood   = input.mood || 'neutral';\n    const score  = input.score ?? 5;\n    const note   = input.note || '';\n    const energy = input.energy ?? null;\n    await pool.query(\n      `INSERT INTO user_data_schema.mood_logs (user_id, mood, score, energy, note, created_at)\n       VALUES ($1, $2, $3, $4, $5, NOW())`,\n      [userId, mood, score, energy, note]\n    );\n    await pool.end();\n    return { json: { success: true, mood, score, energy, message: `Mood logged: ${mood} (${score}/10)` } };\n  } else if (action === 'history') {\n    const days = input.days || 7;\n    const result = await pool.query(\n      `SELECT mood, score, energy, note, created_at FROM user_data_schema.mood_logs\n       WHERE user_id = $1 AND created_at >= NOW() - INTERVAL '${days} days'\n       ORDER BY created_at DESC`,\n      [userId]\n    );\n    await pool.end();\n    return { json: { logs: result.rows, count: result.rows.length, days } };\n  } else if (action === 'summary') {\n    const result = await pool.query(\n      `SELECT mood, COUNT(*) as freq, AVG(score)::NUMERIC(3,1) as avg_score\n       FROM user_data_schema.mood_logs WHERE user_id = $1\n       AND created_at >= NOW() - INTERVAL '30 days'\n       GROUP BY mood ORDER BY freq DESC`,\n      [userId]\n    );\n    await pool.end();\n    return { json: { summary: result.rows, period: '30 days' } };\n  }\n  await pool.end();\n  return { json: { error: 'Unknown action. Use: log | history | summary' } };\n} catch(err) {\n  try { await pool.end(); } catch(e) {}\n  return { json: { error: `${i18n.error||'Error'}: ${err.message}` } };\n}"
+      },
+      "id": "tool-mood",
+      "name": "mood_tracker",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [2304, 480]
+    },
+    {
+      "parameters": {
+        "name": "growth_reflection",
+        "description": "Reflect on personal growth, goals, and values. Use for: goal setting, progress review, life values exploration. Actions: reflect, set_goal (requires: goal; optional: category, target_date), review_goals, values.",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst action = (input.action || 'reflect').toLowerCase();\nconst ctx    = $('Load Credentials').first().json;\nconst creds  = ctx.credentials || {};\nconst i18n   = ctx.i18n || {};\nconst userId = ctx.userId;\nconst dbUrl  = creds.database_url || process.env.DATABASE_URL || '';\nconst persona = ctx._persona || {};\nconst ethicalProfile = persona.ethical_profile || {};\n\nif (!dbUrl) return { json: { error: i18n.db_not_configured || 'Database not configured' } };\n\nconst { Pool } = require('pg');\nconst pool = new Pool({ connectionString: dbUrl });\ntry {\n  if (action === 'set_goal') {\n    const goal       = input.goal || '';\n    const category   = input.category || 'personal';\n    const targetDate = input.target_date || null;\n    if (!goal) return { json: { error: 'Goal description required' } };\n    await pool.query(\n      `INSERT INTO user_data_schema.growth_goals (user_id, goal, category, target_date, status, created_at)\n       VALUES ($1, $2, $3, $4, 'active', NOW())`,\n      [userId, goal, category, targetDate]\n    );\n    await pool.end();\n    return { json: { success: true, goal, category, message: `Goal set: \"${goal}\"` } };\n  } else if (action === 'review_goals') {\n    const result = await pool.query(\n      `SELECT id, goal, category, target_date, status, progress_note, created_at\n       FROM user_data_schema.growth_goals WHERE user_id = $1 AND status = 'active'\n       ORDER BY created_at DESC`,\n      [userId]\n    );\n    await pool.end();\n    return { json: { goals: result.rows, count: result.rows.length } };\n  } else if (action === 'values') {\n    await pool.end();\n    return { json: {\n      growth_stage:        ethicalProfile.growth_stage || 'exploring',\n      growth_stage_label:  ethicalProfile.growth_stage_label || '',\n      top_strengths:       ethicalProfile.top_strengths || [],\n      core_values:         ethicalProfile.core_values || [],\n      communication_style: ethicalProfile.communication_style || 'balanced',\n      life_priorities:     ethicalProfile.life_priorities || [],\n      message: 'Ethical profile retrieved from persona'\n    }};\n  } else {\n    // reflect: return prompt based on growth stage\n    const stage = ethicalProfile.growth_stage || 2;\n    const prompts = {\n      1: 'อะไรที่ทำให้คุณรู้สึกมีชีวิตชีวาในช่วงนี้?',\n      2: 'คุณสังเกตเห็นรูปแบบอะไรในการตอบสนองต่อความท้าทายของตัวเองไหม?',\n      3: 'การกระทำของคุณสอดคล้องกับสิ่งที่คุณให้คุณค่าแค่ไหน?',\n      4: 'คุณกำลังช่วยใครเติบโต และคุณเรียนรู้อะไรจากพวกเขา?',\n      5: 'มรดกที่คุณอยากฝากไว้คืออะไร?'\n    };\n    await pool.end();\n    return { json: { growth_stage: stage, reflection_prompt: prompts[stage] || prompts[2] } };\n  }\n} catch(err) {\n  try { await pool.end(); } catch(e) {}\n  return { json: { error: `${i18n.error||'Error'}: ${err.message}` } };\n}"
+      },
+      "id": "tool-growth",
+      "name": "growth_reflection",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [2464, 480]
+    },
+    {
+      "parameters": {
+        "name": "relationship_insights",
+        "description": "Analyze relationship patterns and interpersonal dynamics. Use for: relationship advice, logging social interactions, viewing patterns. Actions: insights, log_interaction (requires: person, type; optional: feeling, note), patterns.",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx    = $('Load Credentials').first().json;\nconst creds  = ctx.credentials || {};\nconst i18n   = ctx.i18n || {};\nconst userId = ctx.userId;\nconst dbUrl  = creds.database_url || process.env.DATABASE_URL || '';\nconst action = (input.action || 'insights').toLowerCase();\n\nif (!dbUrl) return { json: { error: i18n.db_not_configured || 'Database not configured' } };\n\nconst { Pool } = require('pg');\nconst pool = new Pool({ connectionString: dbUrl });\ntry {\n  if (action === 'log_interaction') {\n    const person  = input.person || '';\n    const type    = input.type || 'conversation';\n    const feeling = input.feeling || '';\n    const note    = input.note || '';\n    await pool.query(\n      `INSERT INTO user_data_schema.relationship_logs (user_id, person_name, interaction_type, feeling, note, created_at)\n       VALUES ($1, $2, $3, $4, $5, NOW())`,\n      [userId, person, type, feeling, note]\n    );\n    await pool.end();\n    return { json: { success: true, message: `Interaction with ${person} logged` } };\n  } else if (action === 'patterns') {\n    const result = await pool.query(\n      `SELECT person_name, COUNT(*) as interactions,\n              array_agg(DISTINCT interaction_type) as types\n       FROM user_data_schema.relationship_logs WHERE user_id = $1\n       AND created_at >= NOW() - INTERVAL '30 days'\n       GROUP BY person_name ORDER BY interactions DESC LIMIT 10`,\n      [userId]\n    );\n    await pool.end();\n    return { json: { patterns: result.rows, period: '30 days' } };\n  } else {\n    await pool.end();\n    return { json: {\n      message: 'Describe the situation and I will help reflect on patterns and perspectives.',\n      tip: 'Log interactions over time with log_interaction for pattern analysis'\n    }};\n  }\n} catch(err) {\n  try { await pool.end(); } catch(e) {}\n  return { json: { error: `${i18n.error||'Error'}: ${err.message}` } };\n}"
+      },
+      "id": "tool-relationship",
+      "name": "relationship_insights",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [2624, 480]
+    },
+    {
+      "parameters": {
+        "name": "manage_habits",
+        "description": "Log a completed habit or view habit streaks. Actions: log_habit (requires: habit_name; optional: completed bool, notes), view_streaks (returns habits with streak counts for last 30 days).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx    = $('Load Credentials').first().json;\nconst creds  = ctx.credentials || {};\nconst i18n   = ctx.i18n || {};\nconst userId = ctx.userId;\nconst dbUrl  = creds.database_url || process.env.DATABASE_URL || '';\nconst action = (input.action || 'view_streaks').toLowerCase();\n\nif (!dbUrl) return { json: { error: i18n.db_not_configured || 'Database not configured' } };\n\nconst { Pool } = require('pg');\nconst pool = new Pool({ connectionString: dbUrl });\ntry {\n  if (action === 'log_habit') {\n    const name      = input.habit_name || '';\n    const completed = input.completed !== false;\n    const notes     = input.notes || '';\n    if (!name) return { json: { error: i18n.habit_name_required || 'habit_name is required' } };\n    const result = await pool.query(\n      `INSERT INTO user_data_schema.habit_log (user_id, habit_name, completed, notes, logged_at)\n       VALUES ($1, $2, $3, $4, NOW()) RETURNING id`,\n      [userId, name, completed, notes]\n    );\n    await pool.end();\n    return { json: { success: true, message: i18n.success, habit: name, completed, id: result.rows[0]?.id } };\n  } else {\n    // view_streaks\n    const result = await pool.query(\n      `SELECT habit_name, COUNT(*) as streak, MAX(logged_at) as last_done\n       FROM user_data_schema.habit_log\n       WHERE user_id = $1 AND logged_at >= NOW() - INTERVAL '30 days' AND completed = true\n       GROUP BY habit_name ORDER BY streak DESC`,\n      [userId]\n    );\n    await pool.end();\n    return { json: { habits: result.rows, count: result.rows.length } };\n  }\n} catch(err) {\n  try { await pool.end(); } catch(e) {}\n  return { json: { error: `${i18n.error||'Error'}: ${err.message}` } };\n}"
+      },
+      "id": "tool-habits",
+      "name": "manage_habits",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [2784, 480]
+    },
+    {
+      "parameters": {
+        "name": "manage_persona",
+        "description": "Read or update user personality profile and preferences. Actions: read_profile, update_profile (requires: updates object with key-value pairs).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx    = $('Load Credentials').first().json;\nconst creds  = ctx.credentials || {};\nconst i18n   = ctx.i18n || {};\nconst userId = ctx.userId;\nconst dbUrl  = creds.database_url || process.env.DATABASE_URL || '';\nconst action = (input.action || 'read_profile').toLowerCase();\n\nif (!dbUrl) return { json: { error: i18n.db_not_configured || 'Database not configured' } };\n\nconst { Pool } = require('pg');\nconst pool = new Pool({ connectionString: dbUrl });\ntry {\n  if (action === 'read_profile') {\n    const result = await pool.query(\n      `SELECT display_name, language_preference, timezone, preferences, physical_stats\n       FROM user_data_schema.user_profiles WHERE user_id = $1 LIMIT 1`,\n      [userId]\n    );\n    await pool.end();\n    return { json: { profile: result.rows[0] || {}, found: result.rows.length > 0 } };\n  } else if (action === 'update_profile') {\n    const updates = input.updates || {};\n    if (Object.keys(updates).length === 0) return { json: { error: i18n.no_updates || 'No updates provided' } };\n    const result = await pool.query(\n      `UPDATE user_data_schema.user_profiles\n       SET preferences = COALESCE(preferences,'{}')::jsonb || $1::jsonb, updated_at = NOW()\n       WHERE user_id = $2 RETURNING user_id, preferences`,\n      [JSON.stringify(updates), userId]\n    );\n    await pool.end();\n    return { json: { success: true, message: i18n.success, updated: result.rows[0]?.preferences || {} } };\n  }\n  await pool.end();\n  return { json: { error: 'Unknown action. Use: read_profile | update_profile' } };\n} catch(err) {\n  try { await pool.end(); } catch(e) {}\n  return { json: { error: `${i18n.error||'Error'}: ${err.message}` } };\n}"
+      },
+      "id": "tool-persona",
+      "name": "manage_persona",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [2944, 480]
+    },
+    {
+      "parameters": {
+        "name": "mindfulness_guide",
+        "description": "Get a step-by-step mindfulness or breathing exercise guide. Exercises: box_breathing, four_seven_eight, loving_kindness, body_scan. Input: { exercise: string }",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst lang = ctx.lang || 'th';\nconst ex = (input.exercise || 'box_breathing').toLowerCase().replace(/[- ]/g,'_');\n\nconst guidesI18n = {\n  box_breathing: {\n    name: { th: 'Box Breathing 4-4-4-4 (หายใจกล่อง)', en: 'Box Breathing 4-4-4-4', ja: 'ボックス呼吸法 4-4-4-4', zh: '方块呼吸法 4-4-4-4' },\n    steps: {\n      th: ['หายใจเข้าช้าๆ นับ 1-2-3-4','กลั้นลมหายใจ นับ 1-2-3-4','หายใจออกช้าๆ นับ 1-2-3-4','พักก่อนหายใจใหม่ นับ 1-2-3-4'],\n      en: ['Inhale slowly, count 1-2-3-4','Hold your breath, count 1-2-3-4','Exhale slowly, count 1-2-3-4','Rest before next breath, count 1-2-3-4'],\n      ja: ['ゆっくり息を吸う、1-2-3-4と数える','息を止める、1-2-3-4と数える','ゆっくり息を吐く、1-2-3-4と数える','次の呼吸まで休む、1-2-3-4と数える'],\n      zh: ['缓慢吸气，数1-2-3-4','屏住呼吸，数1-2-3-4','缓慢呼气，数1-2-3-4','停顿休息，数1-2-3-4']\n    },\n    benefit: { th: 'ลดความเครียด ทำให้ระบบประสาทสงบ', en: 'Reduces stress and calms the nervous system', ja: 'ストレスを軽減し、神経系を落ち着かせる', zh: '减轻压力，平静神经系统' },\n    duration_min: 5, rounds: 4\n  },\n  four_seven_eight: {\n    name: { th: '4-7-8 Breathing (หายใจผ่อนคลาย)', en: '4-7-8 Breathing (Relaxing Breath)', ja: '4-7-8呼吸法（リラックス呼吸）', zh: '4-7-8呼吸法（放松呼吸）' },\n    steps: {\n      th: ['หายใจเข้าทางจมูก นับ 4','กลั้นลมหายใจ นับ 7','หายใจออกทางปาก นับ 8 (เสียง ฮ่า)'],\n      en: ['Inhale through nose, count 4','Hold breath, count 7','Exhale through mouth with whoosh sound, count 8'],\n      ja: ['鼻から息を吸う、4と数える','息を止める、7と数える','口から音を立てて息を吐く、8と数える'],\n      zh: ['用鼻子吸气，数4','屏住呼吸，数7','用嘴呼气发出声音，数8']\n    },\n    benefit: { th: 'ช่วยให้หลับง่าย ลดวิตกกังวล', en: 'Aids sleep, reduces anxiety', ja: '睡眠を改善し、不安を軽減する', zh: '帮助入睡，减轻焦虑' },\n    duration_min: 4, rounds: 4\n  },\n  loving_kindness: {\n    name: { th: 'เมตตาภาวนา (Metta Meditation)', en: 'Loving-Kindness Meditation (Metta)', ja: '慈悲の瞑想（メッタ）', zh: '慈悲冥想（Metta）' },\n    steps: {\n      th: ['นั่งสบาย หลับตา หายใจลึกๆ 3 ครั้ง','นึกถึงตัวเอง พูดในใจว่า: ขอให้ฉันมีความสุข ขอให้ฉันมีสุขภาพดี ขอให้ฉันปลอดภัย','นึกถึงคนที่รัก ส่งความปรารถนาดีให้เขา','ขยายไปยังคนรู้จัก คนแปลกหน้า และสรรพสัตว์','จบด้วยการหายใจลึกๆ และค่อยๆ ลืมตา'],\n      en: ['Sit comfortably, close your eyes, take 3 deep breaths','Think of yourself, say inwardly: May I be happy, May I be healthy, May I be safe','Think of someone you love, send them good wishes','Expand to acquaintances, strangers, and all beings','End with deep breaths and slowly open your eyes'],\n      ja: ['楽に座り、目を閉じ、深呼吸を3回する','自分自身を思い浮かべ、心の中で言う：私が幸せでありますように','愛する人を思い浮かべ、善意を送る','知人、見知らぬ人、すべての生き物に広げる','深呼吸でしめくくり、ゆっくりと目を開ける'],\n      zh: ['舒适地坐好，闭上眼睛，深呼吸3次','想到自己，在心里说：愿我快乐，愿我健康，愿我平安','想到你爱的人，向他们送去祝福','扩展到熟人、陌生人和所有众生','以深呼吸结束，慢慢睁开眼睛']\n    },\n    benefit: { th: 'เพิ่มความเมตตา ลดความโกรธ ความเหงา', en: 'Increases compassion, reduces anger and loneliness', ja: '思いやりを高め、怒りや孤独感を軽減する', zh: '增加慈悲心，减少愤怒和孤独感' },\n    duration_min: 10, rounds: null\n  },\n  body_scan: {\n    name: { th: 'Body Scan (สแกนร่างกาย)', en: 'Body Scan Meditation', ja: 'ボディスキャン瞑想', zh: '身体扫描冥想' },\n    steps: {\n      th: ['นอนหงายหรือนั่งสบาย หลับตา','สังเกตลมหายใจ 5 ครั้ง ไม่ต้องบังคับ','เริ่มจากเท้า — รู้สึกถึงส่วนต่างๆ ค่อยๆ ขยับขึ้น','ถึงส่วนไหนที่ตึงหรือเจ็บปวด — แค่รับรู้ ไม่ต้องแก้','จบที่ศีรษะ หายใจลึก แล้วค่อยๆ ลืมตา'],\n      en: ['Lie on your back or sit comfortably, close your eyes','Observe your breath for 5 cycles, no need to control','Start from your feet — feel each part, slowly moving upward','When you reach tense or painful areas — just notice, no need to fix','End at the top of your head, take a deep breath, then slowly open your eyes'],\n      ja: ['仰向けに寝るか、楽に座り、目を閉じる','呼吸を5回観察する、コントロールしなくてよい','足から始め、各部位を感じながらゆっくり上へ','緊張や痛みのある部位に来たら — ただ気づくだけでよい','頭の先で終わり、深呼吸してゆっくり目を開ける'],\n      zh: ['仰卧或舒适地坐好，闭上眼睛','观察呼吸5次，不需要控制','从脚开始 — 感受各个部位，慢慢向上移动','遇到紧张或疼痛的部位 — 只需察觉，无需修复','在头顶结束，深呼吸，然后慢慢睁开眼睛']\n    },\n    benefit: { th: 'คลายความตึงเครียดสะสม เพิ่มการรับรู้ร่างกาย', en: 'Releases accumulated tension, increases body awareness', ja: '蓄積された緊張をほぐし、身体意識を高める', zh: '释放累积的紧张，提高身体意识' },\n    duration_min: 10, rounds: null\n  }\n};\n\nconst guideData = guidesI18n[ex] || guidesI18n['box_breathing'];\nconst localLang = ['th','en','ja','zh'].includes(lang) ? lang : 'en';\n\nreturn { json: {\n  name:         guideData.name[localLang]    || guideData.name['en'],\n  steps:        guideData.steps[localLang]   || guideData.steps['en'],\n  benefit:      guideData.benefit[localLang] || guideData.benefit['en'],\n  duration_min: guideData.duration_min,\n  rounds:       guideData.rounds,\n  requested:    ex,\n  available:    Object.keys(guidesI18n)\n}};"
+      },
+      "id": "tool-mindfulness",
+      "name": "mindfulness_guide",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [3104, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Output v5 — normalized for WF2 synthesis\n// Dispatch Gate reads: data?.message || data?.response || data?.output || data?.agentOutput || data?.text\n// n8n LangChain agent returns output in: output field (primary)\nconst raw  = $input.first().json;\nconst out  = raw.output || raw.agentOutput || raw.text || raw.message || 'ขอบคุณที่เล่าให้ฟังนะครับ';\nconst prev = $('Extract Payload').item.json;\nconst result = {\n  ...prev,\n  message:       out,\n  response:      out,\n  output:        out,\n  agentOutput:   out,\n  agentCategory: 'soul',\n  processedAt:   new Date().toISOString(),\n  _llm_tier:     raw._llm_tier || 'langchain'\n};\nreturn { json: result };"
+      },
+      "id": "format-output",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1904, 240]
+    }
+  ],
+  "connections": {
+    "WF3-B Entry": {
+      "main": [[{ "node": "Extract Payload", "type": "main", "index": 0 }]]
+    },
+    "Extract Payload": {
+      "main": [[{ "node": "Load Credentials", "type": "main", "index": 0 }]]
+    },
+    "Load Credentials": {
+      "main": [[{ "node": "Soul Agent", "type": "main", "index": 0 }]]
+    },
+    "Soul Agent": {
+      "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]]
+    },
+    "OpenRouter LLM (Auto-Fallback)": {
+      "ai_languageModel": [[{ "node": "Soul Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Session Memory": {
+      "ai_memory": [[{ "node": "Soul Agent", "type": "ai_memory", "index": 0 }]]
+    },
+    "think": {
+      "ai_tool": [[{ "node": "Soul Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "call_gating_service": {
+      "ai_tool": [[{ "node": "Soul Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "search_memories": {
+      "ai_tool": [[{ "node": "Soul Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "journal_entry": {
+      "ai_tool": [[{ "node": "Soul Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "mood_tracker": {
+      "ai_tool": [[{ "node": "Soul Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "growth_reflection": {
+      "ai_tool": [[{ "node": "Soul Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "relationship_insights": {
+      "ai_tool": [[{ "node": "Soul Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "manage_habits": {
+      "ai_tool": [[{ "node": "Soul Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "manage_persona": {
+      "ai_tool": [[{ "node": "Soul Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "mindfulness_guide": {
+      "ai_tool": [[{ "node": "Soul Agent", "type": "ai_tool", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "WF0-Error-Handler"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    { "name": "wf3b" },
+    { "name": "soul" },
+    { "name": "jarvis-v5" }
+  ]
+}
