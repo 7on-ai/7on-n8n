@@ -1,5 +1,5 @@
 {
-  "name": "WF4 Heartbeat Proactive Engine v5 (Fixed: dedup + dispatch + WF3v5 paths)",
+  "name": "Proactive Engine",
   "nodes": [
     {
       "parameters": {
