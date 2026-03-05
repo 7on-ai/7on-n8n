@@ -1,5 +1,5 @@
 {
-  "name": "WF-Internal-PG-Query (Secure DB Proxy)",
+  "name": "Database Proxy",
   "nodes": [
     {
       "parameters": {
