@@ -1,72 +1,179 @@
 {
-  "name": "WF1 — Intake Gateway (Production)",
+  "name": "WF1 — Intake Core",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "wf1-intake",
-        "responseMode": "lastNode",
+        "path": "chat",
+        "responseMode": "responseNode",
         "options": {}
       },
-      "id": "e27b12e8-10ec-4e11-8ce6-9cecb750460a",
-      "name": "WF1 Entry",
+      "id": "1b482319-a457-42e1-bb76-c527656b922e",
+      "name": "Webhook /chat",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
+      "typeVersion": 1.1,
       "position": [
-        -288,
-        -80
+        -224,
+        -96
       ],
-      "webhookId": "wf1-intake-entry"
+      "webhookId": "sunday-chat"
     },
     {
       "parameters": {
-        "jsCode": "// WF1 Intake — Normalize Input\n// Supports: Telegram, Discord, LINE, Web\nconst payload = $input.first().json.body || $input.first().json;\n\nif (payload.source === 'telegram') {\n  return {\n    json: {\n      userId: payload.userId,\n      sessionId: `telegram_${payload.userId}`,\n      source: 'telegram',\n      message: payload.message,\n      originalMessage: payload.message,\n      timestamp: new Date().toISOString(),\n      replyTarget: `telegram:${payload.userId}`,\n      rawPayload: payload\n    }\n  };\n}\n\nif (payload.source === 'discord') {\n  return {\n    json: {\n      userId: payload.userId,\n      sessionId: `discord_${payload.userId}`,\n      source: 'discord',\n      message: payload.message,\n      originalMessage: payload.message,\n      timestamp: new Date().toISOString(),\n      replyTarget: `discord:${payload.channelId}`,\n      rawPayload: payload\n    }\n  };\n}\n\nif (payload.source === 'line') {\n  return {\n    json: {\n      userId: payload.userId,\n      sessionId: `line_${payload.userId}`,\n      source: 'line',\n      message: payload.message,\n      originalMessage: payload.message,\n      timestamp: payload.timestamp || new Date().toISOString(),\n      replyToken: payload.replyToken,\n      replyTarget: `line:${payload.userId}`,\n      rawPayload: payload\n    }\n  };\n}\n\n// Default: Web\nreturn {\n  json: {\n    userId: payload.userId || 'anonymous',\n    sessionId: payload.sessionId || `web_${Date.now()}`,\n    source: 'web',\n    message: payload.message || payload.query || '',\n    originalMessage: payload.message || payload.query || '',\n    timestamp: new Date().toISOString(),\n    replyTarget: 'web',\n    rawPayload: payload\n  }\n};"
+        "httpMethod": "POST",
+        "path": "voice-text",
+        "responseMode": "responseNode",
+        "options": {}
       },
-      "id": "1db54645-c308-4e7d-bd5d-994723b4f184",
-      "name": "Normalize Input",
+      "id": "04097930-fa17-4436-a035-91f45b4f7e54",
+      "name": "Webhook /voice-text",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -224,
+        64
+      ],
+      "webhookId": "sunday-voice-text"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.item.json.body || $input.item.json;\nif (!b.userId || !b.message) throw new Error('Missing userId or message');\nif (!b.databaseUrl) throw new Error('Missing databaseUrl');\nreturn { json: { userId: b.userId, sessionId: b.sessionId || b.userId, message: b.message.trim(), databaseUrl: b.databaseUrl, source: b.source || 'chat', inputType: 'text', replyTarget: b.replyTarget || 'webhook', timestamp: new Date().toISOString() } };"
+      },
+      "id": "9c8f1865-2a38-406c-9d76-c303db74e2b7",
+      "name": "Normalize Chat",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -96,
-        -80
+        16,
+        -96
       ]
     },
     {
       "parameters": {
-        "url": "={{ $env.N8N_WF2_URL || 'http://localhost:5678/webhook/wf2-brain' }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json) }}",
+        "jsCode": "const b = $input.item.json.body || $input.item.json;\nif (!b.userId || !b.message) throw new Error('Missing userId or transcribed message');\nif (!b.databaseUrl) throw new Error('Missing databaseUrl');\nreturn { json: { userId: b.userId, sessionId: b.sessionId || b.userId, message: b.message.trim(), databaseUrl: b.databaseUrl, source: 'voice', inputType: 'voice', replyTarget: 'voice_esp32', timestamp: new Date().toISOString() } };"
+      },
+      "id": "56a3e9ef-33b4-4e8c-87fd-7b290e7d8a30",
+      "name": "Normalize Voice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
         "options": {}
       },
-      "id": "faf0f63e-d201-46e6-80ac-2b6df85b9f91",
-      "name": "Forward to WF2",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "6ef93227-b353-43d0-a48c-b27639515d13",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
       "position": [
-        112,
-        -80
+        256,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $env.WF2_BRAIN_ID }}",
+          "mode": "expression"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "074fdc9b-2644-4854-899a-53819f36d53a",
+      "name": "→ WF2 Brain",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        496,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "45c6c95e-2239-43b8-b9cd-74b740058193",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        736,
+        -16
       ]
     }
   ],
   "pinData": {},
   "connections": {
-    "WF1 Entry": {
+    "Webhook /chat": {
       "main": [
         [
           {
-            "node": "Normalize Input",
+            "node": "Normalize Chat",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Normalize Input": {
+    "Webhook /voice-text": {
       "main": [
         [
           {
-            "node": "Forward to WF2",
+            "node": "Normalize Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Chat": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Voice": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "→ WF2 Brain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "→ WF2 Brain": {
+      "main": [
+        [
+          {
+            "node": "Respond",
             "type": "main",
             "index": 0
           }
@@ -74,16 +181,16 @@
       ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "0d5306e4-c3ec-4dc6-b73c-a8bf3a372a67",
+  "versionId": "8d5a9c0a-696d-4538-bbba-bf1c20822997",
   "meta": {
     "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
   },
-  "id": "jT9SBvZiiTZgDKyu",
+  "id": "peD0mwnHBTY8d7Z7",
   "tags": []
 }
