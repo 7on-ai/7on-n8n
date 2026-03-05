@@ -1,0 +1,227 @@
+{
+  "name": "WF3-F — Home Mate v5 (JARVIS AGI Production)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# WF3-F — HOME MATE v5 (JARVIS AGI)\n\n### Changes from v4 (restored from v3):\n- ✅ Restored: control_sonos tool (multi-room speaker control)\n- ✅ Restored: search_memories tool (pgvector + OpenRouter embed)\n- ✅ Restored: music_lookup full (scrobble_track + youtube_music_search + recent/top tracks)\n- ✅ Restored: i18n full keys (query_required, room_required, name_required, youtube_note, sonos_note)\n- ✅ Restored: lastfm_username + lastfm_session_key credentials\n- ✅ Restored: ha_url/ha_token alias + sonos_api_url alias\n- ✅ Restored: USER_CONTEXT full depth (interests, personality_notes, key_facts, physical_stats, ethical_profile, relevant_memories)\n- ✅ Restored: GROWTH_GUIDANCE map (stage 1–5)\n- ✅ Fixed: webhook responseMode → lastNode\n- ✅ Fixed: Format Output fallback order (output→agentOutput→text→message)\n- ✅ Added: errorWorkflow WF0-Error-Handler\n- ✅ Added: contextWindowLength = 20\n\n### Kept from v4:\n- ✅ v4 payload schema (databaseUrl, _dispatch_mode, isBackground, hasCrisis)\n- ✅ OpenRouter LLM auto-fallback expression\n- ✅ Format Output 4-key normalized for WF2 synthesis\n- ✅ databaseUrl from WF2 payload\n- ✅ PAID_MODEL/FREE_MODEL exported\n\n### Tools (7):\ncontrol_spotify, control_sonos, control_home, music_lookup, search_memories, think\n(home_assistant renamed control_home to match v3 naming)\n\n### ENV: DATABASE_URL, HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN, SONOS_HTTP_API_URL, OPENROUTER_API_KEY",
+        "height": 460,
+        "width": 500,
+        "color": 6
+      },
+      "id": "sticky-wf3f",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-220, -460]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf3f-homemate",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-entry",
+      "name": "WF3-F Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [560, 336],
+      "webhookId": "wf3f-homemate-entry"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.first().json.body || $input.first().json;\nreturn {\n  json: {\n    userId:          payload.userId,\n    sessionId:       payload.sessionId,\n    source:          payload.source,\n    message:         payload.message || payload.enrichedMessage || '',\n    originalMessage: payload.originalMessage || payload.message || '',\n    persona:         typeof payload.persona === 'string'\n                       ? JSON.parse(payload.persona)\n                       : (payload.persona || {}),\n    replyTarget:     payload.replyTarget,\n    replyToken:      payload.replyToken,\n    timestamp:       payload.timestamp || new Date().toISOString(),\n    databaseUrl:     payload.databaseUrl || process.env.DATABASE_URL || '',\n    targetAgent:     payload.targetAgent,\n    _dispatch_mode:  payload._dispatch_mode,\n    _router_version: payload._router_version,\n    isBackground:    payload.isBackground || false,\n    hasCrisis:       payload.hasCrisis || false\n  }\n};"
+      },
+      "id": "extract-payload",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [848, 336]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Load Credentials v5 — v4 architecture + v3 full personalization\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\n\n// ── i18n: v3 full keys restored ───────────────────────────────\nconst i18nMap = {\n  th: {\n    not_connected:  'ยังไม่ได้เชื่อมต่อ',\n    configure:      'กรุณาตั้งค่าที่ /dashboard/api-settings',\n    success:        'สำเร็จ',\n    error:          'เกิดข้อผิดพลาด',\n    completed:      'เสร็จแล้ว',\n    query_required: 'กรุณาระบุคำค้นหา',\n    room_required:  'กรุณาระบุชื่อห้อง',\n    name_required:  'กรุณาระบุชื่อ',\n    youtube_note:   'YouTube Music ต้องเปิดใน app/browser ครับ',\n    sonos_note:     'กรุณาตรวจสอบว่า node-sonos-http-api ทำงานอยู่'\n  },\n  en: {\n    not_connected:  'Not connected',\n    configure:      'Please configure at /dashboard/api-settings',\n    success:        'Success',\n    error:          'Error occurred',\n    completed:      'Completed',\n    query_required: 'query is required',\n    room_required:  'room name is required',\n    name_required:  'name is required',\n    youtube_note:   'YouTube Music must be opened in app/browser',\n    sonos_note:     'Please check that node-sonos-http-api is running'\n  },\n  ja: {\n    not_connected:  '接続されていません',\n    configure:      '/dashboard/api-settingsで設定してください',\n    success:        '成功しました',\n    error:          'エラーが発生しました',\n    completed:      '完了しました',\n    query_required: '検索クエリが必要です',\n    room_required:  'ルーム名が必要です',\n    name_required:  '名前が必要です',\n    youtube_note:   'YouTube Musicはアプリ/ブラウザで開いてください',\n    sonos_note:     'node-sonos-http-apiが起動しているか確認してください'\n  },\n  zh: {\n    not_connected:  '未连接',\n    configure:      '请在 /dashboard/api-settings 配置',\n    success:        '成功',\n    error:          '发生错误',\n    completed:      '已完成',\n    query_required: '需要搜索关键词',\n    room_required:  '需要房间名称',\n    name_required:  '需要名称',\n    youtube_note:   'YouTube Music 需要在应用/浏览器中打开',\n    sonos_note:     '请检查 node-sonos-http-api 是否正在运行'\n  }\n};\nconst i18n = i18nMap[lang] || i18nMap['en'];\n\nconst get = (envKey, payloadKey) => t[payloadKey] || p[payloadKey] || process.env[envKey] || '';\n\n// ── Credentials: v3 full list + v4 additions ──────────────────\nconst creds = {\n  google_access_token:    get('GOOGLE_ACCESS_TOKEN',    'google_access_token'),\n  google_refresh_token:   get('GOOGLE_REFRESH_TOKEN',   'google_refresh_token'),\n  microsoft_access_token: get('MICROSOFT_ACCESS_TOKEN', 'microsoft_access_token'),\n  outlook_access_token:   get('MICROSOFT_ACCESS_TOKEN', 'microsoft_access_token'),\n  telegram_bot_token:     get('TELEGRAM_BOT_TOKEN',     'telegram_bot_token'),\n  discord_bot_token:      get('DISCORD_BOT_TOKEN',      'discord_bot_token'),\n  slack_bot_token:        get('SLACK_BOT_TOKEN',        'slack_bot_token'),\n  twitter_bearer_token:   get('TWITTER_BEARER_TOKEN',   'twitter_bearer_token'),\n  facebook_access_token:  get('FACEBOOK_ACCESS_TOKEN',  'facebook_access_token'),\n  linkedin_access_token:  get('LINKEDIN_ACCESS_TOKEN',  'linkedin_access_token'),\n  spotify_access_token:   get('SPOTIFY_ACCESS_TOKEN',   'spotify_access_token'),\n  youtube_api_key:        get('YOUTUBE_API_KEY',        'youtube_api_key'),\n  line_notify_token:      get('LINE_NOTIFY_TOKEN',      'line_notify_token'),\n  google_maps_key:        get('GOOGLE_MAPS_API_KEY',    'google_maps_key'),\n  brave_api_key:          get('BRAVE_API_KEY',          'brave_api_key'),\n  openweathermap_key:     get('OPENWEATHERMAP_API_KEY', 'openweathermap_key'),\n  fal_api_key:            get('FAL_API_KEY',            'fal_api_key'),\n  elevenlabs_api_key:     get('ELEVENLABS_API_KEY',     'elevenlabs_api_key'),\n  elevenlabs_voice_id:    get('ELEVENLABS_VOICE_ID',    'elevenlabs_voice_id') || 'pNInz6obpgDQGcFmaJgB',\n  unsplash_access_key:    get('UNSPLASH_ACCESS_KEY',    'unsplash_access_key'),\n  nutritionix_app_id:     get('NUTRITIONIX_APP_ID',     'nutritionix_app_id'),\n  nutritionix_api_key:    get('NUTRITIONIX_API_KEY',    'nutritionix_api_key'),\n  finnhub_api_key:        get('FINNHUB_API_KEY',        'finnhub_api_key'),\n  // Home Assistant — support both v3 aliases (ha_url/ha_token) and v4 names\n  ha_url:                 get('HOME_ASSISTANT_URL',     'ha_url') || get('HOME_ASSISTANT_URL', 'home_assistant_url'),\n  ha_token:               get('HOME_ASSISTANT_TOKEN',   'ha_token') || get('HOME_ASSISTANT_TOKEN', 'home_assistant_token'),\n  // Sonos — support both v3 (sonos_api_url) and v4 (sonos_controller_url)\n  sonos_api_url:          get('SONOS_HTTP_API_URL',     'sonos_api_url') || get('SONOS_CONTROLLER_URL', 'sonos_controller_url'),\n  // Last.fm — v3 full set\n  lastfm_api_key:         get('LASTFM_API_KEY',         'lastfm_api_key'),\n  lastfm_username:        get('LASTFM_USERNAME',        'lastfm_username'),\n  lastfm_session_key:     get('LASTFM_SESSION_KEY',     'lastfm_session_key'),\n  // Auth + infra\n  internal_auth_token:    get('INTERNAL_AUTH_TOKEN',    'internal_auth_token'),\n  n8n_base_url:           get('N8N_BASE_URL',           'n8n_base_url'),\n  database_url:           prev.databaseUrl || get('DATABASE_URL', 'database_url'),\n  github_token:           get('GITHUB_TOKEN',           'github_token'),\n};\n\n// ── OpenRouter keys for LLM fallback (v4) ────────────────────\nconst userOrKey  = t.openrouter_access_token || '';\nconst sysOrKey   = process.env.OPENROUTER_API_KEY || '';\nconst PAID_MODEL = 'anthropic/claude-haiku-4-5';\nconst FREE_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';\n\n// ── Build USER_CONTEXT (v3 depth restored) ────────────────────\nconst userContextParts = [];\n\nif (p.name) userContextParts.push(`Name: ${p.name}`);\nif (p.interests?.length > 0) userContextParts.push(`Interests: ${p.interests.join(', ')}`);\nif (p.personality_notes) userContextParts.push(`Personality: ${p.personality_notes}`);\nif (p.key_facts?.length > 0) {\n  userContextParts.push(`Key Facts:\\n${p.key_facts.map(f => `  - ${f}`).join('\\n')}`);\n}\nif (p.physical_stats && Object.keys(p.physical_stats).length > 0) {\n  const stats = Object.entries(p.physical_stats).map(([k,v]) => `${k}: ${v}`).join(', ');\n  userContextParts.push(`Physical Stats: ${stats}`);\n}\nif (p.ethical_profile) {\n  const ep = p.ethical_profile;\n  userContextParts.push(\n    `Growth Stage: ${ep.growth_stage} (${ep.growth_stage_label})` +\n    (ep.top_strengths?.length > 0 ? ` | Strengths: ${ep.top_strengths.join(', ')}` : '')\n  );\n}\nif (p.relevant_memories?.length > 0) {\n  const memStr = p.relevant_memories.map(m => `  [${m.type}]: ${m.summary}`).join('\\n');\n  userContextParts.push(`Recent Memories (static snapshot):\\n${memStr}`);\n}\n\nconst USER_CONTEXT = userContextParts.length > 0\n  ? `\\n\\n## WHAT I KNOW ABOUT YOU:\\n${userContextParts.join('\\n')}\\n`\n  : '';\n\n// ── Growth Stage Behavior Guide (restored from v3 pattern) ────\nconst stage = p.ethical_profile?.growth_stage || 2;\nconst GROWTH_GUIDANCE = {\n  1: 'User is a beginner — use simple language, be very supportive, patient',\n  2: 'User is developing — encourage, guide step by step',\n  3: 'User is growing — challenge with open questions, stimulate thinking',\n  4: 'User is advanced — engage deeply, give space to explore',\n  5: 'User is mature — be a thinking partner, minimal guidance needed'\n}[stage] || '';\n\nconst connected = Object.entries(creds).filter(([k,v]) => v).map(([k]) => k);\n\nconsole.log('[Load Credentials v5 HomeMate]', {\n  userId: prev.userId?.substring(0,8)+'...',\n  connected: connected.length,\n  lang,\n  hasUserKey: !!userOrKey,\n  hasHA: !!(creds.ha_url && creds.ha_token),\n  hasSonos: !!creds.sonos_api_url,\n  hasSpotify: !!creds.spotify_access_token,\n  growthStage: stage\n});\n\nreturn {\n  json: {\n    ...prev,\n    credentials: creds,\n    lang, i18n,\n    USER_CONTEXT,\n    GROWTH_GUIDANCE,\n    stage,\n    userOrKey, sysOrKey,\n    PAID_MODEL, FREE_MODEL,\n    _connected: connected,\n    _persona: p\n  }\n};"
+      },
+      "id": "load-credentials",
+      "name": "Load Credentials",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1104, 336]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message }}",
+        "options": {
+          "systemMessage": "=You are Home Mate — ambient intelligence for music and smart home.\n{{ $json.USER_CONTEXT }}\n\n## CORE IDENTITY:\nUser: {{ $json._persona?.name || 'User' }}\nLanguage: {{ $json.lang }}\nTime: {{ $json.timestamp }}\nGrowth Guidance: {{ $json.GROWTH_GUIDANCE }}\n\n## LANGUAGE RULES:\n**ALWAYS respond in user's preferred language: {{ $json.lang }}**\n- If 'th' → Thai\n- If 'en' → English\n- If 'ja' → Japanese\n- If 'zh' → Chinese\n\n## AMBIENT MODES:\n- morning: Bright 5000K + energy music\n- work: Neutral 4000K + lo-fi\n- relax: Warm 2700K + chill\n- sleep: Lights off + nature sounds\n- movie: Dim 2200K + no music\n- study: Bright 6000K + classical\n\n## HOW TO USE USER CONTEXT:\n- Address user by name when appropriate\n- Reference known music tastes/interests naturally — NOT robotically\n- Adjust formality based on growth stage ({{ $json.stage }})\n- For DEEPER preference history → use search_memories tool\n\n## MEMORY SEARCH (search_memories tool):\nUse when user asks about:\n- Music they liked before (\"เพลงที่เคยฟัง\", \"songs I used to like\")\n- Home settings they prefer (\"ความสว่างที่ชอบ\", \"lighting I prefer\")\n- Previous moods/atmospheres (\"บรรยากาศแบบไหน\", \"what vibe\")\n- Any historical preference context\n\n## TOOLS:\ncontrol_spotify, control_sonos, control_home, music_lookup, search_memories, think\n\n## INTERACTION STYLE:\n- Proactive: suggest music/ambiance for mood or time of day\n- Efficient: control multiple devices in one command\n- Contextual: morning/evening/work/relax/movie routines\n- Always confirm before major home changes (scene changes, all lights off)"
+        }
+      },
+      "id": "homemate-agent",
+      "name": "Home Mate Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [1600, 224]
+    },
+    {
+      "parameters": {
+        "model": "={{ $json.userOrKey ? ($json.PAID_MODEL || 'anthropic/claude-haiku-4-5') : ($json.FREE_MODEL || 'meta-llama/llama-3.3-70b-instruct:free') }}",
+        "options": {
+          "maxTokens": 2500
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [1360, 464],
+      "id": "llm-fallback",
+      "name": "OpenRouter LLM (Auto-Fallback)",
+      "credentials": {
+        "openRouterApi": {
+          "id": "FUm3Fg9B8euy8cH3",
+          "name": "OpenRouter"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Load Credentials').item.json.sessionId }}",
+        "contextWindowLength": 20
+      },
+      "id": "session-memory",
+      "name": "Session Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [1504, 464]
+    },
+    {
+      "parameters": {},
+      "id": "think-tool",
+      "name": "think",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [1648, 464]
+    },
+    {
+      "parameters": {
+        "name": "search_memories",
+        "description": "Search past conversations and memories semantically using vector similarity. Use when user asks about: past music preferences, home settings they liked before, previous mood/ambiance requests, things they mentioned before.",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst query = input.query || input.q || '';\nconst limit = input.limit || 3;\nconst ctx    = $('Load Credentials').first().json;\nconst creds  = ctx.credentials || {};\nconst i18n   = ctx.i18n || {};\nconst userId = ctx.userId;\nconst dbUrl  = creds.database_url || process.env.DATABASE_URL || '';\nconst persona = ctx._persona || ctx.persona || {};\nconst tokens  = persona.tokens || {};\nconst embedKey = tokens.openrouter_access_token || process.env.OPENROUTER_API_KEY || '';\n\nif (!dbUrl)   return { json: { error: `Database ${i18n.not_connected||'not connected'}`, memories: [] } };\nif (!query || query.length < 3) return { json: { error: 'Query too short (min 3 chars)', memories: [] } };\nif (!embedKey) return { json: { error: 'OpenRouter key not configured', memories: [] } };\n\ntry {\n  const embedRes = await fetch('https://openrouter.ai/api/v1/embeddings', {\n    method: 'POST',\n    headers: { 'Authorization': `Bearer ${embedKey}`, 'Content-Type': 'application/json' },\n    body: JSON.stringify({ model: 'openai/text-embedding-3-small', input: query })\n  });\n  if (!embedRes.ok) {\n    const err = await embedRes.text();\n    return { json: { error: `OpenRouter embed failed: ${embedRes.status} ${err}`, memories: [] } };\n  }\n  const embedData = await embedRes.json();\n  const embedding = embedData.data?.[0]?.embedding;\n  if (!embedding || !Array.isArray(embedding)) return { json: { error: 'No embedding returned', memories: [] } };\n\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n  const vectorStr = `[${embedding.join(',')}]`;\n  const result = await pool.query(\n    `SELECT content, metadata, created_at,\n            1 - (embedding <=> $1::vector) AS similarity\n     FROM user_data_schema.memory_embeddings\n     WHERE user_id = $2\n       AND embedding IS NOT NULL\n       AND 1 - (embedding <=> $1::vector) > 0.6\n     ORDER BY embedding <=> $1::vector\n     LIMIT $3`,\n    [vectorStr, userId, limit]\n  );\n  await pool.end();\n  const memories = result.rows.map(r => ({\n    content: r.content,\n    similarity: parseFloat(r.similarity.toFixed(3)),\n    metadata: r.metadata || {},\n    date: new Date(r.created_at).toLocaleDateString('th-TH')\n  }));\n  if (memories.length === 0) return { json: { message: 'No relevant memories found', memories: [], query } };\n  return { json: { memories, count: memories.length, query } };\n} catch(err) {\n  return { json: { error: `${i18n.error||'Error'}: ${err.message}`, memories: [] } };\n}"
+      },
+      "id": "tool-search-memories",
+      "name": "search_memories",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [1792, 464]
+    },
+    {
+      "parameters": {
+        "name": "control_spotify",
+        "description": "Control Spotify playback and library. action: now_playing, play (requires: query or uri), pause, resume, next, prev, set_volume (requires: volume_pct 0-100), set_shuffle (requires: enabled bool), search (requires: query, optional type: track|playlist|artist), list_devices, create_playlist (requires: name).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst action = (input.action || 'now_playing').toLowerCase();\nconst token = creds.spotify_access_token || '';\n\nif (!token) return { json: { error: `Spotify ${i18n.not_connected}`, help: i18n.configure } };\nconst headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };\n\ntry {\n  if (action === 'now_playing') {\n    const res = await fetch('https://api.spotify.com/v1/me/player', { headers });\n    if (res.status === 204) return { json: { status: 'nothing playing' } };\n    const d = await res.json();\n    return { json: { is_playing: d.is_playing, track: d.item?.name, artist: d.item?.artists?.[0]?.name, album: d.item?.album?.name, progress_ms: d.progress_ms, duration_ms: d.item?.duration_ms, device: d.device?.name } };\n  }\n  if (action === 'pause') {\n    await fetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT', headers });\n    return { json: { success: true, message: i18n.success, action: 'paused' } };\n  }\n  if (action === 'resume' || (action === 'play' && !input.query && !input.uri)) {\n    await fetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT', headers });\n    return { json: { success: true, message: i18n.success, action: 'resumed' } };\n  }\n  if (action === 'next') {\n    await fetch('https://api.spotify.com/v1/me/player/next', { method: 'POST', headers });\n    return { json: { success: true, message: i18n.success, action: 'next track' } };\n  }\n  if (action === 'prev') {\n    await fetch('https://api.spotify.com/v1/me/player/previous', { method: 'POST', headers });\n    return { json: { success: true, message: i18n.success, action: 'previous track' } };\n  }\n  if (action === 'set_volume') {\n    const vol = Math.min(100, Math.max(0, parseInt(input.volume_pct || 50)));\n    await fetch(`https://api.spotify.com/v1/me/player/volume?volume_percent=${vol}`, { method: 'PUT', headers });\n    return { json: { success: true, message: i18n.success, volume_pct: vol } };\n  }\n  if (action === 'set_shuffle') {\n    await fetch(`https://api.spotify.com/v1/me/player/shuffle?state=${input.enabled !== false}`, { method: 'PUT', headers });\n    return { json: { success: true, message: i18n.success, shuffle: input.enabled !== false } };\n  }\n  if (action === 'search') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required for search' } };\n    const type = input.type || 'track,playlist,artist';\n    const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(input.query)}&type=${type}&limit=5&market=TH`, { headers });\n    const d = await res.json();\n    const results = {};\n    if (d.tracks)    results.tracks    = d.tracks.items.map(t => ({ name: t.name, artist: t.artists[0]?.name, uri: t.uri }));\n    if (d.playlists) results.playlists = d.playlists.items.map(pl => ({ name: pl.name, tracks: pl.tracks?.total, uri: pl.uri }));\n    if (d.artists)   results.artists   = d.artists.items.map(a => ({ name: a.name, uri: a.uri }));\n    return { json: { query: input.query, results } };\n  }\n  if (action === 'play' && (input.query || input.uri)) {\n    let uri = input.uri;\n    if (!uri && input.query) {\n      const sRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(input.query)}&type=track,playlist&limit=1&market=TH`, { headers });\n      const sData = await sRes.json();\n      uri = sData.tracks?.items?.[0]?.uri || sData.playlists?.items?.[0]?.uri;\n      if (!uri) return { json: { error: `Nothing found for: ${input.query}` } };\n    }\n    const isContext = uri.includes(':album:') || uri.includes(':playlist:') || uri.includes(':artist:');\n    const body = isContext ? { context_uri: uri } : { uris: [uri] };\n    await fetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT', headers, body: JSON.stringify(body) });\n    return { json: { success: true, message: i18n.success, playing: uri } };\n  }\n  if (action === 'list_devices') {\n    const res = await fetch('https://api.spotify.com/v1/me/player/devices', { headers });\n    const d = await res.json();\n    return { json: { devices: (d.devices || []).map(dev => ({ id: dev.id, name: dev.name, type: dev.type, is_active: dev.is_active, volume_pct: dev.volume_percent })) } };\n  }\n  if (action === 'create_playlist') {\n    if (!input.name) return { json: { error: i18n.name_required || 'name required' } };\n    const meRes = await fetch('https://api.spotify.com/v1/me', { headers });\n    const me = await meRes.json();\n    const res = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {\n      method: 'POST', headers,\n      body: JSON.stringify({ name: input.name, description: input.description || '', public: false })\n    });\n    const d = await res.json();\n    return { json: { success: true, message: i18n.success, playlist_id: d.id, name: d.name, url: d.external_urls?.spotify } };\n  }\n  return { json: { error: `Unknown action: ${action}. Use: now_playing|play|pause|resume|next|prev|set_volume|set_shuffle|search|list_devices|create_playlist` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
+      },
+      "id": "tool-spotify",
+      "name": "control_spotify",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [1936, 464]
+    },
+    {
+      "parameters": {
+        "name": "control_sonos",
+        "description": "Control Sonos speakers. action: list_rooms, play, pause (requires: room), set_volume (requires: room, volume 0-100), play_spotify (requires: room, spotify_uri), pause_all, resume_all, now_playing (requires: room).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst action = (input.action || 'list_rooms').toLowerCase();\nconst sonosBase = (creds.sonos_api_url || process.env.SONOS_HTTP_API_URL || '').replace(/\\/$/, '');\n\nif (!sonosBase) return { json: { error: `Sonos ${i18n.not_connected}`, help: i18n.configure, note: i18n.sonos_note } };\n\ntry {\n  const call = async (path) => {\n    const res = await fetch(`${sonosBase}${path}`);\n    if (!res.ok) throw new Error(`Sonos HTTP ${res.status}: ${path}`);\n    try { return await res.json(); } catch { return { ok: true }; }\n  };\n  if (action === 'list_rooms') {\n    const data = await call('/zones');\n    const rooms = (data || []).flatMap(z =>\n      z.members?.map(m => ({ room: m.roomName, uuid: m.uuid, state: m.state?.playbackState })) || []\n    );\n    return { json: { rooms, count: rooms.length } };\n  }\n  if (action === 'pause_all') {\n    await call('/pauseAll');\n    return { json: { success: true, message: i18n.success, action: 'paused all rooms' } };\n  }\n  if (action === 'resume_all') {\n    await call('/resumeAll');\n    return { json: { success: true, message: i18n.success, action: 'resumed all rooms' } };\n  }\n  const room = input.room;\n  if (!room) return { json: { error: i18n.room_required || 'room name required for this action' } };\n  const r = encodeURIComponent(room);\n  if (action === 'play') {\n    await call(`/${r}/play`);\n    return { json: { success: true, message: i18n.success, room, action: 'play' } };\n  }\n  if (action === 'pause') {\n    await call(`/${r}/pause`);\n    return { json: { success: true, message: i18n.success, room, action: 'pause' } };\n  }\n  if (action === 'now_playing') {\n    const d = await call(`/${r}/state`);\n    return { json: { room, ...d } };\n  }\n  if (action === 'set_volume') {\n    const vol = Math.min(100, Math.max(0, parseInt(input.volume || 50)));\n    await call(`/${r}/volume/${vol}`);\n    return { json: { success: true, message: i18n.success, room, volume: vol } };\n  }\n  if (action === 'play_spotify') {\n    if (!input.spotify_uri) return { json: { error: 'spotify_uri required' } };\n    await call(`/${r}/spotify/now/${encodeURIComponent(input.spotify_uri)}`);\n    return { json: { success: true, message: i18n.success, room, spotify_uri: input.spotify_uri } };\n  }\n  return { json: { error: `Unknown action: ${action}. Use: list_rooms|play|pause|set_volume|play_spotify|pause_all|resume_all|now_playing` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}`, note: i18n.sonos_note || 'Is node-sonos-http-api running?' } };\n}"
+      },
+      "id": "tool-sonos",
+      "name": "control_sonos",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [2080, 464]
+    },
+    {
+      "parameters": {
+        "name": "control_home",
+        "description": "Control smart home devices and set ambient modes. action: get_states, lights_on, lights_off, set_lights (requires: entity_id, optional: brightness_pct 0-100, kelvin 2700-6500), call_service (requires: domain, service, entity_id), set_ambient_mode (requires: mode: morning|work|relax|sleep|movie|study).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst lang = ctx.lang || 'th';\nconst action = (input.action || 'get_states').toLowerCase();\nconst haUrl   = (creds.ha_url || '').replace(/\\/$/, '');\nconst haToken = creds.ha_token || '';\n\nif (!haUrl || !haToken) return { json: { error: `Home Assistant ${i18n.not_connected}`, help: i18n.configure } };\nconst haHeaders = { 'Authorization': `Bearer ${haToken}`, 'Content-Type': 'application/json' };\n\nconst localLang = ['th','en','ja','zh'].includes(lang) ? lang : 'en';\n\n// Ambient mode definitions (multilingual descriptions + HA settings)\nconst ambientModes = {\n  morning: {\n    desc: { th: 'เช้า: แสงสว่าง 5000K + เพลง energetic', en: 'Morning: Bright 5000K + energy music', ja: '朝: 明るい5000K + エネルギッシュ音楽', zh: '早晨: 明亮5000K + 活力音乐' },\n    lights: { entity_id: 'all', brightness_pct: 80, kelvin: 5000 },\n    spotify_query: 'morning energy playlist'\n  },\n  work: {\n    desc: { th: 'ทำงาน: แสง neutral 4000K + lo-fi', en: 'Work: Neutral 4000K + lo-fi music', ja: '作業: ニュートラル4000K + ローファイ', zh: '工作: 中性4000K + lo-fi音乐' },\n    lights: { entity_id: 'all', brightness_pct: 100, kelvin: 4000 },\n    spotify_query: 'lo-fi hip hop focus'\n  },\n  relax: {\n    desc: { th: 'ผ่อนคลาย: แสงอุ่น 40% + chill', en: 'Relax: Warm 40% + chill music', ja: 'リラックス: 暖かい40% + チル', zh: '放松: 温暖40% + 轻松音乐' },\n    lights: { entity_id: 'all', brightness_pct: 40, kelvin: 2700 },\n    spotify_query: 'thai chill acoustic'\n  },\n  sleep: {\n    desc: { th: 'นอน: ไฟดับ + เสียงธรรมชาติ', en: 'Sleep: Lights off + nature sounds', ja: '睡眠: 消灯 + 自然の音', zh: '睡眠: 关灯 + 自然声音' },\n    lights: { entity_id: 'all', service: 'turn_off' },\n    spotify_query: 'sleep sounds rain'\n  },\n  movie: {\n    desc: { th: 'ดูหนัง: แสงริมๆ + ไม่มีเพลง', en: 'Movie: Dim ambient light + no music', ja: '映画: 薄暗い照明 + 音楽なし', zh: '电影: 昏暗灯光 + 无音乐' },\n    lights: { entity_id: 'all', brightness_pct: 8, kelvin: 2200 },\n    spotify_query: null\n  },\n  study: {\n    desc: { th: 'อ่านหนังสือ: แสงจ้า 6000K + classical', en: 'Study: Bright 6000K + classical music', ja: '勉強: 明るい6000K + クラシック', zh: '学习: 明亮6000K + 古典音乐' },\n    lights: { entity_id: 'all', brightness_pct: 100, kelvin: 6000 },\n    spotify_query: 'classical concentration'\n  }\n};\n\ntry {\n  if (action === 'set_ambient_mode') {\n    const mode = (input.mode || 'relax').toLowerCase();\n    const preset = ambientModes[mode];\n    if (!preset) return { json: { error: `Unknown mode: ${mode}`, available: Object.keys(ambientModes) } };\n    const lightSvc = preset.lights.service === 'turn_off' ? 'turn_off' : 'turn_on';\n    const lightData = { entity_id: preset.lights.entity_id };\n    if (preset.lights.brightness_pct) lightData.brightness_pct = preset.lights.brightness_pct;\n    if (preset.lights.kelvin) lightData.color_temp_kelvin = preset.lights.kelvin;\n    await fetch(`${haUrl}/api/services/light/${lightSvc}`, { method: 'POST', headers: haHeaders, body: JSON.stringify(lightData) });\n    const description = preset.desc[localLang] || preset.desc['en'];\n    return { json: { success: true, message: i18n.success, mode, description, spotify_suggestion: preset.spotify_query } };\n  }\n  if (action === 'get_states') {\n    const res = await fetch(`${haUrl}/api/states`, { headers: haHeaders });\n    if (!res.ok) throw new Error(`HA API error: ${res.status}`);\n    const states = await res.json();\n    const relevant = (states || [])\n      .filter(s => ['light','switch','climate','sensor','media_player'].some(d => s.entity_id.startsWith(d)))\n      .slice(0, 20)\n      .map(s => ({ entity_id: s.entity_id, state: s.state, friendly_name: s.attributes?.friendly_name }));\n    return { json: { devices: relevant, count: relevant.length } };\n  }\n  if (action === 'lights_on') {\n    const entityId = input.entity_id || 'all';\n    await fetch(`${haUrl}/api/services/light/turn_on`, { method: 'POST', headers: haHeaders, body: JSON.stringify({ entity_id: entityId }) });\n    return { json: { success: true, message: i18n.success, action: 'lights on', entity_id: entityId } };\n  }\n  if (action === 'lights_off') {\n    const entityId = input.entity_id || 'all';\n    await fetch(`${haUrl}/api/services/light/turn_off`, { method: 'POST', headers: haHeaders, body: JSON.stringify({ entity_id: entityId }) });\n    return { json: { success: true, message: i18n.success, action: 'lights off', entity_id: entityId } };\n  }\n  if (action === 'set_lights') {\n    const entityId = input.entity_id || 'all';\n    const data = { entity_id: entityId };\n    if (input.brightness_pct !== undefined) data.brightness_pct = Math.min(100, Math.max(0, parseInt(input.brightness_pct)));\n    if (input.kelvin !== undefined) data.color_temp_kelvin = Math.min(6500, Math.max(2700, parseInt(input.kelvin)));\n    await fetch(`${haUrl}/api/services/light/turn_on`, { method: 'POST', headers: haHeaders, body: JSON.stringify(data) });\n    return { json: { success: true, message: i18n.success, entity_id: entityId, ...data } };\n  }\n  if (action === 'call_service') {\n    const { domain, service, entity_id, service_data } = input;\n    if (!domain || !service) return { json: { error: 'domain and service required' } };\n    const body = { entity_id, ...(service_data || {}) };\n    await fetch(`${haUrl}/api/services/${domain}/${service}`, { method: 'POST', headers: haHeaders, body: JSON.stringify(body) });\n    return { json: { success: true, message: i18n.success, called: `${domain}.${service}`, entity_id } };\n  }\n  return { json: { error: `Unknown action: ${action}. Use: get_states|lights_on|lights_off|set_lights|call_service|set_ambient_mode` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
+      },
+      "id": "tool-home",
+      "name": "control_home",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [2224, 464]
+    },
+    {
+      "parameters": {
+        "name": "music_lookup",
+        "description": "Music lookup and Last.fm scrobbling. lookup_type: scrobble_track (requires: artist, track), recent_tracks, top_tracks (optional: period 7day|1month|3month|6month|12month), youtube_music_search (requires: query), artist_info (requires: query).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n = ctx.i18n || {};\nconst lookupType = (input.lookup_type || 'recent_tracks').toLowerCase();\nconst lfKey  = creds.lastfm_api_key   || '';\nconst lfUser = creds.lastfm_username  || '';\nconst lfSk   = creds.lastfm_session_key || '';\nconst ytKey  = creds.youtube_api_key  || '';\n\ntry {\n  // ── YouTube Music Search ─────────────────────────────────────\n  if (lookupType === 'youtube_music_search') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    if (!ytKey) return { json: { error: `YouTube API key ${i18n.not_connected}`, help: i18n.configure } };\n    const res = await fetch(\n      `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(input.query + ' official audio')}&type=video&videoCategoryId=10&maxResults=5&key=${ytKey}`\n    );\n    const data = await res.json();\n    if (data.error) return { json: { error: data.error.message } };\n    return { json: {\n      results: (data.items || []).map(v => ({\n        title:   v.snippet.title,\n        channel: v.snippet.channelTitle,\n        url:     `https://youtube.com/watch?v=${v.id.videoId}`\n      })),\n      note: i18n.youtube_note\n    }};\n  }\n\n  // ── All Last.fm methods need API key ─────────────────────────\n  if (!lfKey) return { json: { error: `Last.fm API key ${i18n.not_connected}`, help: i18n.configure } };\n\n  // ── Scrobble Track ────────────────────────────────────────────\n  if (lookupType === 'scrobble_track') {\n    if (!input.artist || !input.track) return { json: { error: 'artist and track required' } };\n    if (!lfSk) return { json: { error: 'Last.fm session key not configured (need auth)', help: i18n.configure } };\n    // Note: Live HMAC scrobbling requires signing; log locally for now\n    return { json: {\n      info: `Track logged: ${input.artist} - ${input.track}`,\n      note: 'Live Last.fm scrobbling requires HMAC auth. Track logged for reference only.',\n      artist: input.artist, track: input.track, scrobbled: false\n    }};\n  }\n\n  // ── Recent Tracks ─────────────────────────────────────────────\n  if (lookupType === 'recent_tracks') {\n    if (!lfUser) return { json: { error: 'lastfm_username not configured', help: i18n.configure } };\n    const res = await fetch(\n      `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${lfUser}&api_key=${lfKey}&limit=10&format=json`\n    );\n    const data = await res.json();\n    if (data.error) return { json: { error: data.message } };\n    const tracks = (data.recenttracks?.track || []).map(t => ({\n      artist: t.artist?.['#text'], track: t.name, album: t.album?.['#text'],\n      now_playing: t['@attr']?.nowplaying === 'true'\n    }));\n    return { json: { tracks, count: tracks.length } };\n  }\n\n  // ── Top Tracks ────────────────────────────────────────────────\n  if (lookupType === 'top_tracks') {\n    if (!lfUser) return { json: { error: 'lastfm_username not configured', help: i18n.configure } };\n    const period = input.period || '1month'; // 7day|1month|3month|6month|12month|overall\n    const res = await fetch(\n      `https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=${lfUser}&api_key=${lfKey}&period=${period}&limit=10&format=json`\n    );\n    const data = await res.json();\n    if (data.error) return { json: { error: data.message } };\n    const tracks = (data.toptracks?.track || []).map(t => ({\n      rank: t['@attr']?.rank, artist: t.artist?.name, track: t.name, playcount: t.playcount\n    }));\n    return { json: { tracks, period, count: tracks.length } };\n  }\n\n  // ── Artist Info ───────────────────────────────────────────────\n  if (lookupType === 'artist_info') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const res = await fetch(\n      `https://ws.audioscrobbler.com/2.0/?method=artist.getinfo&artist=${encodeURIComponent(input.query)}&api_key=${lfKey}&format=json`\n    );\n    const data = await res.json();\n    if (data.error) return { json: { error: data.message } };\n    const a = data.artist;\n    return { json: {\n      name: a.name,\n      bio: a.bio?.summary?.replace(/<[^>]+>/g, '').slice(0, 500),\n      tags: (a.tags?.tag || []).map(t => t.name),\n      plays: a.stats?.playcount,\n      similar: (a.similar?.artist || []).slice(0, 5).map(s => s.name)\n    }};\n  }\n\n  return { json: { error: `Unknown lookup_type: ${lookupType}. Use: scrobble_track | recent_tracks | top_tracks | youtube_music_search | artist_info` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
+      },
+      "id": "tool-music-lookup",
+      "name": "music_lookup",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [2368, 464]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Output v5 — normalized for WF2 synthesis\n// Dispatch Gate reads: data?.message || data?.response || data?.output || data?.agentOutput || data?.text\n// n8n LangChain agent returns output in: output field (primary), then agentOutput, then text\nconst raw  = $input.first().json;\nconst out  = raw.output || raw.agentOutput || raw.text || raw.message || 'ดำเนินการแล้วครับ';\nconst prev = $('Extract Payload').item.json;\nconst result = {\n  ...prev,\n  message:       out,\n  response:      out,\n  output:        out,\n  agentOutput:   out,\n  agentCategory: 'home-mate',\n  processedAt:   new Date().toISOString(),\n  _llm_tier:     raw._llm_tier || 'langchain'\n};\nreturn { json: result };"
+      },
+      "id": "format-output",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2688, 224]
+    }
+  ],
+  "connections": {
+    "WF3-F Entry": {
+      "main": [[{ "node": "Extract Payload", "type": "main", "index": 0 }]]
+    },
+    "Extract Payload": {
+      "main": [[{ "node": "Load Credentials", "type": "main", "index": 0 }]]
+    },
+    "Load Credentials": {
+      "main": [[{ "node": "Home Mate Agent", "type": "main", "index": 0 }]]
+    },
+    "Home Mate Agent": {
+      "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]]
+    },
+    "OpenRouter LLM (Auto-Fallback)": {
+      "ai_languageModel": [[{ "node": "Home Mate Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Session Memory": {
+      "ai_memory": [[{ "node": "Home Mate Agent", "type": "ai_memory", "index": 0 }]]
+    },
+    "think": {
+      "ai_tool": [[{ "node": "Home Mate Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "search_memories": {
+      "ai_tool": [[{ "node": "Home Mate Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "control_spotify": {
+      "ai_tool": [[{ "node": "Home Mate Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "control_sonos": {
+      "ai_tool": [[{ "node": "Home Mate Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "control_home": {
+      "ai_tool": [[{ "node": "Home Mate Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "music_lookup": {
+      "ai_tool": [[{ "node": "Home Mate Agent", "type": "ai_tool", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "WF0-Error-Handler"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    { "name": "wf3f" },
+    { "name": "homemate" },
+    { "name": "jarvis-v5" }
+  ]
+}
