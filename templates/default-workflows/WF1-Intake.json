@@ -12,7 +12,10 @@
       "name": "Webhook /chat",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [-224, -96],
+      "position": [
+        -224,
+        -96
+      ],
       "webhookId": "sunday-chat"
     },
     {
@@ -26,7 +29,10 @@
       "name": "Webhook /voice-text",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [-224, 96],
+      "position": [
+        -224,
+        64
+      ],
       "webhookId": "sunday-voice-text"
     },
     {
@@ -37,7 +43,10 @@
       "name": "Normalize Chat",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [16, -96]
+      "position": [
+        16,
+        -96
+      ]
     },
     {
       "parameters": {
@@ -47,54 +56,45 @@
       "name": "Normalize Voice",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [16, 96]
+      "position": [
+        16,
+        64
+      ]
     },
     {
       "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "Brain Router",
-          "mode": "name"
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "id": "074fdc9b-2644-4854-899a-53819f36d53a-chat",
-      "name": "→ WF2 Brain (Chat)",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
-      "position": [256, -96]
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "Brain Router",
-          "mode": "name"
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "id": "074fdc9b-2644-4854-899a-53819f36d53a-voice",
-      "name": "→ WF2 Brain (Voice)",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
-      "position": [256, 96]
-    },
-
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $json }}",
+        "mode": "combine",
+        "combineBy": "combineAll",
         "options": {}
       },
-      "id": "45c6c95e-2239-43b8-b9cd-74b740058193-chat",
-      "name": "Respond (Chat)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [496, -96]
+      "id": "6ef93227-b353-43d0-a48c-b27639515d13",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        256,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $env.WF2_BRAIN_ID }}",
+          "mode": "expression"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "074fdc9b-2644-4854-899a-53819f36d53a",
+      "name": "→ WF2 Brain",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        496,
+        -16
+      ]
     },
     {
       "parameters": {
@@ -102,41 +102,92 @@
         "responseBody": "={{ $json }}",
         "options": {}
       },
-      "id": "45c6c95e-2239-43b8-b9cd-74b740058193-voice",
-      "name": "Respond (Voice)",
+      "id": "45c6c95e-2239-43b8-b9cd-74b740058193",
+      "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [496, 96]
+      "position": [
+        736,
+        -16
+      ]
     }
   ],
   "pinData": {},
   "connections": {
     "Webhook /chat": {
-      "main": [[{ "node": "Normalize Chat", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Normalize Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Webhook /voice-text": {
-      "main": [[{ "node": "Normalize Voice", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Normalize Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Normalize Chat": {
-      "main": [[{ "node": "→ WF2 Brain (Chat)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Normalize Voice": {
-      "main": [[{ "node": "→ WF2 Brain (Voice)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
     },
-    "→ WF2 Brain (Chat)": {
-      "main": [[{ "node": "Respond (Chat)", "type": "main", "index": 0 }]]
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "→ WF2 Brain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "→ WF2 Brain (Voice)": {
-      "main": [[{ "node": "Respond (Voice)", "type": "main", "index": 0 }]]
+    "→ WF2 Brain": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "8d5a9c0a-696d-4538-bbba-bf1c20822997-fixed",
+  "versionId": "8d5a9c0a-696d-4538-bbba-bf1c20822997",
   "meta": {
     "instanceId": "c3a8077648ce894608db1ade94831096370fb6a0453430d193f6c81b3c8cc1cb"
   },
