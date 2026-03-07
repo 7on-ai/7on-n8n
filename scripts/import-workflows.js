@@ -185,6 +185,59 @@ async function importWorkflowWithRetry(baseUrl, cookies, workflowData, fileName)
   throw new Error(`Failed to import after ${CONFIG.MAX_IMPORT_RETRIES} attempts`);
 }
 
+// ─── Patch WF1 → inject real WF2 ID into executeWorkflow node ─────────────
+// เหตุผล: n8n executeWorkflow node ต้องการ Workflow ID จริงของ instance นั้น
+// WF1 template เก็บ placeholder "PATCH_WF2_ID_HERE" ไว้ใน value ของ executeWorkflow node
+// หลังจาก import ทั้งคู่แล้ว ให้ replace placeholder ด้วย wf2Id จริง
+// แล้ว PUT กลับก่อนที่จะ activate WF1
+async function patchWF1WithWF2Id(baseUrl, cookies, wf1Id, wf2Id) {
+  console.log(`\n🔧 Phase 1.5: Patching WF1 (${wf1Id}) with WF2 ID (${wf2Id})...`);
+
+  try {
+    // ดึง WF1 ที่ import ไปแล้ว
+    const getRes = await axios.get(`${baseUrl}/rest/workflows/${wf1Id}`, {
+      headers: { Cookie: cookies },
+      timeout: 30000,
+      validateStatus: () => true,
+    });
+
+    if (getRes.status !== 200 || !getRes.data?.data) {
+      console.log(`   ❌ Cannot fetch WF1 for patching: ${getRes.status}`);
+      return false;
+    }
+
+    const wf1Data = getRes.data.data;
+
+    // Replace placeholder ด้วย wf2Id จริงในทุก node (ครอบคลุมกรณีมีหลาย node)
+    const patchedJson = JSON.stringify(wf1Data).replaceAll('PATCH_WF2_ID_HERE', wf2Id);
+    const patchedData = JSON.parse(patchedJson);
+
+    // PUT กลับ (replace ทั้ง workflow)
+    const putRes = await axios.put(
+      `${baseUrl}/rest/workflows/${wf1Id}`,
+      patchedData,
+      {
+        headers: { 'Content-Type': 'application/json', Cookie: cookies },
+        timeout: 60000,
+        validateStatus: () => true,
+        maxContentLength: 50 * 1024 * 1024,
+        maxBodyLength: 50 * 1024 * 1024,
+      }
+    );
+
+    if (putRes.status === 200 || putRes.status === 201) {
+      console.log(`   ✅ WF1 patched — executeWorkflow → wf2Id: ${wf2Id}`);
+      return true;
+    }
+
+    console.log(`   ❌ PUT failed: ${putRes.status} — ${JSON.stringify(putRes.data).slice(0, 200)}`);
+    return false;
+  } catch (err) {
+    console.log(`   ❌ patchWF1WithWF2Id error: ${err.message}`);
+    return false;
+  }
+}
+
 // ─── Find workflow by name ─────────────────────────────────────────────────
 async function findWorkflowByName(baseUrl, cookies, name) {
   try {
@@ -393,6 +446,38 @@ async function importWorkflows() {
     importResults.filter((r) => r.error).forEach((r) => {
       console.log(`   ❌ ${r.file}: ${r.error}`);
     });
+  }
+
+  // ── Phase 1.5: Patch WF1 → inject real WF2 ID ───────────────────────────
+  // ทำก่อน activate เพราะ n8n validate executeWorkflow node ตอน activate
+  // WF1 template ใช้ placeholder "PATCH_WF2_ID_HERE" แทน wf2Id จริง
+  // ตอนนี้ทั้ง WF1 และ WF2 import แล้ว เราจึงรู้ wf2Id จริงแล้ว
+  console.log('\n' + '═'.repeat(60));
+  console.log('🔧 PHASE 1.5: PATCH WF1 → WF2 REFERENCE');
+  console.log('═'.repeat(60));
+
+  const wf1Result = importResults.find(
+    (r) => r.file && r.file.toLowerCase().includes('wf1') && r.workflowId
+  );
+  const wf2Result = importResults.find(
+    (r) => r.file && r.file.toLowerCase().includes('wf2') && r.workflowId
+  );
+
+  if (wf1Result && wf2Result) {
+    console.log(`   WF1 id: ${wf1Result.workflowId} | WF2 id: ${wf2Result.workflowId}`);
+    const patchOk = await patchWF1WithWF2Id(
+      baseUrl,
+      cookies,
+      wf1Result.workflowId,
+      wf2Result.workflowId
+    );
+    if (!patchOk) {
+      console.log('   ⚠️  Patch failed — WF1 may not activate correctly');
+    }
+  } else {
+    console.log('   ℹ️  WF1/WF2 not both present — skipping patch');
+    if (!wf1Result) console.log('   (WF1 not found in import results)');
+    if (!wf2Result) console.log('   (WF2 not found in import results)');
   }
 
   // ── Phase 2: Activate workflows that need it ─────────────────────────────
