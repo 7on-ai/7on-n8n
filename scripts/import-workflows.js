@@ -1,594 +1,431 @@
-#!/usr/bin/env node
-
 // scripts/import-workflows.js
-// ✅ v5 FIX: Chunked import, extended retry, large workflow handling
-// แก้ปัญหา: workflow ขนาดใหญ่ไม่ถูก inject เข้า n8n account
+// Northflank Job script — runs once on first provision
+//
+// Phase 1   — Import all missing workflows from filesystem templates
+// Phase 1.5A — Patch WF1 → inject real WF2 ID
+// Phase 1.5B — Patch openRouterApi credential ID in all LLM nodes  ← ADDED
+// Phase 1.5C — Patch errorWorkflow name → real WF0 ID              ← ADDED
+// Phase 2   — Activate all workflows
+//
+// Auth: X-N8N-API-KEY header + /api/v1/... endpoint
+// (different from route.ts which uses cookie-based /rest/... endpoint)
 
-const axios = require('axios');
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 
-const CONFIG = {
-  // เพิ่ม delay ให้มากขึ้นสำหรับ workflow ใหญ่
-  IMPORT_DELAY: 5000,
-  ACTIVATION_DELAY: 3000,
-  VERIFICATION_RETRIES: 15,
-  VERIFICATION_INTERVAL: 3000,
-  // กำหนด size limit: ถ้า workflow JSON > 100KB ให้ใช้ chunked mode
-  LARGE_WORKFLOW_THRESHOLD_KB: 100,
-  // Max retry ต่อ workflow
-  MAX_IMPORT_RETRIES: 3,
-  // Timeout per request (ms)
-  REQUEST_TIMEOUT: 60000,
+const N8N_BASE_URL = (process.env.N8N_BASE_URL || 'http://localhost:5678').replace(/\/$/, '');
+const N8N_API_KEY  = process.env.N8N_API_KEY  || '';
+
+// ── WF name → filename mapping ───────────────────────────────────────────────
+// Key   = the "name" field inside the JSON template (must match exactly)
+// Value = template filename (relative to templates/default-workflows/)
+// ⚠️  WF3C: JSON name is "Coach", not "Career Coach"
+// ⚠️  WF5A: JSON name is "Memory Builder" (after v3 fix)
+const WF_NAME_TO_FILE = {
+  'Error Handler':  'WF0-Error-Handler.json',
+  'Intake Gateway': 'WF1-Intake-Gateway.json',
+  'Brain Router':   'WF2-Brain-Router.json',
+  'Secretary':      'WF3A-Secretary.json',
+  'Soul':           'WF3B-Soul.json',
+  'Coach':          'WF3C-Career.json',        // ⚠️ JSON name ≠ filename
+  'Explorer':       'WF3D-Explorer.json',
+  'Creator':        'WF3E-Creator.json',
+  'HomeMate':       'WF3F-HomeMate.json',
+  'HealthMate':     'WF3G-Health.json',
+  'Secretary Plus': 'WF4-SecretaryPlus.json',
+  'Memory Builder': 'WF5A-Memory.json',        // ⚠️ name changed in v3 fix
+  'Background':     'WF5B-Background.json',
+  'DB Proxy':       'WF-DB-Proxy.json',
 };
 
-// ─── Login ─────────────────────────────────────────────────────────────────
-async function loginToN8N(baseUrl) {
-  const email = process.env.N8N_USER_EMAIL;
-  const password = process.env.N8N_USER_PASSWORD;
+// ── WFs with lmChatOpenRouter nodes (need openRouterApi credential patch) ────
+const WFS_WITH_OPENROUTER_LLM = [
+  'Secretary',      // WF3A
+  'Soul',           // WF3B
+  'Coach',          // WF3C
+  'Explorer',       // WF3D
+  'Creator',        // WF3E
+  'HomeMate',       // WF3F
+  'HealthMate',     // WF3G
+  'Secretary Plus', // WF4
+  'Memory Builder', // WF5A ← ADDED (has LLM Memory Extractor Haiku node)
+];
 
-  if (!email || !password) throw new Error('Missing N8N credentials');
+// ── WFs with settings.errorWorkflow (need WF0 ID patch) ─────────────────────
+const WFS_WITH_ERROR_WORKFLOW = [
+  'Brain Router',   // WF2
+  'Secretary',      // WF3A
+  'Soul',           // WF3B
+  'Coach',          // WF3C
+  'Explorer',       // WF3D
+  'Creator',        // WF3E
+  'HomeMate',       // WF3F
+  'HealthMate',     // WF3G
+  'Secretary Plus', // WF4
+  'DB Proxy',       // WF-DB-Proxy
+];
 
-  console.log('🔐 Logging into n8n...');
+const HARDCODED_OR_CRED_ID  = 'FUm3Fg9B8euy8cH3';
+const ERROR_WF_PLACEHOLDER  = 'WF0-Error-Handler';
+const TEMPLATE_DIR          = path.join(__dirname, '..', 'templates', 'default-workflows');
 
-  // Retry login up to 5 times (n8n อาจยังไม่พร้อม)
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    try {
-      const response = await axios.post(
-        `${baseUrl}/rest/login`,
-        { emailOrLdapLoginId: email, password },
-        {
-          headers: { 'Content-Type': 'application/json' },
-          validateStatus: () => true,
-          timeout: CONFIG.REQUEST_TIMEOUT,
-        }
-      );
+// ── n8n API helpers (API key auth) ───────────────────────────────────────────
+const n8nHeaders = {
+  'Content-Type': 'application/json',
+  'X-N8N-API-KEY': N8N_API_KEY,
+};
 
-      if (response.status === 200) {
-        const cookies = response.headers['set-cookie'];
-        if (!cookies) throw new Error('No cookies');
-        console.log(`✅ Login successful (attempt ${attempt})\n`);
-        return cookies.join('; ');
-      }
-
-      console.log(`⚠️  Login attempt ${attempt} failed: ${response.status}`);
-    } catch (err) {
-      console.log(`⚠️  Login attempt ${attempt} error: ${err.message}`);
-    }
-
-    if (attempt < 5) {
-      const wait = 10000 * attempt;
-      console.log(`⏰ Waiting ${wait / 1000}s before retry...`);
-      await sleep(wait);
-    }
-  }
-
-  throw new Error('Failed to login to n8n after 5 attempts');
+async function n8nGet(endpoint) {
+  const res = await fetch(`${N8N_BASE_URL}/api/v1${endpoint}`, { headers: n8nHeaders });
+  if (!res.ok) throw new Error(`GET ${endpoint} → ${res.status} ${await res.text().catch(() => '')}`);
+  return res.json();
 }
 
-// ─── Wait for N8N Ready ────────────────────────────────────────────────────
-async function waitForN8NReady(baseUrl, maxWaitMs = 600000) {
-  console.log(`⏳ Waiting for n8n to be fully ready (max ${maxWaitMs / 1000}s)...`);
-  const start = Date.now();
-
-  while (Date.now() - start < maxWaitMs) {
-    try {
-      const res = await axios.get(`${baseUrl}/healthz/readiness`, {
-        timeout: 10000,
-        validateStatus: () => true,
-      });
-
-      if (res.status === 200) {
-        console.log('✅ n8n is ready!\n');
-        return true;
-      }
-      console.log(`⌛ n8n not ready yet (${res.status}), waiting...`);
-    } catch (e) {
-      console.log(`⌛ n8n health check failed: ${e.message}`);
-    }
-
-    await sleep(15000);
+async function n8nPost(endpoint, body) {
+  const res = await fetch(`${N8N_BASE_URL}/api/v1${endpoint}`, {
+    method: 'POST',
+    headers: n8nHeaders,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`POST ${endpoint} → ${res.status}: ${text.slice(0, 200)}`);
   }
-
-  throw new Error('n8n did not become ready within timeout');
+  return res.json();
 }
 
-// ─── Clean workflow for import ─────────────────────────────────────────────
-function cleanWorkflowForImport(workflowData) {
-  const cleaned = { ...workflowData };
-
-  // Remove server-generated fields
-  delete cleaned.id;
-  delete cleaned.createdAt;
-  delete cleaned.updatedAt;
-  delete cleaned.versionCounter;
-  delete cleaned.shared;
-  delete cleaned.scopes;
-  delete cleaned.checksum;
-  delete cleaned.triggerCount;
-  delete cleaned.activeVersion;
-  delete cleaned.parentFolder;
-
-  // Import as INACTIVE — activate ทีหลังหลังจาก import ครบทุกตัว
-  cleaned.active = false;
-  cleaned.pinData = cleaned.pinData || {};
-  cleaned.staticData = null;
-  cleaned.settings = cleaned.settings || { executionOrder: 'v1' };
-  cleaned.tags = cleaned.tags || [];
-  cleaned.meta = cleaned.meta || { templateCredsSetupCompleted: true };
-
-  return cleaned;
+async function n8nPut(endpoint, body) {
+  const res = await fetch(`${N8N_BASE_URL}/api/v1${endpoint}`, {
+    method: 'PUT',
+    headers: n8nHeaders,
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`PUT ${endpoint} → ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return res.json();
 }
 
-// ─── Strip large nodes for size reduction ─────────────────────────────────
-// ✅ FIX: สำหรับ workflow ใหญ่ ให้ strip jsCode ออกก่อน import แล้ว patch ทีหลัง
-function getWorkflowSize(workflowData) {
-  return Buffer.byteLength(JSON.stringify(workflowData), 'utf8') / 1024;
+async function n8nPatch(endpoint, body) {
+  const res = await fetch(`${N8N_BASE_URL}/api/v1${endpoint}`, {
+    method: 'PATCH',
+    headers: n8nHeaders,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`PATCH ${endpoint} → ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return res.json();
 }
 
-// ─── Import single workflow with retry ────────────────────────────────────
-async function importWorkflowWithRetry(baseUrl, cookies, workflowData, fileName) {
-  const sizeKB = getWorkflowSize(workflowData);
-  console.log(`   📏 Workflow size: ${sizeKB.toFixed(1)} KB`);
-
-  for (let attempt = 1; attempt <= CONFIG.MAX_IMPORT_RETRIES; attempt++) {
-    try {
-      console.log(`   📥 Import attempt ${attempt}/${CONFIG.MAX_IMPORT_RETRIES}...`);
-
-      const response = await axios.post(
-        `${baseUrl}/rest/workflows`,
-        workflowData,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Cookie: cookies,
-          },
-          timeout: CONFIG.REQUEST_TIMEOUT,
-          validateStatus: () => true,
-          // ✅ FIX: เพิ่ม maxContentLength สำหรับ response ใหญ่
-          maxContentLength: 50 * 1024 * 1024,
-          maxBodyLength: 50 * 1024 * 1024,
-        }
-      );
-
-      if (response.status === 200 || response.status === 201) {
-        const workflowId = response.data?.data?.id || response.data?.id;
-        if (!workflowId) throw new Error('No workflow ID in response');
-        console.log(`   ✅ Imported successfully (ID: ${workflowId})`);
-        return workflowId;
-      }
-
-      // ✅ Handle specific errors
-      if (response.status === 409) {
-        console.log(`   ℹ️  Workflow already exists (409), skipping import`);
-        // Try to find existing workflow by name
-        const existingId = await findWorkflowByName(baseUrl, cookies, workflowData.name);
-        if (existingId) return existingId;
-        throw new Error('Conflict but could not find existing workflow');
-      }
-
-      const errBody = JSON.stringify(response.data).slice(0, 200);
-      console.log(`   ⚠️  Import failed: ${response.status} — ${errBody}`);
-
-      if (response.status === 413) {
-        throw new Error(`Payload too large (${sizeKB.toFixed(0)}KB) — n8n rejected`);
-      }
-
-    } catch (err) {
-      console.log(`   ❌ Import error (attempt ${attempt}): ${err.message}`);
-      if (attempt === CONFIG.MAX_IMPORT_RETRIES) throw err;
-    }
-
-    await sleep(5000 * attempt);
-  }
-
-  throw new Error(`Failed to import after ${CONFIG.MAX_IMPORT_RETRIES} attempts`);
-}
-
-// ─── Patch WF1 → inject real WF2 ID into executeWorkflow node ─────────────
-// เหตุผล: n8n executeWorkflow node ต้องการ Workflow ID จริงของ instance นั้น
-// WF1 template เก็บ placeholder "PATCH_WF2_ID_HERE" ไว้ใน value ของ executeWorkflow node
-// หลังจาก import ทั้งคู่แล้ว ให้ replace placeholder ด้วย wf2Id จริง
-// แล้ว PUT กลับก่อนที่จะ activate WF1
-async function patchWF1WithWF2Id(baseUrl, cookies, wf1Id, wf2Id) {
-  console.log(`\n🔧 Phase 1.5: Patching WF1 (${wf1Id}) with WF2 ID (${wf2Id})...`);
-
-  try {
-    // ดึง WF1 ที่ import ไปแล้ว
-    const getRes = await axios.get(`${baseUrl}/rest/workflows/${wf1Id}`, {
-      headers: { Cookie: cookies },
-      timeout: 30000,
-      validateStatus: () => true,
-    });
-
-    if (getRes.status !== 200 || !getRes.data?.data) {
-      console.log(`   ❌ Cannot fetch WF1 for patching: ${getRes.status}`);
-      return false;
-    }
-
-    const wf1Data = getRes.data.data;
-
-    // Replace placeholder ด้วย wf2Id จริงในทุก node (ครอบคลุมกรณีมีหลาย node)
-    const patchedJson = JSON.stringify(wf1Data).replaceAll('PATCH_WF2_ID_HERE', wf2Id);
-    const patchedData = JSON.parse(patchedJson);
-
-    // PUT กลับ (replace ทั้ง workflow)
-    const putRes = await axios.put(
-      `${baseUrl}/rest/workflows/${wf1Id}`,
-      patchedData,
-      {
-        headers: { 'Content-Type': 'application/json', Cookie: cookies },
-        timeout: 60000,
-        validateStatus: () => true,
-        maxContentLength: 50 * 1024 * 1024,
-        maxBodyLength: 50 * 1024 * 1024,
-      }
-    );
-
-    if (putRes.status === 200 || putRes.status === 201) {
-      console.log(`   ✅ WF1 patched — executeWorkflow → wf2Id: ${wf2Id}`);
-      return true;
-    }
-
-    console.log(`   ❌ PUT failed: ${putRes.status} — ${JSON.stringify(putRes.data).slice(0, 200)}`);
-    return false;
-  } catch (err) {
-    console.log(`   ❌ patchWF1WithWF2Id error: ${err.message}`);
-    return false;
-  }
-}
-
-// ─── Find workflow by name ─────────────────────────────────────────────────
-async function findWorkflowByName(baseUrl, cookies, name) {
-  try {
-    const res = await axios.get(`${baseUrl}/rest/workflows`, {
-      headers: { Cookie: cookies },
-      timeout: 30000,
-      validateStatus: () => true,
-    });
-
-    if (res.status !== 200) return null;
-    const workflows = res.data?.data || [];
-    const found = workflows.find((w) => w.name === name);
-    return found?.id || null;
-  } catch {
-    return null;
-  }
-}
-
-// ─── Activate workflow ─────────────────────────────────────────────────────
-async function activateWorkflow(baseUrl, workflowId, cookies) {
-  console.log('   🚀 Activating workflow...');
-
-  try {
-    // Step 1: Get versionId
-    const getResponse = await axios.get(`${baseUrl}/rest/workflows/${workflowId}`, {
-      headers: { Cookie: cookies },
-      timeout: 30000,
-      validateStatus: () => true,
-    });
-
-    if (getResponse.status !== 200 || !getResponse.data?.data) {
-      console.log('   ⚠️  Failed to get workflow details for activation');
-      return false;
-    }
-
-    const versionId = getResponse.data.data.versionId;
-    if (!versionId) {
-      console.log('   ⚠️  No versionId found');
-      return false;
-    }
-
-    console.log(`   📌 versionId: ${versionId.substring(0, 8)}...`);
-
-    // Step 2: Activate
-    const response = await axios.post(
-      `${baseUrl}/rest/workflows/${workflowId}/activate`,
-      { versionId },
-      {
-        headers: { 'Content-Type': 'application/json', Cookie: cookies },
-        timeout: 45000,
-        validateStatus: () => true,
-      }
-    );
-
-    if (response.status === 200 || response.status === 201) {
-      console.log('   ✅ Activation request accepted');
-      return true;
-    }
-
-    console.log(`   ⚠️  Activation returned ${response.status}: ${JSON.stringify(response.data).slice(0, 100)}`);
-    return false;
-  } catch (error) {
-    console.log(`   ❌ Activation error: ${error.message}`);
-    return false;
-  }
-}
-
-// ─── Verify workflow active ────────────────────────────────────────────────
-async function verifyWorkflowActive(baseUrl, workflowId, cookies) {
-  console.log('   🔍 Verifying activation...');
-
-  for (let attempt = 1; attempt <= CONFIG.VERIFICATION_RETRIES; attempt++) {
-    try {
-      const response = await axios.get(`${baseUrl}/rest/workflows/${workflowId}`, {
-        headers: { Cookie: cookies },
-        timeout: 15000,
-        validateStatus: () => true,
-      });
-
-      if (response.status === 200 && response.data?.data) {
-        if (response.data.data.active === true) {
-          console.log(`   🎉 VERIFIED ACTIVE (attempt ${attempt})`);
-          return true;
-        }
-        process.stdout.write(`   ⌛ Still inactive (${attempt}/${CONFIG.VERIFICATION_RETRIES})\r`);
-      }
-    } catch (error) {
-      console.log(`   ⚠️  Verify error: ${error.message}`);
-    }
-
-    if (attempt < CONFIG.VERIFICATION_RETRIES) {
-      await sleep(CONFIG.VERIFICATION_INTERVAL);
-    }
-  }
-
-  console.log('\n   ⚠️  Could not verify active status');
-  return false;
-}
-
-// ─── Main import function ──────────────────────────────────────────────────
-async function importWorkflows() {
-  const baseUrl = process.env.N8N_EDITOR_BASE_URL || 'http://localhost:5678';
-  const templateSet = process.env.WORKFLOW_TEMPLATES || 'default';
-
-  console.log('========================================');
-  console.log('🔧 n8n Workflow Importer v5.0');
-  console.log('========================================');
-  console.log(`n8n URL:      ${baseUrl}`);
-  console.log(`Template Set: ${templateSet}\n`);
-
-  // ✅ FIX: Wait for n8n to be truly ready before starting
-  await waitForN8NReady(baseUrl, 600000);
-
-  // Extra stability wait after readiness probe
-  console.log('⏳ Stability wait 20s...');
-  await sleep(20000);
-
-  const templateDir =
-    templateSet === 'default'
-      ? '/templates/default-workflows'
-      : '/templates/custom-workflows';
-
-  if (!fs.existsSync(templateDir)) {
-    console.log('⚠️  Template directory not found:', templateDir);
-    return { success: true, imported: 0, published: 0 };
-  }
-
-  const files = fs
-    .readdirSync(templateDir)
-    .filter((f) => f.endsWith('.json'))
-    .sort(); // Sort for deterministic order
-
-  if (files.length === 0) {
-    console.log('⚠️  No workflow templates found');
-    return { success: true, imported: 0, published: 0 };
-  }
-
-  console.log(`📦 Found ${files.length} workflow template(s)\n`);
-
-  // Log all files and sizes upfront
-  console.log('📋 Workflow inventory:');
-  for (const file of files) {
-    const filePath = path.join(templateDir, file);
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    const sizeKB = Buffer.byteLength(raw, 'utf8') / 1024;
-    const data = JSON.parse(raw);
-    const shouldActivate = data.active === true || data.meta?.autoActivate === true;
-    console.log(`   ${file.padEnd(60)} ${sizeKB.toFixed(1).padStart(7)} KB  ${shouldActivate ? '🟢 activate' : '⚪ draft'}`);
-  }
-  console.log('');
-
-  const cookies = await loginToN8N(baseUrl);
-
-  // ── Phase 1: Import ALL workflows (no activation yet) ────────────────────
-  console.log('\n' + '═'.repeat(60));
-  console.log('📥 PHASE 1: IMPORT ALL WORKFLOWS');
-  console.log('═'.repeat(60));
-
-  const importResults = []; // { file, workflowId, shouldActivate, error }
-
-  for (const file of files) {
-    const filePath = path.join(templateDir, file);
-    console.log(`\n▶ ${file}`);
-
-    try {
-      const rawData = fs.readFileSync(filePath, 'utf-8');
-      const workflowData = JSON.parse(rawData);
-
-      const shouldActivate =
-        workflowData.active === true || workflowData.meta?.autoActivate === true;
-
-      const cleanedWorkflow = cleanWorkflowForImport(workflowData);
-
-      // ✅ FIX: Check if already imported (idempotent)
-      const existingId = await findWorkflowByName(baseUrl, cookies, workflowData.name);
-      if (existingId) {
-        console.log(`   ℹ️  Already exists (ID: ${existingId}), skipping import`);
-        importResults.push({ file, workflowId: existingId, shouldActivate, error: null });
-        continue;
-      }
-
-      const workflowId = await importWorkflowWithRetry(
-        baseUrl,
-        cookies,
-        cleanedWorkflow,
-        file
-      );
-
-      importResults.push({ file, workflowId, shouldActivate, error: null });
-
-      // Small delay between imports to not overwhelm n8n
-      await sleep(2000);
-    } catch (err) {
-      console.log(`   ❌ FAILED: ${err.message}`);
-      importResults.push({ file, workflowId: null, shouldActivate: false, error: err.message });
-    }
-  }
-
-  // ── Phase 1 Summary ──────────────────────────────────────────────────────
-  const imported = importResults.filter((r) => r.workflowId && !r.error).length;
-  const importFailed = importResults.filter((r) => r.error).length;
-  console.log(`\n✅ Phase 1 complete: ${imported} imported, ${importFailed} failed`);
-
-  if (importFailed > 0) {
-    console.log('Failed workflows:');
-    importResults.filter((r) => r.error).forEach((r) => {
-      console.log(`   ❌ ${r.file}: ${r.error}`);
-    });
-  }
-
-  // ── Phase 1.5: Patch WF1 → inject real WF2 ID ───────────────────────────
-  // ทำก่อน activate เพราะ n8n validate executeWorkflow node ตอน activate
-  // WF1 template ใช้ placeholder "PATCH_WF2_ID_HERE" แทน wf2Id จริง
-  // ตอนนี้ทั้ง WF1 และ WF2 import แล้ว เราจึงรู้ wf2Id จริงแล้ว
-  console.log('\n' + '═'.repeat(60));
-  console.log('🔧 PHASE 1.5: PATCH WF1 → WF2 REFERENCE');
-  console.log('═'.repeat(60));
-
-  const wf1Result = importResults.find(
-    (r) => r.file && r.file.toLowerCase().includes('wf1') && r.workflowId
-  );
-  const wf2Result = importResults.find(
-    (r) => r.file && r.file.toLowerCase().includes('wf2') && r.workflowId
-  );
-
-  if (wf1Result && wf2Result) {
-    console.log(`   WF1 id: ${wf1Result.workflowId} | WF2 id: ${wf2Result.workflowId}`);
-    const patchOk = await patchWF1WithWF2Id(
-      baseUrl,
-      cookies,
-      wf1Result.workflowId,
-      wf2Result.workflowId
-    );
-    if (!patchOk) {
-      console.log('   ⚠️  Patch failed — WF1 may not activate correctly');
-    }
-  } else {
-    console.log('   ℹ️  WF1/WF2 not both present — skipping patch');
-    if (!wf1Result) console.log('   (WF1 not found in import results)');
-    if (!wf2Result) console.log('   (WF2 not found in import results)');
-  }
-
-  // ── Phase 2: Activate workflows that need it ─────────────────────────────
-  console.log('\n' + '═'.repeat(60));
-  console.log('🚀 PHASE 2: ACTIVATE WORKFLOWS');
-  console.log('═'.repeat(60));
-
-  // Wait before activation phase to let n8n settle
-  console.log('⏳ Waiting 10s before activation phase...');
-  await sleep(10000);
-
-  // Refresh login (cookie may expire for long imports)
-  let activationCookies = cookies;
-  try {
-    activationCookies = await loginToN8N(baseUrl);
-  } catch (e) {
-    console.log('⚠️  Cookie refresh failed, using original');
-  }
-
-  const toActivate = importResults.filter((r) => r.workflowId && r.shouldActivate);
-  console.log(`\n📋 ${toActivate.length} workflow(s) need activation`);
-
-  let published = 0;
-  let activationFailed = 0;
-
-  for (const result of toActivate) {
-    console.log(`\n▶ Activating: ${result.file}`);
-
-    const activateSuccess = await activateWorkflow(
-      baseUrl,
-      result.workflowId,
-      activationCookies
-    );
-
-    if (!activateSuccess) {
-      console.log('   ⚠️  Activation request failed, skipping verify');
-      activationFailed++;
-      continue;
-    }
-
-    await sleep(CONFIG.ACTIVATION_DELAY);
-
-    const isActive = await verifyWorkflowActive(
-      baseUrl,
-      result.workflowId,
-      activationCookies
-    );
-
-    if (isActive) {
-      published++;
-    } else {
-      activationFailed++;
-    }
-  }
-
-  // ── Final Summary ────────────────────────────────────────────────────────
-  console.log('\n' + '═'.repeat(60));
-  console.log('📊 FINAL SUMMARY');
-  console.log('═'.repeat(60));
-  console.log(`✅ Imported:  ${imported}/${files.length}`);
-  console.log(`🚀 Activated: ${published}/${toActivate.length}`);
-  console.log(`❌ Import errors: ${importFailed}`);
-  console.log(`⚠️  Activation errors: ${activationFailed}`);
-  console.log('═'.repeat(60) + '\n');
-
-  // ── Write result file for webhook callback ───────────────────────────────
-  const resultData = {
-    success: importFailed === 0,
-    imported,
-    published,
-    failed: importFailed,
-    activationFailed,
-    details: importResults.map((r) => ({
-      name: r.file,
-      id: r.workflowId,
-      error: r.error,
-    })),
-    timestamp: new Date().toISOString(),
-  };
-
-  try {
-    fs.writeFileSync('/tmp/workflow-import-result.json', JSON.stringify(resultData, null, 2));
-    console.log('📄 Result written to /tmp/workflow-import-result.json');
-  } catch (e) {
-    // non-fatal
-  }
-
-  return resultData;
-}
-
-// ─── Helper ───────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// ─── Entry point ──────────────────────────────────────────────────────────
-if (require.main === module) {
-  importWorkflows()
-    .then((result) => {
-      if (result.imported > 0) {
-        console.log(`✅ SUCCESS: ${result.imported} workflow(s) imported, ${result.published} activated`);
-        process.exit(0);
-      } else {
-        console.error('❌ No workflows were imported');
-        process.exit(1);
-      }
-    })
-    .catch((error) => {
-      console.error('💥 FATAL:', error.message);
-      process.exit(1);
-    });
+async function getExistingWorkflows() {
+  const data = await n8nGet('/workflows?limit=100');
+  const map = {};
+  for (const wf of data.data || []) {
+    map[wf.name] = { id: wf.id, active: wf.active };
+  }
+  return map;
 }
 
-module.exports = { importWorkflows };
+function loadTemplate(filename) {
+  const filePath = path.join(TEMPLATE_DIR, filename);
+  if (!fs.existsSync(filePath)) throw new Error(`Template not found: ${filePath}`);
+  return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+}
+
+function cleanWorkflow(wf) {
+  const cleaned = { ...wf };
+  for (const key of [
+    'id', 'createdAt', 'updatedAt', 'versionCounter', 'shared',
+    'scopes', 'checksum', 'triggerCount', 'activeVersion', 'parentFolder',
+  ]) {
+    delete cleaned[key];
+  }
+  cleaned.active     = false;
+  cleaned.pinData    = cleaned.pinData ?? {};
+  cleaned.staticData = null;
+  cleaned.settings   = cleaned.settings ?? { executionOrder: 'v1' };
+  // n8n API expects tags as string[] not object[]
+  const rawTags      = cleaned.tags ?? [];
+  cleaned.tags       = rawTags
+    .map((t) => (typeof t === 'string' ? t : t.name ?? ''))
+    .filter(Boolean);
+  cleaned.meta       = cleaned.meta ?? { templateCredsSetupCompleted: true };
+  return cleaned;
+}
+
+// ── patchWorkflow: string-replace in workflow JSON, skip PUT if no change ────
+async function patchWorkflow(wfId, wfName, patches) {
+  const wfData = await n8nGet(`/workflows/${wfId}`);
+  let wfStr    = JSON.stringify(wfData);
+  const changes = [];
+
+  for (const { find, replace, description } of patches) {
+    if (wfStr.includes(find)) {
+      wfStr = wfStr.split(find).join(replace);
+      changes.push(description);
+    }
+  }
+
+  if (changes.length === 0) {
+    return { patched: false, changes: [] };
+  }
+
+  const updated = JSON.parse(wfStr);
+  await n8nPut(`/workflows/${wfId}`, updated);
+  console.log(`[import] Patched "${wfName}": ${changes.join(', ')}`);
+  return { patched: true, changes };
+}
+
+// ── Phase 1.5B: Find openRouterApi credential ID ─────────────────────────────
+// NOTE: /api/v1/credentials response shape differs by n8n version.
+// Some versions use `type`, some use `typeDisplayName` or omit type entirely.
+// We match on name containing "openrouter" as primary strategy (reliable across versions),
+// with type-based fallback for versions that do include it.
+async function findOpenRouterCredentialId() {
+  try {
+    const data  = await n8nGet('/credentials?limit=100');
+    const creds = data.data || [];
+
+    // Strategy 1: name contains "openrouter" (case-insensitive) — most reliable
+    const byName = creds.find((c) => c.name?.toLowerCase().includes('openrouter'));
+    if (byName) {
+      console.log(`[import] 1.5B: found credential by name: "${byName.name}" (id: ${byName.id})`);
+      return byName.id;
+    }
+
+    // Strategy 2: type field = "openRouterApi" (present in some n8n versions)
+    const byType = creds.find((c) => c.type === 'openRouterApi');
+    if (byType) {
+      console.log(`[import] 1.5B: found credential by type: "${byType.name}" (id: ${byType.id})`);
+      return byType.id;
+    }
+
+    console.log('[import] 1.5B: no openRouterApi credential found in list:', creds.map((c) => c.name));
+    return null;
+  } catch (err) {
+    console.warn('[import] Could not list credentials:', err.message);
+    return null;
+  }
+}
+
+async function patchOpenRouterCredentials(importResults) {
+  const credId = await findOpenRouterCredentialId();
+  if (!credId) {
+    console.log('⚠️  [import] Phase 1.5B: openRouterApi credential not found — skip');
+    console.log('   LLM calls will fail until credential is manually assigned in n8n');
+    return;
+  }
+  if (credId === HARDCODED_OR_CRED_ID) {
+    console.log('ℹ️  [import] Phase 1.5B: credential ID matches template — no patch needed');
+    return;
+  }
+
+  console.log(`🔧 [import] Phase 1.5B: openRouterApi → ${credId}`);
+  let patched = 0;
+
+  for (const wfName of WFS_WITH_OPENROUTER_LLM) {
+    const wfId = importResults[wfName];
+    if (!wfId) {
+      console.log(`   ⚠️  [import] 1.5B: "${wfName}" not imported — skip`);
+      continue;
+    }
+    try {
+      const result = await patchWorkflow(wfId, wfName, [
+        {
+          find: `"openRouterApi":{"id":"${HARDCODED_OR_CRED_ID}"`,
+          replace: `"openRouterApi":{"id":"${credId}"`,
+          description: `openRouterApi.id → ${credId}`,
+        },
+      ]);
+      if (result.patched) patched++;
+      else console.log(`   ✓  [import] 1.5B: "${wfName}" already patched`);
+    } catch (err) {
+      console.log(`   ❌ [import] 1.5B: "${wfName}" ${err.message}`);
+    }
+    await sleep(400);
+  }
+
+  console.log(`📊 [import] Phase 1.5B: ${patched} patched`);
+}
+
+// ── Phase 1.5C: Patch errorWorkflow → real WF0 ID ────────────────────────────
+async function patchErrorWorkflow(wf0Id, importResults) {
+  if (!wf0Id) {
+    console.log('ℹ️  [import] Phase 1.5C: WF0 ID unknown — skip (non-critical)');
+    return;
+  }
+
+  console.log(`🔧 [import] Phase 1.5C: errorWorkflow → ${wf0Id}`);
+  let patched = 0;
+
+  for (const wfName of WFS_WITH_ERROR_WORKFLOW) {
+    const wfId = importResults[wfName];
+    if (!wfId) {
+      console.log(`   ⚠️  [import] 1.5C: "${wfName}" not imported — skip`);
+      continue;
+    }
+    try {
+      const result = await patchWorkflow(wfId, wfName, [
+        {
+          find: `"errorWorkflow":"${ERROR_WF_PLACEHOLDER}"`,
+          replace: `"errorWorkflow":"${wf0Id}"`,
+          description: `errorWorkflow → ${wf0Id}`,
+        },
+        // Also handle format with space after colon
+        {
+          find: `"errorWorkflow": "${ERROR_WF_PLACEHOLDER}"`,
+          replace: `"errorWorkflow": "${wf0Id}"`,
+          description: `errorWorkflow (spaced) → ${wf0Id}`,
+        },
+      ]);
+      if (result.patched) patched++;
+      else console.log(`   ✓  [import] 1.5C: "${wfName}" already correct`);
+    } catch (err) {
+      console.log(`   ❌ [import] 1.5C: "${wfName}" ${err.message}`);
+    }
+    await sleep(400);
+  }
+
+  console.log(`📊 [import] Phase 1.5C: ${patched} patched`);
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+async function main() {
+  console.log('🚀 [import] Starting workflow import...');
+  console.log(`   N8N_BASE_URL: ${N8N_BASE_URL}`);
+  console.log(`   API_KEY set: ${N8N_API_KEY ? 'yes' : '⚠️ NO'}`);
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Phase 1: Import missing workflows
+  // ════════════════════════════════════════════════════════════════════════════
+  console.log('\n📋 Phase 1: Importing missing workflows...');
+
+  const existing = await getExistingWorkflows();
+  console.log(`   Existing: ${Object.keys(existing).length} — ${Object.keys(existing).join(', ')}`);
+
+  // importResults: name → id (includes pre-existing)
+  const importResults = {};
+  for (const [name, info] of Object.entries(existing)) {
+    importResults[name] = info.id;
+  }
+
+  let imported     = 0;
+  let skipped      = 0;
+  let importFailed = 0;
+
+  for (const [wfName, filename] of Object.entries(WF_NAME_TO_FILE)) {
+    if (existing[wfName]) {
+      console.log(`   ⏭️  Skip (exists): "${wfName}"`);
+      skipped++;
+      continue;
+    }
+    try {
+      const template = loadTemplate(filename);
+      const cleaned  = cleanWorkflow(template);
+      const created  = await n8nPost('/workflows', cleaned);
+      importResults[wfName] = created.id;
+      console.log(`   ✅ Imported: "${wfName}" → id: ${created.id}`);
+      imported++;
+    } catch (err) {
+      console.error(`   ❌ Failed: "${wfName}" — ${err.message}`);
+      importFailed++;
+    }
+    await sleep(1500);
+  }
+
+  console.log(`\n📊 Phase 1: ${imported} imported, ${skipped} skipped, ${importFailed} failed`);
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Phase 1.5A: Patch WF1 → inject real WF2 ID
+  // ════════════════════════════════════════════════════════════════════════════
+  console.log('\n🔧 Phase 1.5A: Patching WF1 → WF2 ID...');
+
+  const wf1Id = importResults['Intake Gateway'];
+  const wf2Id = importResults['Brain Router'];
+
+  if (wf1Id && wf2Id) {
+    try {
+      const result = await patchWorkflow(wf1Id, 'Intake Gateway', [
+        {
+          find: 'PATCH_WF2_ID_HERE',
+          replace: wf2Id,
+          description: `WF2 ID → ${wf2Id}`,
+        },
+      ]);
+      console.log(result.patched
+        ? `   ✅ WF1: injected WF2 ID (${wf2Id})`
+        : `   ✓  WF1: WF2 ID already patched`);
+    } catch (err) {
+      console.error(`   ❌ WF1 patch failed: ${err.message}`);
+    }
+  } else {
+    console.log(`   ⚠️  Skip — wf1Id=${wf1Id ?? 'missing'}, wf2Id=${wf2Id ?? 'missing'}`);
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Phase 1.5B: Patch openRouterApi credential ID
+  // ════════════════════════════════════════════════════════════════════════════
+  console.log('\n🔧 Phase 1.5B: Patching openRouterApi credential...');
+  await patchOpenRouterCredentials(importResults);
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Phase 1.5C: Patch errorWorkflow → real WF0 ID
+  // ════════════════════════════════════════════════════════════════════════════
+  console.log('\n🔧 Phase 1.5C: Patching errorWorkflow...');
+  const wf0Id = importResults['Error Handler'];
+  await patchErrorWorkflow(wf0Id, importResults);
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Phase 2: Activate all workflows
+  // ════════════════════════════════════════════════════════════════════════════
+  console.log('\n⚡ Phase 2: Activating workflows...');
+  await sleep(3000);
+
+  const currentWfs = await getExistingWorkflows();
+  let activated       = 0;
+  let activationFailed = 0;
+
+  for (const [wfName, info] of Object.entries(currentWfs)) {
+    if (info.active) {
+      console.log(`   ✓  Already active: "${wfName}"`);
+      activated++;
+      continue;
+    }
+    try {
+      await n8nPatch(`/workflows/${info.id}`, { active: true });
+      console.log(`   🚀 Activated: "${wfName}"`);
+      activated++;
+    } catch (err) {
+      // Non-fatal: some WFs may not be activatable (missing credentials)
+      console.log(`   ⚠️  Could not activate "${wfName}": ${err.message}`);
+      activationFailed++;
+    }
+    await sleep(800);
+  }
+
+  console.log(`\n📊 Phase 2: ${activated} activated, ${activationFailed} failed`);
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Summary
+  // ════════════════════════════════════════════════════════════════════════════
+  console.log('\n✅ [import] Done.');
+  console.log(`   Phase 1: ${imported} imported, ${skipped} skipped, ${importFailed} failed`);
+  console.log(`   Phase 2: ${activated} active, ${activationFailed} failed`);
+
+  if (importFailed > 0) {
+    process.exit(1);
+  }
+}
+
+main().catch((err) => {
+  console.error('💥 [import] Fatal error:', err.message);
+  process.exit(1);
+});
