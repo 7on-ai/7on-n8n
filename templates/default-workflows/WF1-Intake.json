@@ -12,10 +12,7 @@
       "name": "Webhook /chat",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [
-        -224,
-        -96
-      ],
+      "position": [-224, -96],
       "webhookId": "sunday-chat"
     },
     {
@@ -29,10 +26,7 @@
       "name": "Webhook /voice-text",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [
-        -224,
-        64
-      ],
+      "position": [-224, 64],
       "webhookId": "sunday-voice-text"
     },
     {
@@ -43,10 +37,7 @@
       "name": "Normalize Chat",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        16,
-        -96
-      ]
+      "position": [16, -96]
     },
     {
       "parameters": {
@@ -56,10 +47,7 @@
       "name": "Normalize Voice",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        16,
-        64
-      ]
+      "position": [16, 64]
     },
     {
       "parameters": {
@@ -71,30 +59,24 @@
       "name": "Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
-      "position": [
-        256,
-        -16
-      ]
+      "position": [256, -16]
     },
     {
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "={{ $env.WF2_BRAIN_ID }}",
-          "mode": "expression"
+          "value": "PATCH_WF2_ID_HERE",
+          "mode": "id"
         },
         "options": {
           "waitForSubWorkflow": true
         }
       },
       "id": "074fdc9b-2644-4854-899a-53819f36d53a",
-      "name": "→ WF2 Brain",
+      "name": "→ WF2 Brain (Chat)",
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
-      "position": [
-        496,
-        -16
-      ]
+      "typeVersion": 1.2,
+      "position": [496, -16]
     },
     {
       "parameters": {
@@ -106,78 +88,39 @@
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [
-        736,
-        -16
-      ]
+      "position": [736, -16]
     }
   ],
   "pinData": {},
   "connections": {
     "Webhook /chat": {
       "main": [
-        [
-          {
-            "node": "Normalize Chat",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Normalize Chat", "type": "main", "index": 0 }]
       ]
     },
     "Webhook /voice-text": {
       "main": [
-        [
-          {
-            "node": "Normalize Voice",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Normalize Voice", "type": "main", "index": 0 }]
       ]
     },
     "Normalize Chat": {
       "main": [
-        [
-          {
-            "node": "Merge",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Merge", "type": "main", "index": 0 }]
       ]
     },
     "Normalize Voice": {
       "main": [
-        [
-          {
-            "node": "Merge",
-            "type": "main",
-            "index": 1
-          }
-        ]
+        [{ "node": "Merge", "type": "main", "index": 1 }]
       ]
     },
     "Merge": {
       "main": [
-        [
-          {
-            "node": "→ WF2 Brain",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "→ WF2 Brain (Chat)", "type": "main", "index": 0 }]
       ]
     },
-    "→ WF2 Brain": {
+    "→ WF2 Brain (Chat)": {
       "main": [
-        [
-          {
-            "node": "Respond",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Respond", "type": "main", "index": 0 }]
       ]
     }
   },
