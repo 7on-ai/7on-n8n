@@ -10,7 +10,10 @@
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-176, -48],
+      "position": [
+        -176,
+        -48
+      ],
       "id": "2378d984-f78b-4b23-8949-911f89e1e7fe",
       "name": "WF5-A Overview"
     },
@@ -23,7 +26,10 @@
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-176, 352],
+      "position": [
+        -176,
+        352
+      ],
       "id": "b73e0b62-ebb4-4c8d-ba1c-3b949fcac453",
       "name": "Schema Notes"
     },
@@ -36,7 +42,10 @@
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
-      "position": [1536, 496],
+      "position": [
+        1536,
+        496
+      ],
       "id": "4d5e7fab-b190-4edb-be4b-f5119cdf2497",
       "name": "LLM Memory Extractor (Haiku)",
       "credentials": {
@@ -49,9 +58,9 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Analyze this conversation and extract memory updates.\n\nUSER INFO:\nName: {{ $json.userMeta.name }}\nLanguage: {{ $json.userMeta.language }}\nTimezone: {{ $json.userMeta.timezone }}\n\nCURRENT PERSONA:\n{{ JSON.stringify($json.currentPersona, null, 2) }}\n\nCONVERSATION (last 7 hours, {{ $json.messageCount }} messages):\n{{ $json.conversation }}",
+        "text": "=Analyze this conversation and extract ALL memory-worthy information.\n\nUSER INFO:\nName: {{ $json.userMeta.name }}\nLanguage: {{ $json.userMeta.language }}\nTimezone: {{ $json.userMeta.timezone }}\n\nCURRENT PERSONA (already known — only extract NEW info):\n{{ JSON.stringify($json.currentPersona, null, 2) }}\n\nCONVERSATION (last 7 hours, {{ $json.messageCount }} messages):\n{{ $json.conversation }}",
         "options": {
-          "systemMessage": "You are a Memory Extraction AI. Analyze the conversation and extract structured memory updates.\n\n## TASK:\nExtract what you learn about the user from this conversation to build a persistent persona.\n\n## RESPONSE FORMAT (JSON ONLY — no markdown, no preamble):\n{\n  \"persona_updates\": {\n    \"interests\": [\"topic1\", \"topic2\"],\n    \"preferences\": {\n      \"key\": \"value\"\n    },\n    \"physical_stats\": {\n      \"weight_kg\": null,\n      \"height_cm\": null,\n      \"age\": null,\n      \"gender\": null\n    },\n    \"personality_notes\": \"brief description of personality/communication style\"\n  },\n  \"key_facts\": [\n    \"Fact 1 about the user (e.g. works as software engineer)\",\n    \"Fact 2 about the user\"\n  ],\n  \"emotional_patterns\": [\n    \"pattern1\"\n  ],\n  \"language_detected\": \"th\"\n}\n\n## RULES:\n- Only include fields with new information found in this conversation\n- key_facts: concrete, specific facts (job, location, family, goals, etc.)\n- interests: topics the user discussed or showed interest in\n- preferences: things they like/dislike, habits, settings\n- physical_stats: only if explicitly mentioned (weight, height, age, gender)\n- personality_notes: communication style, personality traits observed\n- language_detected: th, en, ja, or zh based on primary language used\n- If nothing new found, return empty arrays/objects\n- Return ONLY valid JSON, no explanation text"
+          "systemMessage": "You are a Memory Extraction AI. Analyze the conversation and extract structured memory updates.\n\n## TASK:\nExtract everything learned about this user to build a rich, persistent long-term memory profile.\n\n## RESPONSE FORMAT (JSON ONLY — no markdown, no preamble):\n{\n  \"persona_updates\": {\n    \"interests\": [\"topic1\", \"topic2\"],\n    \"preferences\": {\n      \"communication_style\": \"direct/gentle/detailed\",\n      \"language\": \"th\",\n      \"any_other_preference\": \"value\"\n    },\n    \"physical_stats\": {\n      \"weight_kg\": null,\n      \"height_cm\": null,\n      \"age\": null,\n      \"gender\": null\n    },\n    \"personality_notes\": \"brief description of personality/communication style\"\n  },\n  \"key_facts\": [\n    \"Works as [job title] at [company]\",\n    \"Lives in [city/area]\",\n    \"Has [family info e.g. spouse, children, pets]\",\n    \"Goal: [specific goal mentioned]\",\n    \"Challenge: [specific challenge mentioned]\"\n  ],\n  \"emotional_patterns\": [\n    \"Tends to feel anxious before deadlines\",\n    \"Uses humor to cope with stress\"\n  ],\n  \"relationship_facts\": [\n    \"Partner named [name], [relationship detail]\",\n    \"Has a close friend named [name] who [context]\"\n  ],\n  \"goals_and_aspirations\": [\n    \"Wants to [specific aspiration]\",\n    \"Working towards [goal]\"\n  ],\n  \"language_detected\": \"th\"\n}\n\n## RULES:\n- key_facts: concrete, specific, factual (job, location, family, health, constraints)\n- emotional_patterns: recurring emotional tendencies observed\n- relationship_facts: important people in their life with context\n- goals_and_aspirations: short-term and long-term goals\n- interests: topics discussed or shown interest in\n- Only include fields where new info was found in THIS conversation\n- Merge with existing persona — do NOT repeat what's already known\n- Return ONLY valid JSON, no explanation"
         },
         "batching": {}
       },
@@ -59,7 +68,10 @@
       "name": "LLM Chain (Memory Extract)",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
-      "position": [1536, 256]
+      "position": [
+        1536,
+        256
+      ]
     },
     {
       "parameters": {
@@ -84,17 +96,23 @@
       "name": "Should Save?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2016, 256]
+      "position": [
+        2016,
+        256
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst userId = item.userId;\nconst updatedPersona = item.updatedPersona;\nconst keyFacts = item.keyFacts || [];\n\nconst dbUrl = process.env.DATABASE_URL || '';\nif (!dbUrl) {\n  console.error('[WF5-A Save] DATABASE_URL not set');\n  return { json: { ...item, saved: false, reason: 'no_db_url' } };\n}\n\ntry {\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n\n  // 1. Update User.persona — parameterized (no SQL injection)\n  await pool.query(\n    'UPDATE \"User\" SET persona = $1::jsonb, updated_at = NOW() WHERE id = $2',\n    [JSON.stringify(updatedPersona), userId]\n  );\n\n  // 2. Mark messages as processed\n  await pool.query(\n    `UPDATE user_data_schema.raw_messages\n     SET processed_for_memory = true\n     WHERE session_id IN (\n       SELECT id FROM user_data_schema.chat_sessions WHERE user_id = $1\n     )\n     AND processed_for_memory = false\n     AND created_at > NOW() - INTERVAL '7 hours'`,\n    [userId]\n  );\n\n  // 3. Save key_facts — deduped via UNIQUE(user_id, fact)\n  for (const fact of keyFacts) {\n    try {\n      await pool.query(\n        `INSERT INTO user_data_schema.memory_facts (user_id, fact, source, created_at)\n         VALUES ($1, $2, 'wf5a', NOW())\n         ON CONFLICT (user_id, fact) DO NOTHING`,\n        [userId, fact]\n      );\n    } catch (e) {\n      console.log('[WF5-A Save] memory_facts skip:', e.message);\n      break;\n    }\n  }\n\n  await pool.end();\n  console.log(`[WF5-A Save] ✅ userId: ${userId.substring(0,8)}... | facts: ${keyFacts.length} | persona_keys: ${Object.keys(updatedPersona).length}`);\n  return { json: { ...item, saved: true, factsCount: keyFacts.length, personaKeys: Object.keys(updatedPersona).length } };\n\n} catch (err) {\n  console.error('[WF5-A Save] DB error:', err.message);\n  return { json: { ...item, saved: false, reason: err.message } };\n}"
+        "jsCode": "// ════════════════════════════════════════════════════════\n// Save to DB + Embed Facts v2\n// ════════════════════════════════════════════════════════\n// 1. Update User.persona (JSONB)\n// 2. Mark raw_messages as processed\n// 3. Upsert key_facts → memory_facts (deduped)\n// 4. NEW: Embed each new fact → memory_embeddings (vector)\n//    ทำให้ facts ถูกค้นด้วย vector search ใน Memory Injector ได้\n// ════════════════════════════════════════════════════════\nconst item = $input.first().json;\nconst userId = item.userId;\nconst updatedPersona = item.updatedPersona;\nconst keyFacts = item.keyFacts || [];\nconst emotionalPatterns = item.emotionalPatterns || [];\n\nconst dbUrl = process.env.DATABASE_URL || '';\nif (!dbUrl) {\n  console.error('[WF5-A Save] DATABASE_URL not set');\n  return { json: { ...item, saved: false, reason: 'no_db_url' } };\n}\n\n// OpenRouter key for embedding new facts\nconst embedKey = updatedPersona?.tokens?.openrouter_access_token || process.env.OPENROUTER_API_KEY || '';\n\nconst { Pool } = require('pg');\nconst pool = new Pool({ connectionString: dbUrl });\n\ntry {\n  // ── 1. Update User.persona ─────────────────────────────────\n  await pool.query(\n    'UPDATE \"User\" SET persona = $1::jsonb, updated_at = NOW() WHERE id = $2',\n    [JSON.stringify(updatedPersona), userId]\n  );\n\n  // ── 2. Mark raw_messages as processed ─────────────────────\n  await pool.query(\n    `UPDATE user_data_schema.raw_messages\n     SET processed_for_memory = true\n     WHERE session_id IN (\n       SELECT id FROM user_data_schema.chat_sessions WHERE user_id = $1\n     )\n     AND processed_for_memory = false\n     AND created_at > NOW() - INTERVAL '7 hours'`,\n    [userId]\n  );\n\n  // ── 3. Upsert key_facts ────────────────────────────────────\n  const newFacts = [];\n  for (const fact of keyFacts) {\n    if (!fact || fact.length < 5) continue;\n    try {\n      const res = await pool.query(\n        `INSERT INTO user_data_schema.memory_facts (user_id, fact, source, created_at)\n         VALUES ($1, $2, 'wf5a', NOW())\n         ON CONFLICT (user_id, fact) DO NOTHING\n         RETURNING fact`,\n        [userId, fact]\n      );\n      if (res.rows.length > 0) newFacts.push(fact); // only newly inserted\n    } catch (e) {\n      console.log('[WF5-A] memory_facts skip:', e.message);\n    }\n  }\n\n  // ── 4. Embed new facts → memory_embeddings ────────────────\n  let embeddedCount = 0;\n  if (newFacts.length > 0 && embedKey) {\n    for (const fact of newFacts) {\n      try {\n        const embedRes = await fetch('https://openrouter.ai/api/v1/embeddings', {\n          method: 'POST',\n          headers: {\n            'Authorization': `Bearer ${embedKey}`,\n            'Content-Type': 'application/json'\n          },\n          body: JSON.stringify({\n            model: 'openai/text-embedding-3-small',\n            input: fact\n          })\n        });\n\n        if (!embedRes.ok) {\n          console.warn(`[WF5-A] Embed fact failed: ${embedRes.status}`);\n          continue;\n        }\n\n        const embedData = await embedRes.json();\n        const embedding = embedData.data?.[0]?.embedding;\n        if (!embedding) continue;\n\n        const vectorStr = `[${embedding.join(',')}]`;\n        await pool.query(\n          `INSERT INTO user_data_schema.memory_embeddings\n             (user_id, content, embedding, metadata, created_at)\n           VALUES ($1, $2, $3::vector, $4::jsonb, NOW())\n           ON CONFLICT DO NOTHING`,\n          [\n            userId,\n            fact,\n            vectorStr,\n            JSON.stringify({ type: 'key_fact', source: 'wf5a', classification: 'factual_memory' })\n          ]\n        );\n        embeddedCount++;\n      } catch (e) {\n        console.log('[WF5-A] embed fact skip:', e.message);\n      }\n    }\n  }\n\n  // ── 5. Save emotional_patterns as interaction_memories ─────\n  for (const pattern of emotionalPatterns.slice(0, 3)) {\n    if (!pattern || pattern.length < 5) continue;\n    try {\n      await pool.query(\n        `INSERT INTO user_data_schema.interaction_memories\n           (user_id, text, classification, created_at)\n         VALUES ($1, $2, 'emotional_pattern', NOW())\n         ON CONFLICT DO NOTHING`,\n        [userId, pattern]\n      );\n    } catch (e) {\n      console.log('[WF5-A] emotional_pattern skip:', e.message);\n    }\n  }\n\n  await pool.end();\n\n  console.log(`[WF5-A Save] ✅ userId=${userId.slice(0,8)}... | facts_new=${newFacts.length} | embedded=${embeddedCount} | patterns=${emotionalPatterns.length}`);\n  return {\n    json: {\n      ...item,\n      saved: true,\n      factsNew: newFacts.length,\n      factsEmbedded: embeddedCount,\n      patternsSaved: emotionalPatterns.length,\n      personaKeys: Object.keys(updatedPersona).length\n    }\n  };\n\n} catch (err) {\n  console.error('[WF5-A Save] DB error:', err.message);\n  try { await pool.end(); } catch(_) {}\n  return { json: { ...item, saved: false, reason: err.message } };\n}"
       },
       "id": "35d61f9b-b7cf-4706-8571-b6fce9b72058",
       "name": "Save to DB",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2240, 256]
+      "position": [
+        2240,
+        256
+      ]
     },
     {
       "parameters": {
@@ -104,7 +122,10 @@
       "name": "Silent Skip",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2240, 416]
+      "position": [
+        2240,
+        416
+      ]
     },
     {
       "parameters": {
@@ -121,7 +142,10 @@
       "name": "Cron: Every 6h",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [288, 256]
+      "position": [
+        288,
+        256
+      ]
     },
     {
       "parameters": {
@@ -131,7 +155,10 @@
       "name": "Get Active Users",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [528, 256]
+      "position": [
+        528,
+        256
+      ]
     },
     {
       "parameters": {
@@ -141,7 +168,10 @@
       "name": "Split Users",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [768, 256]
+      "position": [
+        768,
+        256
+      ]
     },
     {
       "parameters": {
@@ -151,7 +181,10 @@
       "name": "Load Unprocessed Messages",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1040, 112]
+      "position": [
+        1040,
+        112
+      ]
     },
     {
       "parameters": {
@@ -161,7 +194,10 @@
       "name": "Load Current Persona",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1040, 400]
+      "position": [
+        1040,
+        400
+      ]
     },
     {
       "parameters": {
@@ -171,17 +207,23 @@
       "name": "Merge for Analysis",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1312, 256]
+      "position": [
+        1312,
+        256
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst rawOutput = item.text || item.output || item.response || '{}';\nconst userId = $('Merge for Analysis').item.json.userId;\nconst currentPersona = $('Merge for Analysis').item.json.currentPersona;\nconst userMeta = $('Merge for Analysis').item.json.userMeta;\n\nlet memoryUpdate = {};\ntry {\n  const cleaned = rawOutput.replace(/```json|```/g, '').trim();\n  memoryUpdate = JSON.parse(cleaned);\n} catch(e) {\n  console.error('[WF5-A Parse] JSON parse error:', e.message, '| raw:', rawOutput.slice(0, 200));\n  return {\n    json: {\n      userId, updatedPersona: currentPersona,\n      keyFacts: [], emotionalPatterns: [],\n      languageDetected: userMeta.language,\n      skip: true,\n      skipReason: 'json_parse_error'\n    }\n  };\n}\n\nconst pu = memoryUpdate.persona_updates || {};\n\nconst mergedInterests = [...new Set([...(currentPersona.interests || []), ...(pu.interests || [])])];\nconst mergedPreferences = { ...(currentPersona.preferences || {}), ...(pu.preferences || {}) };\nconst mergedPhysicalStats = {\n  ...(currentPersona.physical_stats || {}),\n  ...(Object.keys(pu.physical_stats || {}).length > 0 ? pu.physical_stats : {})\n};\n\nconst updatedPersona = {\n  ...currentPersona,\n  interests: mergedInterests,\n  preferences: mergedPreferences,\n  physical_stats: mergedPhysicalStats,\n  personality_notes: pu.personality_notes || currentPersona.personality_notes || null,\n  language_preference: memoryUpdate.language_detected || currentPersona.language_preference || userMeta.language,\n  _last_memory_update: new Date().toISOString()\n};\n\nconsole.log(`[WF5-A Parse] userId: ${userId.substring(0,8)}... | facts: ${(memoryUpdate.key_facts || []).length} | interests_new: ${(pu.interests || []).length}`);\n\nreturn {\n  json: {\n    userId, updatedPersona,\n    keyFacts: memoryUpdate.key_facts || [],\n    emotionalPatterns: memoryUpdate.emotional_patterns || [],\n    languageDetected: memoryUpdate.language_detected || userMeta.language,\n    skip: false\n  }\n};"
+        "jsCode": "const item = $input.first().json;\nconst rawOutput = item.text || item.output || item.response || '{}';\nconst userId = $('Merge for Analysis').item.json.userId;\nconst currentPersona = $('Merge for Analysis').item.json.currentPersona;\nconst userMeta = $('Merge for Analysis').item.json.userMeta;\n\nlet memoryUpdate = {};\ntry {\n  const cleaned = rawOutput.replace(/```json|```/g, '').trim();\n  memoryUpdate = JSON.parse(cleaned);\n} catch(e) {\n  console.error('[WF5-A Parse] JSON parse error:', e.message, '| raw:', rawOutput.slice(0, 200));\n  return {\n    json: {\n      userId, updatedPersona: currentPersona,\n      keyFacts: [], emotionalPatterns: [],\n      languageDetected: userMeta.language,\n      skip: true, skipReason: 'json_parse_error'\n    }\n  };\n}\n\nconst pu = memoryUpdate.persona_updates || {};\n\n// Merge arrays deduped\nconst mergedInterests = [...new Set([\n  ...(currentPersona.interests || []),\n  ...(pu.interests || [])\n])];\n\nconst mergedPreferences = {\n  ...(currentPersona.preferences || {}),\n  ...(pu.preferences || {})\n};\n\nconst mergedPhysicalStats = {\n  ...(currentPersona.physical_stats || {}),\n  ...(Object.keys(pu.physical_stats || {}).some(k => pu.physical_stats[k] != null)\n    ? pu.physical_stats : {})\n};\n\n// NEW: merge relationship_facts + goals_and_aspirations\nconst mergedRelationships = [...new Set([\n  ...(currentPersona.relationship_facts || []),\n  ...(memoryUpdate.relationship_facts || [])\n])];\n\nconst mergedGoals = [...new Set([\n  ...(currentPersona.goals_and_aspirations || []),\n  ...(memoryUpdate.goals_and_aspirations || [])\n])];\n\nconst updatedPersona = {\n  ...currentPersona,\n  interests: mergedInterests,\n  preferences: mergedPreferences,\n  physical_stats: mergedPhysicalStats,\n  personality_notes: pu.personality_notes || currentPersona.personality_notes || null,\n  language_preference: memoryUpdate.language_detected || currentPersona.language_preference || userMeta.language,\n  relationship_facts: mergedRelationships,\n  goals_and_aspirations: mergedGoals,\n  _last_memory_update: new Date().toISOString()\n};\n\nconst keyFacts = memoryUpdate.key_facts || [];\nconst emotionalPatterns = memoryUpdate.emotional_patterns || [];\n\nconsole.log(`[WF5-A Parse] userId=${userId.slice(0,8)}... | facts=${keyFacts.length} | emotions=${emotionalPatterns.length} | goals=${mergedGoals.length} | relationships=${mergedRelationships.length}`);\n\nreturn {\n  json: {\n    userId, updatedPersona,\n    keyFacts, emotionalPatterns,\n    relationshipFacts: memoryUpdate.relationship_facts || [],\n    goalsAndAspirations: memoryUpdate.goals_and_aspirations || [],\n    languageDetected: memoryUpdate.language_detected || userMeta.language,\n    skip: false\n  }\n};"
       },
       "id": "d42f1854-4870-4b15-898d-dd48f450f411",
       "name": "Parse Memory Update",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1792, 256]
+      "position": [
+        1792,
+        256
+      ]
     }
   ],
   "connections": {
@@ -318,5 +360,15 @@
   "meta": {
     "templateCredsSetupCompleted": true
   },
-  "tags": []
+  "tags": [
+    {
+      "name": "wf5a"
+    },
+    {
+      "name": "memory"
+    },
+    {
+      "name": "v2-long-life"
+    }
+  ]
 }
