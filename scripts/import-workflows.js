@@ -34,7 +34,7 @@ const WF_NAME_TO_FILE = {
   'HealthMate':     'WF3G-Health.json',
   'Secretary Plus': 'WF4-SecretaryPlus.json',
   'Memory Builder': 'WF5A-Memory.json',        // ⚠️ name changed in v3 fix
-  'Background':     'WF5B-Background.json',
+  'Insight Engine': 'WF5B-Background.json', // JSON "name" = "Insight Engine" (ไม่ใช่ "Background")
   'DB Proxy':       'WF-DB-Proxy.json',
 };
 
@@ -62,7 +62,7 @@ const WFS_WITH_ERROR_WORKFLOW = [
   'HomeMate',       // WF3F
   'HealthMate',     // WF3G
   'Secretary Plus', // WF4
-  'DB Proxy',       // WF-DB-Proxy
+  'Database Proxy', // WF-DB-Proxy ← JSON "name" = "Database Proxy"
 ];
 
 const HARDCODED_OR_CRED_ID  = 'FUm3Fg9B8euy8cH3';
