@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "# WF2 — JARVIS Brain Router v5.4\n\n### Changes from v5.3:\n- ✅ Fix: Call OpenRouter ใช้ n8n credential 'OpenRouter' (ไม่ custom header → ไม่ 401)\n- ✅ Fix: ลบ IF 'Has API Key?' + Merge node ออก → straight flow\n- ✅ Fix: Parse & Route ดึง context จาก $('Prepare JARVIS').item\n- ✅ Fix: buildPersona ไม่ query 'User' table (ไม่มีใน per-user DB)\n\n### Flow:\nVercel → WF1 → WF2 Entry → Extract Payload\n→ Prepare JARVIS → Call OpenRouter (credential)\n→ Parse & Route → Dispatch Gate → Format Response\n\n### ENV: N8N_BLOCK_ENV_ACCESS_IN_NODE=false",
+        "content": "# WF2 — JARVIS Brain Router v5.5\n\n### Changes from v5.4:\n- ✅ Fix: ไม่ใช้ n8n credential เลย (ไม่มี httpHeaderAuth/openRouterApi mismatch)\n- ✅ Authorization header build จาก $env.OPENROUTER_API_KEY + persona.tokens\n- ✅ IF 'Has Auth?' guard: ถ้าไม่มี key → Keyword Fallback (ไม่ call OpenRouter)\n- ✅ Merge node รวม 2 paths กลับ → Parse & Route\n\n### ENV required:\n- N8N_BLOCK_ENV_ACCESS_IN_NODE=false\n- OPENROUTER_API_KEY=sk-or-...\n\n### Flow:\nWF2 Entry → Extract Payload → Prepare JARVIS\n→ Has Auth? → [TRUE] Call OpenRouter → Merge → Parse & Route\n            → [FALSE] Keyword Fallback ─────↗\n→ Dispatch Gate → Format Response",
         "height": 380,
         "width": 480,
         "color": 4
@@ -49,7 +49,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Prepare JARVIS v5.4\n// ─────────────────────────────────────────────────────────────\n// WF2 routing ใช้ OpenRouter credential (system key) เสมอ\n// user key ส่งไปใน payload → WF3x agents ใช้สำหรับ LLM call เอง\n// ─────────────────────────────────────────────────────────────\nconst payload = $input.first().json;\nconst message  = payload.message || '';\nconst persona  = payload.persona || {};\nconst lang     = persona.language_preference || 'th';\nconst name     = persona.name || 'User';\nconst tier     = persona.subscriptionTier || 'FREE';\nconst stage    = persona.ethical_profile?.growth_stage || 2;\nconst stageLabel = persona.ethical_profile?.growth_stage_label || 'Developing';\nconst interests  = (persona.interests || []).slice(0, 5).join(', ') || 'not specified';\nconst keyFacts   = (persona.key_facts || []).slice(0, 3).join(' | ') || 'none';\nconst recentMemTypes = (persona.relevant_memories || []).map(m => m.type).join(', ') || 'none';\n\n// Model selection: user มี OpenRouter key → PAID, ไม่มี → FREE\n// Note: system credential จะถูก inject โดย n8n เองผ่าน \"OpenRouter\" credential\nconst PAID_MODEL = 'anthropic/claude-haiku-4-5';\nconst FREE_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';\nconst userHasKey = !!(persona.tokens?.openrouter_access_token);\nconst model = userHasKey ? PAID_MODEL : FREE_MODEL;\n\n// Agent URLs\nconst n8nBase = $env.N8N_BASE_URL || 'http://localhost:5678';\nconst AGENT_URLS = {\n  wf3a: $env.N8N_WF3A_URL || `${n8nBase}/webhook/wf3a-secretary`,\n  wf3b: $env.N8N_WF3B_URL || `${n8nBase}/webhook/wf3b-soul`,\n  wf3c: $env.N8N_WF3C_URL || `${n8nBase}/webhook/wf3c-careercoach`,\n  wf3d: $env.N8N_WF3D_URL || `${n8nBase}/webhook/wf3d-explorer`,\n  wf3e: $env.N8N_WF3E_URL || `${n8nBase}/webhook/wf3e-creator`,\n  wf3f: $env.N8N_WF3F_URL || `${n8nBase}/webhook/wf3f-homemate`,\n  wf3g: $env.N8N_WF3G_URL || `${n8nBase}/webhook/wf3g-healthcoach`\n};\n\nconst SYSTEM_PROMPT = `You are JARVIS — the central cognitive router of an advanced personal AI system.\nYour function: Decompose the user's message into a structured dispatch plan.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nAGENT REGISTRY\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nwf3a [SECRETARY] — External coordination & communication\n  • Calendar, reminders, alarms, countdowns, scheduling\n  • Email, LINE notify, Telegram, Discord, Slack, SMS\n  • Social media: post, DM, tweet, LinkedIn\n  • Task management: todo, checklist, Notion, Trello\n\nwf3b [SOUL] — Inner world, emotions & personal growth\n  • Emotional processing: venting, sharing feelings, being heard\n  • Journaling: daily log, gratitude, mood entry, reflection\n  • Personal growth: habits, streaks, mindfulness, meditation\n  • Relationships: emotional angle\n  • Crisis: hopelessness, self-harm → ALWAYS wf3b, ALWAYS crisis=true\n\nwf3c [CAREER COACH] — Finance, work & professional\n  • Personal finance: budget, expenses, savings\n  • Investment: stocks, crypto, funds\n  • Career: job search, resume, interview\n\nwf3d [EXPLORER] — Knowledge & real-world data\n  • Web search: news, research, facts\n  • Real-time: weather, exchange rates\n  • Location: maps, travel info\n\nwf3e [CREATOR] — Content generation\n  • AI image, TTS, creative writing, translation\n\nwf3f [HOME MATE] — Ambient & entertainment\n  • Music: Spotify, Sonos\n  • Smart home: Home Assistant\n\nwf3g [HEALTH COACH] — Physical health\n  • Nutrition: calorie, meal logging\n  • Fitness: workout, exercise log\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nRULES\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n- Single intent → 1 item\n- Multi intent → max 3 items, ordered by priority\n- crisis → wf3b always\n- gating=true for emotional depth\n- Output ONLY valid JSON, no markdown\n\n{\n  \"intents\": [\n    {\n      \"agent\": \"wf3x\",\n      \"priority\": 1,\n      \"sub_task\": \"focused instruction in user language\",\n      \"gating\": false,\n      \"crisis\": false\n    }\n  ]\n}\n\nCONTEXT:\nUser: ${name} | Language: ${lang} | Tier: ${tier}\nGrowth: ${stage}/5 (${stageLabel})\nInterests: ${interests}\nKey facts: ${keyFacts}\nRecent memory themes: ${recentMemTypes}`;\n\n// Build request body for OpenRouter\n// Authorization header จะถูก inject โดย n8n credential \"OpenRouter\" อัตโนมัติ\nconst openrouterBody = {\n  model,\n  max_tokens: 300,\n  temperature: 0,\n  response_format: { type: 'json_object' },\n  messages: [\n    { role: 'system', content: SYSTEM_PROMPT },\n    { role: 'user', content: message }\n  ]\n};\n\nconsole.log(`[JARVIS Prepare v5.4] model=${model} | userHasKey=${userHasKey} | msg_len=${message.length}`);\n\nreturn {\n  json: {\n    ...payload,\n    _jarvis: {\n      model,\n      userHasKey,\n      openrouterBody,\n      AGENT_URLS,\n      n8nBase\n    }\n  }\n};"
+        "jsCode": "// Prepare JARVIS v5.5\n// ─────────────────────────────────────────────────────────────\n// FIX: ไม่ใช้ n8n credential เลย\n// Authorization header สร้างจาก $env.OPENROUTER_API_KEY หรือ user token\n// ─────────────────────────────────────────────────────────────\nconst payload  = $input.first().json;\nconst message  = payload.message || '';\nconst persona  = payload.persona || {};\nconst lang     = persona.language_preference || 'th';\nconst name_    = persona.name || 'User';\nconst tier     = persona.subscriptionTier || 'FREE';\nconst stage    = persona.ethical_profile?.growth_stage || 2;\nconst stageLabel = persona.ethical_profile?.growth_stage_label || 'Developing';\nconst interests  = (persona.interests || []).slice(0, 5).join(', ') || 'not specified';\nconst keyFacts   = (persona.key_facts || []).slice(0, 3).join(' | ') || 'none';\nconst recentMemTypes = (persona.relevant_memories || []).map(m => m.type).join(', ') || 'none';\n\n// ── API Key: user key → system key ───────────────────────────\nconst userKey   = persona.tokens?.openrouter_access_token || '';\nconst systemKey = $env.OPENROUTER_API_KEY || '';\nconst apiKey    = userKey || systemKey || '';\n\nconst PAID_MODEL = 'anthropic/claude-haiku-4-5';\nconst FREE_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';\nconst model    = userKey ? PAID_MODEL : FREE_MODEL;\nconst keyType  = userKey ? 'user' : (systemKey ? 'system' : 'none');\nconst hasAuth  = apiKey.length > 0;\n\n// ── Agent URLs ────────────────────────────────────────────────\nconst n8nBase = $env.N8N_BASE_URL || 'http://localhost:5678';\nconst AGENT_URLS = {\n  wf3a: $env.N8N_WF3A_URL || `${n8nBase}/webhook/wf3a-secretary`,\n  wf3b: $env.N8N_WF3B_URL || `${n8nBase}/webhook/wf3b-soul`,\n  wf3c: $env.N8N_WF3C_URL || `${n8nBase}/webhook/wf3c-careercoach`,\n  wf3d: $env.N8N_WF3D_URL || `${n8nBase}/webhook/wf3d-explorer`,\n  wf3e: $env.N8N_WF3E_URL || `${n8nBase}/webhook/wf3e-creator`,\n  wf3f: $env.N8N_WF3F_URL || `${n8nBase}/webhook/wf3f-homemate`,\n  wf3g: $env.N8N_WF3G_URL || `${n8nBase}/webhook/wf3g-healthcoach`\n};\n\nconst SYSTEM_PROMPT = `You are JARVIS — the central cognitive router of an advanced personal AI system.\nYour function: Decompose the user's message into a structured dispatch plan.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nAGENT REGISTRY\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nwf3a [SECRETARY] — External coordination & communication\n  • Calendar, reminders, alarms, countdowns, scheduling\n  • Email, LINE notify, Telegram, Discord, Slack, SMS\n  • Social media: post, DM, tweet, LinkedIn\n  • Task management: todo, checklist, Notion, Trello\n\nwf3b [SOUL] — Inner world, emotions & personal growth\n  • Emotional processing: venting, sharing feelings, being heard\n  • Journaling: daily log, gratitude, mood entry, reflection\n  • Personal growth: habits, streaks, mindfulness, meditation\n  • Relationships: emotional angle\n  • Crisis: hopelessness, self-harm → ALWAYS wf3b, ALWAYS crisis=true\n\nwf3c [CAREER COACH] — Finance, work & professional\n  • Personal finance: budget, expenses, savings\n  • Investment: stocks, crypto, funds\n  • Career: job search, resume, interview\n\nwf3d [EXPLORER] — Knowledge & real-world data\n  • Web search: news, research, facts\n  • Real-time: weather, exchange rates\n  • Location: maps, travel info\n\nwf3e [CREATOR] — Content generation\n  • AI image, TTS, creative writing, translation\n\nwf3f [HOME MATE] — Ambient & entertainment\n  • Music: Spotify, Sonos\n  • Smart home: Home Assistant\n\nwf3g [HEALTH COACH] — Physical health\n  • Nutrition: calorie, meal logging\n  • Fitness: workout, exercise log\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nRULES\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n- Single intent → 1 item\n- Multi intent → max 3 items, ordered by priority\n- crisis → wf3b always\n- gating=true for emotional depth\n- Output ONLY valid JSON, no markdown\n\n{\n  \"intents\": [\n    {\n      \"agent\": \"wf3x\",\n      \"priority\": 1,\n      \"sub_task\": \"focused instruction in user language\",\n      \"gating\": false,\n      \"crisis\": false\n    }\n  ]\n}\n\nCONTEXT:\nUser: ${name_} | Language: ${lang} | Tier: ${tier}\nGrowth: ${stage}/5 (${stageLabel})\nInterests: ${interests}\nKey facts: ${keyFacts}\nRecent memory themes: ${recentMemTypes}`;\n\nconst openrouterBody = {\n  model,\n  max_tokens: 300,\n  temperature: 0,\n  response_format: { type: 'json_object' },\n  messages: [\n    { role: 'system', content: SYSTEM_PROMPT },\n    { role: 'user', content: message }\n  ]\n};\n\nconsole.log(`[JARVIS v5.5] keyType=${keyType} | hasAuth=${hasAuth} | model=${model}`);\n\nreturn {\n  json: {\n    ...payload,\n    _jarvis: {\n      apiKey,\n      authHeader: hasAuth ? `Bearer ${apiKey}` : '',\n      model,\n      keyType,\n      hasAuth,\n      openrouterBody,\n      AGENT_URLS,\n      n8nBase\n    }\n  }\n};"
       },
       "id": "prepare-jarvis-v53",
       "name": "Prepare JARVIS",
@@ -62,20 +62,50 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json._jarvis.hasAuth }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "has-auth-check-v55",
+      "name": "Has Auth?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        464,
+        580
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://openrouter.ai/api/v1/chat/completions",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "HTTP-Referer",
-              "value": "https://7on.ai"
+              "name": "Authorization",
+              "value": "={{ $json._jarvis.authHeader }}"
             },
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "https://7on.ai"
             }
           ]
         },
@@ -99,13 +129,34 @@
       "position": [
         688,
         480
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "FUm3Fg9B8euy8cH3",
-          "name": "OpenRouter"
-        }
-      }
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keyword Fallback v5.5\n// ใช้เมื่อไม่มี OpenRouter API key\n// Parse & Route รับ _openrouter_skipped=true และใช้ keyword routing แทน\nconst payload = $input.first().json;\nconsole.log('[JARVIS Fallback] No API key — keyword routing');\nreturn {\n  json: {\n    ...payload,\n    choices: null,\n    _openrouter_skipped: true\n  }\n};"
+      },
+      "id": "keyword-fallback-v55",
+      "name": "Keyword Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        740
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "passThrough",
+        "output": "input1"
+      },
+      "id": "merge-router-v55",
+      "name": "Merge Router",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        912,
+        580
+      ]
     },
     {
       "parameters": {
@@ -196,7 +247,25 @@
       "main": [
         [
           {
+            "node": "Has Auth?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Auth?": {
+      "main": [
+        [
+          {
             "node": "Call OpenRouter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Keyword Fallback",
             "type": "main",
             "index": 0
           }
@@ -204,6 +273,28 @@
       ]
     },
     "Call OpenRouter": {
+      "main": [
+        [
+          {
+            "node": "Merge Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keyword Fallback": {
+      "main": [
+        [
+          {
+            "node": "Merge Router",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Router": {
       "main": [
         [
           {
