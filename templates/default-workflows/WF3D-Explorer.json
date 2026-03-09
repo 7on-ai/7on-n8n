@@ -92,7 +92,7 @@
     },
     {
       "parameters": {
-        "model": "={{ $json.userOrKey ? ($json.PAID_MODEL || 'google/gemini-2.0-flash-001') : ($json.FREE_MODEL || 'meta-llama/llama-3.3-70b-instruct:free') }}",
+        "model": "={{ ($json.userOrKey || $json.sysOrKey) ? ($json.PAID_MODEL || 'google/gemini-2.0-flash-001') : ($json.FREE_MODEL || 'meta-llama/llama-3.3-70b-instruct:free') }}",
         "options": {
           "maxTokens": 6000
         }
@@ -107,7 +107,7 @@
       "name": "OpenRouter LLM (Gemini Flash)",
       "credentials": {
         "openRouterApi": {
-          "id": "FUm3Fg9B8euy8cH3",
+          "id": "Jv35fZXKtN2bqFpr",
           "name": "OpenRouter"
         }
       }
