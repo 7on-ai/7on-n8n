@@ -3,16 +3,19 @@
   "nodes": [
     {
       "parameters": {
-        "content": "# WF3-D — EXPLORER+ v5 (JARVIS AGI)\n\n### Merged from v3 + v4:\n\n**Restored from v3:**\n- ✅ wikipedia search (inside web_search tool)\n- ✅ fetch_url (inside web_search tool)\n- ✅ get_weather: 4-lang OWM + 5-day forecast (restored from weather_lookup th-only)\n- ✅ find_places: YouTube search (merged into maps_search)\n- ✅ dev_tools: npm_search, pypi_info, http_test, github_repos, github_issues (merged into github_search)\n- ✅ rag_search: personal knowledge base (vector + keyword fallback)\n- ✅ i18n extra keys (query_required, url_required, city_required, repo_required, package_required, github_username_missing)\n- ✅ maxTokens=6000 (Gemini Flash needs large context for research synthesis)\n- ✅ webhook responseMode=lastNode (fixed v4 responseNode bug)\n- ✅ LLM = Gemini Flash (best for research: fast + large context)\n\n**Kept from v4:**\n- ✅ v4 payload schema (databaseUrl, _dispatch_mode, hasCrisis, isBackground)\n- ✅ databaseUrl from WF2 payload\n- ✅ Format Output normalized for WF2 synthesis\n- ✅ _persona + USER_CONTEXT + GROWTH_GUIDANCE exported\n- ✅ Clean node IDs (no trailing 1)\n- ✅ Better system prompt (USER_CONTEXT + role + Thailand-aware)\n- ✅ errorWorkflow: WF0-Error-Handler (both versions missing — added in v5)\n\n### Tools (8 + think):\nweb_search (brave+wikipedia+fetch_url),\nget_weather (current+5day, 4-lang),\nmaps_search (textsearch+nearby+youtube),\ndev_tools (github_repos+issues+search+npm+pypi+http_test),\nrag_search (vector+keyword fallback),\nsearch_memories, think\n\n### LLM: Gemini Flash (large context, fast, best for research)\n### ENV: DATABASE_URL, N8N_BASE_URL, OPENROUTER_API_KEY, BRAVE_API_KEY",
-        "height": 540,
-        "width": 500,
+        "content": "# WF3-D — EXPLORER+ v5.2 (JARVIS AGI)\n\n### v5.2 additions:\n- ✅ NEW: Build Agent Context node (relationship_facts + goals_and_aspirations + key_facts + relevant_memories)\n\n### Tools (7 + think):\nweb_search, get_weather, maps_search, dev_tools, rag_search, search_memories, think\n\n### LLM: Gemini Flash (large context, fast, best for research)\n### ENV: DATABASE_URL, N8N_BASE_URL, OPENROUTER_API_KEY, BRAVE_API_KEY",
+        "height": 280,
+        "width": 440,
         "color": 4
       },
       "id": "sticky-wf3d",
       "name": "Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-240, -420]
+      "position": [
+        -240,
+        -420
+      ]
     },
     {
       "parameters": {
@@ -25,28 +28,50 @@
       "name": "WF3-D Entry",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [608, 352],
+      "position": [
+        608,
+        352
+      ],
       "webhookId": "wf3d-explorer-entry"
     },
     {
       "parameters": {
-        "jsCode": "const p = $input.first().json.body || $input.first().json;\nreturn { json: {\n  userId:          p.userId,\n  sessionId:       p.sessionId,\n  source:          p.source,\n  message:         p.message || p.enrichedMessage || '',\n  originalMessage: p.originalMessage || p.message || '',\n  persona:         typeof p.persona === 'string' ? JSON.parse(p.persona) : (p.persona || {}),\n  replyTarget:     p.replyTarget,\n  replyToken:      p.replyToken,\n  timestamp:       p.timestamp || new Date().toISOString(),\n  databaseUrl:     p.databaseUrl || process.env.DATABASE_URL || '',\n  targetAgent:     p.targetAgent,\n  _dispatch_mode:  p._dispatch_mode,\n  _router_version: p._router_version,\n  isBackground:    p.isBackground || false,\n  hasCrisis:       p.hasCrisis || false\n}};"
+        "jsCode": "const p = $input.first().json.body || $input.first().json;\nreturn { json: {\n  userId: p.userId, sessionId: p.sessionId, source: p.source,\n  message: p.message || p.enrichedMessage || '', originalMessage: p.originalMessage || p.message || '',\n  persona: typeof p.persona === 'string' ? JSON.parse(p.persona) : (p.persona || {}),\n  replyTarget: p.replyTarget, replyToken: p.replyToken,\n  timestamp: p.timestamp || new Date().toISOString(),\n  databaseUrl: p.databaseUrl || process.env.DATABASE_URL || '',\n  targetAgent: p.targetAgent, _dispatch_mode: p._dispatch_mode,\n  _router_version: p._router_version, isBackground: p.isBackground || false, hasCrisis: p.hasCrisis || false\n}};"
       },
       "id": "extract-payload",
       "name": "Extract Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [896, 352]
+      "position": [
+        896,
+        352
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Load Credentials v5 — v4 architecture + v3 full i18n + USER_CONTEXT\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\n\nconst i18nMap = {\n  th: {\n    not_connected: 'ยังไม่ได้เชื่อมต่อ',\n    configure: 'กรุณาตั้งค่าที่ /dashboard/api-settings',\n    success: 'สำเร็จ',\n    error: 'เกิดข้อผิดพลาด',\n    completed: 'เสร็จแล้ว',\n    query_required: 'กรุณาระบุคำค้นหา',\n    url_required: 'กรุณาระบุ URL',\n    city_required: 'กรุณาระบุชื่อเมือง',\n    repo_required: 'กรุณาระบุ repo (เช่น user/repo)',\n    package_required: 'กรุณาระบุชื่อแพ็กเกจ',\n    github_username_missing: 'ยังไม่ได้ตั้งค่า github_username ใน persona'\n  },\n  en: {\n    not_connected: 'Not connected',\n    configure: 'Please configure at /dashboard/api-settings',\n    success: 'Success',\n    error: 'Error occurred',\n    completed: 'Completed',\n    query_required: 'query is required',\n    url_required: 'url is required',\n    city_required: 'city is required',\n    repo_required: 'repo required (e.g. user/repo)',\n    package_required: 'package name is required',\n    github_username_missing: 'github_username not set in persona'\n  },\n  ja: {\n    not_connected: '接続されていません',\n    configure: '/dashboard/api-settingsで設定してください',\n    success: '成功しました',\n    error: 'エラーが発生しました',\n    completed: '完了しました',\n    query_required: '検索クエリが必要です',\n    url_required: 'URLが必要です',\n    city_required: '都市名が必要です',\n    repo_required: 'リポジトリが必要です（例: user/repo）',\n    package_required: 'パッケージ名が必要です',\n    github_username_missing: 'personaにgithub_usernameが設定されていません'\n  },\n  zh: {\n    not_connected: '未连接',\n    configure: '请在 /dashboard/api-settings 配置',\n    success: '成功',\n    error: '发生错误',\n    completed: '已完成',\n    query_required: '需要查询关键词',\n    url_required: '需要URL',\n    city_required: '需要城市名称',\n    repo_required: '需要仓库名（例如 user/repo）',\n    package_required: '需要包名',\n    github_username_missing: 'persona中未设置github_username'\n  }\n};\nconst i18n = i18nMap[lang] || i18nMap['en'];\n\nconst get = (envKey, payloadKey) => t[payloadKey] || p[payloadKey] || process.env[envKey] || '';\n\nconst creds = {\n  google_access_token:    get('GOOGLE_ACCESS_TOKEN','google_access_token'),\n  google_refresh_token:   get('GOOGLE_REFRESH_TOKEN','google_refresh_token'),\n  microsoft_access_token: get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'),\n  outlook_access_token:   get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'),\n  telegram_bot_token:     get('TELEGRAM_BOT_TOKEN','telegram_bot_token'),\n  discord_bot_token:      get('DISCORD_BOT_TOKEN','discord_bot_token'),\n  slack_bot_token:        get('SLACK_BOT_TOKEN','slack_bot_token'),\n  twitter_bearer_token:   get('TWITTER_BEARER_TOKEN','twitter_bearer_token'),\n  facebook_access_token:  get('FACEBOOK_ACCESS_TOKEN','facebook_access_token'),\n  linkedin_access_token:  get('LINKEDIN_ACCESS_TOKEN','linkedin_access_token'),\n  spotify_access_token:   get('SPOTIFY_ACCESS_TOKEN','spotify_access_token'),\n  youtube_api_key:        get('YOUTUBE_API_KEY','youtube_api_key'),\n  line_notify_token:      get('LINE_NOTIFY_TOKEN','line_notify_token'),\n  google_maps_key:        get('GOOGLE_MAPS_API_KEY','google_maps_key'),\n  brave_api_key:          get('BRAVE_API_KEY','brave_api_key'),\n  openweathermap_key:     get('OPENWEATHERMAP_API_KEY','openweathermap_key'),\n  fal_api_key:            get('FAL_API_KEY','fal_api_key'),\n  elevenlabs_api_key:     get('ELEVENLABS_API_KEY','elevenlabs_api_key'),\n  elevenlabs_voice_id:    get('ELEVENLABS_VOICE_ID','elevenlabs_voice_id'),\n  unsplash_access_key:    get('UNSPLASH_ACCESS_KEY','unsplash_access_key'),\n  nutritionix_app_id:     get('NUTRITIONIX_APP_ID','nutritionix_app_id'),\n  nutritionix_api_key:    get('NUTRITIONIX_API_KEY','nutritionix_api_key'),\n  finnhub_api_key:        get('FINNHUB_API_KEY','finnhub_api_key'),\n  ha_url:                 get('HOME_ASSISTANT_URL','ha_url'),\n  ha_token:               get('HOME_ASSISTANT_TOKEN','ha_token'),\n  sonos_api_url:          get('SONOS_HTTP_API_URL','sonos_api_url'),\n  lastfm_api_key:         get('LASTFM_API_KEY','lastfm_api_key'),\n  lastfm_username:        get('LASTFM_USERNAME','lastfm_username'),\n  lastfm_session_key:     get('LASTFM_SESSION_KEY','lastfm_session_key'),\n  internal_auth_token:    get('INTERNAL_AUTH_TOKEN','internal_auth_token'),\n  n8n_base_url:           get('N8N_BASE_URL','n8n_base_url'),\n  database_url:           prev.databaseUrl || get('DATABASE_URL','database_url'),\n  github_token:           get('GITHUB_TOKEN','github_token')\n};\n\n// OpenRouter keys — used for embeddings only (LLM = Gemini Flash hardcoded)\nconst userOrKey  = t.openrouter_access_token || '';\nconst sysOrKey   = process.env.OPENROUTER_API_KEY || '';\n// LLM is Gemini Flash (best for research: large context + fast)\n// Fallback only if Gemini unavailable\nconst PAID_MODEL = 'google/gemini-2.0-flash-001';\nconst FREE_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';\n\n// ── USER_CONTEXT (consistent with WF3-A/B/C v5) ───────────────\nconst userContextParts = [];\nif (p.name) userContextParts.push(`Name: ${p.name}`);\nif (p.interests?.length > 0) userContextParts.push(`Interests: ${p.interests.join(', ')}`);\nif (p.personality_notes) userContextParts.push(`Personality: ${p.personality_notes}`);\nif (p.key_facts?.length > 0) {\n  userContextParts.push(`Key Facts:\\n${p.key_facts.map(f => `  - ${f}`).join('\\n')}`);\n}\nif (p.physical_stats && Object.keys(p.physical_stats).length > 0) {\n  const stats = Object.entries(p.physical_stats).map(([k,v]) => `${k}: ${v}`).join(', ');\n  userContextParts.push(`Physical Stats: ${stats}`);\n}\nif (p.ethical_profile) {\n  const ep = p.ethical_profile;\n  userContextParts.push(\n    `Growth Stage: ${ep.growth_stage} (${ep.growth_stage_label})` +\n    (ep.top_strengths?.length > 0 ? ` | Strengths: ${ep.top_strengths.join(', ')}` : '')\n  );\n}\nif (p.relevant_memories?.length > 0) {\n  const memStr = p.relevant_memories.map(m => `  [${m.type}]: ${m.summary}`).join('\\n');\n  userContextParts.push(`Recent Memories (static snapshot):\\n${memStr}`);\n}\n\nconst USER_CONTEXT = userContextParts.length > 0\n  ? `\\n\\n## WHAT I KNOW ABOUT YOU:\\n${userContextParts.join('\\n')}\\n`\n  : '';\n\n// ── GROWTH_GUIDANCE ───────────────────────────────────────────\nconst stage = p.ethical_profile?.growth_stage || 2;\nconst GROWTH_GUIDANCE = {\n  1: 'User is new to research — explain clearly, avoid technical jargon, provide context',\n  2: 'User is developing — guide through sources, explain tradeoffs between results',\n  3: 'User is growing — synthesize multiple perspectives, encourage critical evaluation',\n  4: 'User is advanced — peer-level discussion, discuss methodology and source quality',\n  5: 'User is expert — focus on nuance, emerging research, and contrarian perspectives'\n}[stage] || '';\n\nconst connected = Object.entries(creds).filter(([k,v]) => v).map(([k]) => k);\n\nconsole.log('[Load Credentials v5 Explorer]', {\n  userId: prev.userId?.substring(0,8)+'...',\n  connected: connected.length,\n  lang,\n  hasUserKey: !!userOrKey,\n  growthStage: stage\n});\n\nreturn {\n  json: {\n    ...prev,\n    credentials: creds,\n    lang, i18n,\n    USER_CONTEXT,\n    GROWTH_GUIDANCE,\n    stage,\n    userOrKey, sysOrKey,\n    PAID_MODEL, FREE_MODEL,\n    _connected: connected,\n    _persona: p\n  }\n};"
+        "jsCode": "// Load Credentials v5 — Explorer (Gemini Flash + embeddings)\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\n\nconst i18nMap = {\n  th: { not_connected:'ยังไม่ได้เชื่อมต่อ', configure:'กรุณาตั้งค่าที่ /dashboard/api-settings', success:'สำเร็จ', error:'เกิดข้อผิดพลาด', completed:'เสร็จแล้ว', query_required:'กรุณาระบุคำค้นหา', url_required:'กรุณาระบุ URL', city_required:'กรุณาระบุชื่อเมือง', repo_required:'กรุณาระบุ repo (เช่น user/repo)', package_required:'กรุณาระบุชื่อแพ็กเกจ', github_username_missing:'ยังไม่ได้ตั้งค่า github_username ใน persona' },\n  en: { not_connected:'Not connected', configure:'Please configure at /dashboard/api-settings', success:'Success', error:'Error occurred', completed:'Completed', query_required:'query is required', url_required:'url is required', city_required:'city is required', repo_required:'repo required (e.g. user/repo)', package_required:'package name is required', github_username_missing:'github_username not set in persona' },\n  ja: { not_connected:'接続されていません', configure:'/dashboard/api-settingsで設定してください', success:'成功しました', error:'エラーが発生しました', completed:'完了しました', query_required:'検索クエリが必要です', url_required:'URLが必要です', city_required:'都市名が必要です', repo_required:'リポジトリが必要です', package_required:'パッケージ名が必要です', github_username_missing:'personaにgithub_usernameが設定されていません' },\n  zh: { not_connected:'未连接', configure:'请在 /dashboard/api-settings 配置', success:'成功', error:'发生错误', completed:'已完成', query_required:'需要查询关键词', url_required:'需要URL', city_required:'需要城市名称', repo_required:'需要仓库名', package_required:'需要包名', github_username_missing:'persona中未设置github_username' }\n};\nconst i18n = i18nMap[lang] || i18nMap['en'];\n\nconst get = (envKey, payloadKey) => t[payloadKey] || p[payloadKey] || process.env[envKey] || '';\n\nconst creds = {\n  google_access_token:    get('GOOGLE_ACCESS_TOKEN','google_access_token'),\n  google_refresh_token:   get('GOOGLE_REFRESH_TOKEN','google_refresh_token'),\n  microsoft_access_token: get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'),\n  outlook_access_token:   get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'),\n  telegram_bot_token:     get('TELEGRAM_BOT_TOKEN','telegram_bot_token'),\n  discord_bot_token:      get('DISCORD_BOT_TOKEN','discord_bot_token'),\n  slack_bot_token:        get('SLACK_BOT_TOKEN','slack_bot_token'),\n  twitter_bearer_token:   get('TWITTER_BEARER_TOKEN','twitter_bearer_token'),\n  facebook_access_token:  get('FACEBOOK_ACCESS_TOKEN','facebook_access_token'),\n  linkedin_access_token:  get('LINKEDIN_ACCESS_TOKEN','linkedin_access_token'),\n  spotify_access_token:   get('SPOTIFY_ACCESS_TOKEN','spotify_access_token'),\n  youtube_api_key:        get('YOUTUBE_API_KEY','youtube_api_key'),\n  line_notify_token:      get('LINE_NOTIFY_TOKEN','line_notify_token'),\n  google_maps_key:        get('GOOGLE_MAPS_API_KEY','google_maps_key'),\n  brave_api_key:          get('BRAVE_API_KEY','brave_api_key'),\n  openweathermap_key:     get('OPENWEATHERMAP_API_KEY','openweathermap_key'),\n  fal_api_key:            get('FAL_API_KEY','fal_api_key'),\n  elevenlabs_api_key:     get('ELEVENLABS_API_KEY','elevenlabs_api_key'),\n  elevenlabs_voice_id:    get('ELEVENLABS_VOICE_ID','elevenlabs_voice_id'),\n  unsplash_access_key:    get('UNSPLASH_ACCESS_KEY','unsplash_access_key'),\n  nutritionix_app_id:     get('NUTRITIONIX_APP_ID','nutritionix_app_id'),\n  nutritionix_api_key:    get('NUTRITIONIX_API_KEY','nutritionix_api_key'),\n  finnhub_api_key:        get('FINNHUB_API_KEY','finnhub_api_key'),\n  ha_url:                 get('HOME_ASSISTANT_URL','ha_url'),\n  ha_token:               get('HOME_ASSISTANT_TOKEN','ha_token'),\n  sonos_api_url:          get('SONOS_HTTP_API_URL','sonos_api_url'),\n  lastfm_api_key:         get('LASTFM_API_KEY','lastfm_api_key'),\n  lastfm_username:        get('LASTFM_USERNAME','lastfm_username'),\n  lastfm_session_key:     get('LASTFM_SESSION_KEY','lastfm_session_key'),\n  internal_auth_token:    get('INTERNAL_AUTH_TOKEN','internal_auth_token'),\n  n8n_base_url:           get('N8N_BASE_URL','n8n_base_url'),\n  database_url:           prev.databaseUrl || get('DATABASE_URL','database_url'),\n  github_token:           get('GITHUB_TOKEN','github_token')\n};\n\nconst userOrKey  = t.openrouter_access_token || '';\nconst sysOrKey   = process.env.OPENROUTER_API_KEY || '';\nconst PAID_MODEL = 'google/gemini-2.0-flash-001';\nconst FREE_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';\n\nconst stage = p.ethical_profile?.growth_stage || 2;\nconst GROWTH_GUIDANCE = {\n  1: 'User is new to research — explain clearly, avoid technical jargon, provide context',\n  2: 'User is developing — guide through sources, explain tradeoffs between results',\n  3: 'User is growing — synthesize multiple perspectives, encourage critical evaluation',\n  4: 'User is advanced — peer-level discussion, discuss methodology and source quality',\n  5: 'User is expert — focus on nuance, emerging research, and contrarian perspectives'\n}[stage] || '';\n\nconst connected = Object.entries(creds).filter(([k,v]) => v).map(([k]) => k);\n\nconsole.log('[Load Credentials v5 Explorer]', {\n  userId: prev.userId?.substring(0,8)+'...', connected: connected.length, lang,\n  hasUserKey: !!userOrKey, growthStage: stage\n});\n\nreturn {\n  json: {\n    ...prev,\n    credentials: creds,\n    lang, i18n,\n    GROWTH_GUIDANCE, stage,\n    userOrKey, sysOrKey,\n    PAID_MODEL, FREE_MODEL,\n    _connected: connected,\n    _persona: p\n  }\n};"
       },
       "id": "load-credentials",
       "name": "Load Credentials",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1152, 352]
+      "position": [
+        1152,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Agent Context v2 — Long-Life Memory\nconst payload = $input.first().json;\nconst persona = payload._persona || payload.persona || {};\nconst userId = payload.userId;\n\nconst relevantMemories    = persona.relevant_memories     || [];\nconst keyFacts            = persona.key_facts             || [];\nconst ethicalProfile      = persona.ethical_profile       || {};\nconst interests           = persona.interests             || [];\nconst preferences         = persona.preferences           || {};\nconst relationshipFacts   = persona.relationship_facts    || [];\nconst goalsAndAspirations = persona.goals_and_aspirations || [];\nconst physicalStats       = persona.physical_stats        || {};\n\nfunction buildUserContext(p) {\n  const lines = [];\n  lines.push(`👤 USER PROFILE`);\n  lines.push(`Name: ${p.name || 'Unknown'}`);\n  lines.push(`Language: ${p.language_preference || 'th'}`);\n  lines.push(`Tier: ${p.subscriptionTier || 'FREE'}`);\n  lines.push(`Timezone: ${p.timezone || 'Asia/Bangkok'}`);\n\n  const hasStats = Object.values(physicalStats).some(v => v != null);\n  if (hasStats) {\n    const s = physicalStats;\n    const parts = [];\n    if (s.age)       parts.push(`age ${s.age}`);\n    if (s.gender)    parts.push(s.gender);\n    if (s.weight_kg) parts.push(`${s.weight_kg}kg`);\n    if (s.height_cm) parts.push(`${s.height_cm}cm`);\n    if (parts.length) lines.push(`Physical: ${parts.join(', ')}`);\n  }\n\n  if (p.personality_notes) lines.push(`Personality: ${p.personality_notes}`);\n\n  if (keyFacts.length > 0) {\n    lines.push(`\\n📌 KEY FACTS (remember these always):`);\n    keyFacts.slice(0, 8).forEach(f => lines.push(`  • ${f}`));\n  }\n\n  if (interests.length > 0) {\n    lines.push(`\\n💡 INTERESTS: ${interests.slice(0, 6).join(', ')}`);\n  }\n\n  if (Object.keys(preferences).length > 0) {\n    const prefStr = Object.entries(preferences).slice(0, 4).map(([k,v]) => `${k}: ${v}`).join(', ');\n    lines.push(`⚙️  PREFERENCES: ${prefStr}`);\n  }\n\n  if (relationshipFacts.length > 0) {\n    lines.push(`\\n❤️  RELATIONSHIPS:`);\n    relationshipFacts.slice(0, 3).forEach(r => lines.push(`  • ${r}`));\n  }\n\n  if (goalsAndAspirations.length > 0) {\n    lines.push(`\\n🎯 GOALS & ASPIRATIONS:`);\n    goalsAndAspirations.slice(0, 4).forEach(g => lines.push(`  • ${g}`));\n  }\n\n  if (ethicalProfile.growth_stage) {\n    lines.push(`\\n🌱 GROWTH: Stage ${ethicalProfile.growth_stage}/5 (${ethicalProfile.growth_stage_label || ''})`);\n    if (ethicalProfile.top_strengths?.length) {\n      lines.push(`   Strengths: ${ethicalProfile.top_strengths.join(', ')}`);\n    }\n  }\n\n  if (relevantMemories.length > 0) {\n    lines.push(`\\n🧠 RELEVANT MEMORIES (from past conversations):`);\n    relevantMemories.forEach((m, i) => {\n      const sim = m.similarity ? ` [${(m.similarity*100).toFixed(0)}% match]` : '';\n      lines.push(`  ${i+1}. [${m.type}]${sim} ${m.summary}`);\n      if (m.insight) lines.push(`     → ${m.insight}`);\n    });\n  }\n\n  return lines.join('\\n');\n}\n\nconst userContext = buildUserContext(persona);\nconsole.log(`[BuildAgentContext] userId=${userId?.slice(0,8)}... | facts=${keyFacts.length} | memories=${relevantMemories.length} | goals=${goalsAndAspirations.length} | relationships=${relationshipFacts.length}`);\n\nreturn {\n  json: {\n    ...payload,\n    USER_CONTEXT: userContext,\n    _context_built: true,\n    _facts_count: keyFacts.length,\n    _memories_count: relevantMemories.length\n  }\n};\n"
+      },
+      "id": "build-agent-context",
+      "name": "Build Agent Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        352
+      ]
     },
     {
       "parameters": {
@@ -60,7 +85,10 @@
       "name": "Explorer Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.8,
-      "position": [1648, 240]
+      "position": [
+        1664,
+        240
+      ]
     },
     {
       "parameters": {
@@ -71,7 +99,10 @@
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
-      "position": [1344, 480],
+      "position": [
+        1344,
+        480
+      ],
       "id": "llm-gemini",
       "name": "OpenRouter LLM (Gemini Flash)",
       "credentials": {
@@ -90,7 +121,10 @@
       "name": "Session Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
-      "position": [1504, 480]
+      "position": [
+        1504,
+        480
+      ]
     },
     {
       "parameters": {},
@@ -98,7 +132,10 @@
       "name": "think",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
-      "position": [1664, 480]
+      "position": [
+        1664,
+        480
+      ]
     },
     {
       "parameters": {
@@ -110,118 +147,254 @@
       "name": "search_memories",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [1824, 480]
+      "position": [
+        1824,
+        480
+      ]
     },
     {
       "parameters": {
         "name": "web_search",
         "description": "Search the web or fetch content. search_type: brave_search (requires: query; optional: count), wikipedia (requires: query; optional: lang th|en|ja|zh), fetch_url (requires: url).",
-        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\nconst searchType = (input.search_type || 'brave_search').toLowerCase();\n\ntry {\n  if (searchType === 'brave_search') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const braveKey = creds.brave_api_key || process.env.BRAVE_API_KEY || '';\n    if (!braveKey) return { json: { error: `Brave API key ${i18n.not_connected}`, help: i18n.configure } };\n    const count = input.count || 8;\n    const res = await fetch(\n      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(input.query)}&count=${count}&country=th`,\n      { headers: { 'Accept': 'application/json', 'X-Subscription-Token': braveKey } }\n    );\n    if (!res.ok) throw new Error(`Brave API HTTP ${res.status}`);\n    const data = await res.json();\n    const results = (data.web?.results || []).map(r => ({\n      title: r.title, url: r.url,\n      snippet: r.description?.slice(0, 300)\n    }));\n    return { json: { query: input.query, results, count: results.length, engine: 'Brave' } };\n  }\n\n  if (searchType === 'wikipedia') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const wikiLangMap = { th: 'th', en: 'en', ja: 'ja', zh: 'zh' };\n    const wikiLang = wikiLangMap[input.lang || ctx.lang || 'th'] || 'en';\n    const title = encodeURIComponent(input.query.replace(/ /g, '_'));\n    const res = await fetch(`https://${wikiLang}.wikipedia.org/api/rest_v1/page/summary/${title}`);\n    if (res.status === 404) {\n      // Try English fallback\n      const res2 = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${title}`);\n      if (res2.status === 404) return { json: { error: `Wikipedia: '${input.query}' not found` } };\n      const data2 = await res2.json();\n      return { json: { title: data2.title, summary: data2.extract, url: data2.content_urls?.desktop?.page, lang: 'en', note: 'Fallback to English' } };\n    }\n    const data = await res.json();\n    return { json: { title: data.title, summary: data.extract, url: data.content_urls?.desktop?.page, lang: wikiLang } };\n  }\n\n  if (searchType === 'fetch_url') {\n    if (!input.url) return { json: { error: i18n.url_required || 'url required' } };\n    const res = await fetch(input.url, { headers: { 'User-Agent': 'JARVIS-Explorer/5.0' } });\n    if (!res.ok) return { json: { error: `HTTP ${res.status}`, url: input.url } };\n    const text = await res.text();\n    const clean = text.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 4000);\n    return { json: { url: input.url, content: clean, length: clean.length } };\n  }\n\n  return { json: { error: `Unknown search_type: ${searchType}. Use: brave_search, wikipedia, fetch_url` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\nconst searchType = (input.search_type || 'brave_search').toLowerCase();\n\ntry {\n  if (searchType === 'brave_search') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const braveKey = creds.brave_api_key || process.env.BRAVE_API_KEY || '';\n    if (!braveKey) return { json: { error: `Brave API key ${i18n.not_connected}`, help: i18n.configure } };\n    const count = input.count || 8;\n    const res = await fetch(\n      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(input.query)}&count=${count}&country=th`,\n      { headers: { 'Accept': 'application/json', 'X-Subscription-Token': braveKey } }\n    );\n    if (!res.ok) throw new Error(`Brave API HTTP ${res.status}`);\n    const data = await res.json();\n    const results = (data.web?.results || []).map(r => ({ title: r.title, url: r.url, snippet: r.description?.slice(0, 300) }));\n    return { json: { query: input.query, results, count: results.length, engine: 'Brave' } };\n  }\n  if (searchType === 'wikipedia') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const wikiLangMap = { th: 'th', en: 'en', ja: 'ja', zh: 'zh' };\n    const wikiLang = wikiLangMap[input.lang || ctx.lang || 'th'] || 'en';\n    const title = encodeURIComponent(input.query.replace(/ /g, '_'));\n    const res = await fetch(`https://${wikiLang}.wikipedia.org/api/rest_v1/page/summary/${title}`);\n    if (res.status === 404) {\n      const res2 = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${title}`);\n      if (res2.status === 404) return { json: { error: `Wikipedia: '${input.query}' not found` } };\n      const data2 = await res2.json();\n      return { json: { title: data2.title, summary: data2.extract, url: data2.content_urls?.desktop?.page, lang: 'en', note: 'Fallback to English' } };\n    }\n    const data = await res.json();\n    return { json: { title: data.title, summary: data.extract, url: data.content_urls?.desktop?.page, lang: wikiLang } };\n  }\n  if (searchType === 'fetch_url') {\n    if (!input.url) return { json: { error: i18n.url_required || 'url required' } };\n    const res = await fetch(input.url, { headers: { 'User-Agent': 'JARVIS-Explorer/5.0' } });\n    if (!res.ok) return { json: { error: `HTTP ${res.status}`, url: input.url } };\n    const text = await res.text();\n    const clean = text.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 4000);\n    return { json: { url: input.url, content: clean, length: clean.length } };\n  }\n  return { json: { error: `Unknown search_type: ${searchType}. Use: brave_search, wikipedia, fetch_url` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
       },
       "id": "tool-web-search",
       "name": "web_search",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [1984, 480]
+      "position": [
+        1984,
+        480
+      ]
     },
     {
       "parameters": {
         "name": "get_weather",
-        "description": "Get weather data. weather_type: current (current conditions), forecast_5day (5-day forecast). Requires: city (e.g. Bangkok, Chiang Mai, Tokyo). Language follows user preference.",
-        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\nconst weatherType = (input.weather_type || 'current').toLowerCase();\nconst city  = input.city || ctx._persona?.location || 'Bangkok';\nconst owmKey = creds.openweathermap_key || process.env.OPENWEATHERMAP_API_KEY || '';\n\nif (!owmKey) return { json: { error: `OpenWeatherMap ${i18n.not_connected}`, help: i18n.configure } };\nif (!city)   return { json: { error: i18n.city_required || 'city is required' } };\n\n// 4-lang OWM mapping\nconst owmLangMap = { th: 'th', en: 'en', ja: 'ja', zh: 'zh_cn' };\nconst owmLang = owmLangMap[ctx.lang || 'th'] || 'en';\nconst BASE = 'https://api.openweathermap.org/data/2.5';\n\ntry {\n  if (weatherType === 'current') {\n    const res = await fetch(`${BASE}/weather?q=${encodeURIComponent(city)}&appid=${owmKey}&units=metric&lang=${owmLang}`);\n    const d = await res.json();\n    if (d.cod !== 200) return { json: { error: d.message, city } };\n    return { json: {\n      city: d.name, country: d.sys?.country,\n      temp_c: d.main?.temp, feels_like: d.main?.feels_like,\n      humidity_pct: d.main?.humidity,\n      description: d.weather?.[0]?.description,\n      wind_kph: Math.round((d.wind?.speed || 0) * 3.6),\n      visibility_km: (d.visibility || 0) / 1000,\n      timestamp: new Date().toISOString()\n    }};\n  }\n\n  if (weatherType === 'forecast_5day') {\n    const res = await fetch(`${BASE}/forecast?q=${encodeURIComponent(city)}&appid=${owmKey}&units=metric&lang=${owmLang}&cnt=40`);\n    const d = await res.json();\n    if (d.cod !== '200') return { json: { error: d.message, city } };\n    const byDay = {};\n    for (const item of d.list) {\n      const day = item.dt_txt.split(' ')[0];\n      if (!byDay[day]) byDay[day] = [];\n      byDay[day].push(item);\n    }\n    const forecast = Object.entries(byDay).slice(0, 5).map(([date, items]) => ({\n      date,\n      temp_max: Math.round(Math.max(...items.map(i => i.main.temp_max))),\n      temp_min: Math.round(Math.min(...items.map(i => i.main.temp_min))),\n      description: items[Math.floor(items.length / 2)].weather[0].description,\n      rain_chance: Math.round(Math.max(...items.map(i => (i.pop || 0) * 100)))\n    }));\n    return { json: { city: d.city?.name, forecast, days: forecast.length } };\n  }\n\n  return { json: { error: `Unknown weather_type: ${weatherType}. Use: current, forecast_5day` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
+        "description": "Get weather data. weather_type: current (current conditions), forecast_5day (5-day forecast). Requires: city (e.g. Bangkok, Chiang Mai, Tokyo).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\nconst weatherType = (input.weather_type || 'current').toLowerCase();\nconst city  = input.city || ctx._persona?.location || 'Bangkok';\nconst owmKey = creds.openweathermap_key || process.env.OPENWEATHERMAP_API_KEY || '';\n\nif (!owmKey) return { json: { error: `OpenWeatherMap ${i18n.not_connected}`, help: i18n.configure } };\nif (!city)   return { json: { error: i18n.city_required || 'city is required' } };\n\nconst owmLangMap = { th: 'th', en: 'en', ja: 'ja', zh: 'zh_cn' };\nconst owmLang = owmLangMap[ctx.lang || 'th'] || 'en';\nconst BASE = 'https://api.openweathermap.org/data/2.5';\n\ntry {\n  if (weatherType === 'current') {\n    const res = await fetch(`${BASE}/weather?q=${encodeURIComponent(city)}&appid=${owmKey}&units=metric&lang=${owmLang}`);\n    const d = await res.json();\n    if (d.cod !== 200) return { json: { error: d.message, city } };\n    return { json: { city: d.name, country: d.sys?.country, temp_c: d.main?.temp, feels_like: d.main?.feels_like, humidity_pct: d.main?.humidity, description: d.weather?.[0]?.description, wind_kph: Math.round((d.wind?.speed || 0) * 3.6), visibility_km: (d.visibility || 0) / 1000, timestamp: new Date().toISOString() }};\n  }\n  if (weatherType === 'forecast_5day') {\n    const res = await fetch(`${BASE}/forecast?q=${encodeURIComponent(city)}&appid=${owmKey}&units=metric&lang=${owmLang}&cnt=40`);\n    const d = await res.json();\n    if (d.cod !== '200') return { json: { error: d.message, city } };\n    const byDay = {};\n    for (const item of d.list) {\n      const day = item.dt_txt.split(' ')[0];\n      if (!byDay[day]) byDay[day] = [];\n      byDay[day].push(item);\n    }\n    const forecast = Object.entries(byDay).slice(0, 5).map(([date, items]) => ({\n      date, temp_max: Math.round(Math.max(...items.map(i => i.main.temp_max))),\n      temp_min: Math.round(Math.min(...items.map(i => i.main.temp_min))),\n      description: items[Math.floor(items.length / 2)].weather[0].description,\n      rain_chance: Math.round(Math.max(...items.map(i => (i.pop || 0) * 100)))\n    }));\n    return { json: { city: d.city?.name, forecast, days: forecast.length } };\n  }\n  return { json: { error: `Unknown weather_type: ${weatherType}. Use: current, forecast_5day` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
       },
       "id": "tool-weather",
       "name": "get_weather",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2144, 480]
+      "position": [
+        2144,
+        480
+      ]
     },
     {
       "parameters": {
         "name": "maps_search",
-        "description": "Find places, search nearby locations, or search YouTube. search_type: text_search (requires: query; optional: location), nearby (requires: query; optional: lat, lng, radius), youtube (requires: query; optional: max_results).",
-        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\nconst searchType = (input.search_type || 'text_search').toLowerCase();\n\ntry {\n  if (searchType === 'text_search') {\n    const mapsKey = creds.google_maps_key || process.env.GOOGLE_MAPS_API_KEY || '';\n    if (!mapsKey) return { json: { error: `Google Maps API key ${i18n.not_connected}`, help: i18n.configure } };\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const lat = ctx._persona?.lat || '13.7563';\n    const lng = ctx._persona?.lng || '100.5018';\n    const mapsLang = ['th','en','ja','zh'].includes(ctx.lang) ? ctx.lang : 'en';\n    const res = await fetch(\n      `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(input.query)}&location=${lat},${lng}&radius=5000&language=${mapsLang}&key=${mapsKey}`\n    );\n    const data = await res.json();\n    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS')\n      return { json: { error: data.status, message: data.error_message } };\n    const places = (data.results || []).slice(0, 5).map(p => ({\n      name: p.name, address: p.formatted_address,\n      rating: p.rating, open_now: p.opening_hours?.open_now,\n      place_id: p.place_id\n    }));\n    return { json: { query: input.query, places, count: places.length } };\n  }\n\n  if (searchType === 'nearby') {\n    const mapsKey = creds.google_maps_key || process.env.GOOGLE_MAPS_API_KEY || '';\n    if (!mapsKey) return { json: { error: `Google Maps API key ${i18n.not_connected}`, help: i18n.configure } };\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const lat    = input.lat || ctx._persona?.lat || 13.7563;\n    const lng    = input.lng || ctx._persona?.lng || 100.5018;\n    const radius = input.radius || 1000;\n    const mapsLang = ['th','en','ja','zh'].includes(ctx.lang) ? ctx.lang : 'en';\n    const res = await fetch(\n      `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&keyword=${encodeURIComponent(input.query)}&language=${mapsLang}&key=${mapsKey}`\n    );\n    const data = await res.json();\n    const places = (data.results || []).slice(0, 5).map(p => ({\n      name: p.name, vicinity: p.vicinity,\n      rating: p.rating, open_now: p.opening_hours?.open_now\n    }));\n    return { json: { query: input.query, places, count: places.length, radius_m: radius } };\n  }\n\n  if (searchType === 'youtube') {\n    const ytKey = creds.youtube_api_key || process.env.YOUTUBE_API_KEY || '';\n    if (!ytKey) return { json: { error: `YouTube API key ${i18n.not_connected}`, help: i18n.configure } };\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const maxResults = input.max_results || 5;\n    const res = await fetch(\n      `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(input.query)}&maxResults=${maxResults}&type=video&key=${ytKey}`\n    );\n    const data = await res.json();\n    if (data.error) return { json: { error: data.error.message } };\n    const videos = (data.items || []).map(v => ({\n      title: v.snippet.title,\n      channel: v.snippet.channelTitle,\n      description: v.snippet.description?.slice(0, 150),\n      url: `https://youtube.com/watch?v=${v.id.videoId}`,\n      published: v.snippet.publishedAt\n    }));\n    return { json: { query: input.query, videos, count: videos.length } };\n  }\n\n  return { json: { error: `Unknown search_type: ${searchType}. Use: text_search, nearby, youtube` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
+        "description": "Find places, search nearby locations, or search YouTube. search_type: text_search (requires: query), nearby (requires: query; optional: lat, lng, radius), youtube (requires: query; optional: max_results).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\nconst searchType = (input.search_type || 'text_search').toLowerCase();\n\ntry {\n  if (searchType === 'text_search') {\n    const mapsKey = creds.google_maps_key || process.env.GOOGLE_MAPS_API_KEY || '';\n    if (!mapsKey) return { json: { error: `Google Maps API key ${i18n.not_connected}`, help: i18n.configure } };\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const lat = ctx._persona?.lat || '13.7563';\n    const lng = ctx._persona?.lng || '100.5018';\n    const mapsLang = ['th','en','ja','zh'].includes(ctx.lang) ? ctx.lang : 'en';\n    const res = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(input.query)}&location=${lat},${lng}&radius=5000&language=${mapsLang}&key=${mapsKey}`);\n    const data = await res.json();\n    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') return { json: { error: data.status, message: data.error_message } };\n    const places = (data.results || []).slice(0, 5).map(p => ({ name: p.name, address: p.formatted_address, rating: p.rating, open_now: p.opening_hours?.open_now, place_id: p.place_id }));\n    return { json: { query: input.query, places, count: places.length } };\n  }\n  if (searchType === 'nearby') {\n    const mapsKey = creds.google_maps_key || process.env.GOOGLE_MAPS_API_KEY || '';\n    if (!mapsKey) return { json: { error: `Google Maps API key ${i18n.not_connected}`, help: i18n.configure } };\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const lat = input.lat || ctx._persona?.lat || 13.7563;\n    const lng = input.lng || ctx._persona?.lng || 100.5018;\n    const radius = input.radius || 1000;\n    const mapsLang = ['th','en','ja','zh'].includes(ctx.lang) ? ctx.lang : 'en';\n    const res = await fetch(`https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&keyword=${encodeURIComponent(input.query)}&language=${mapsLang}&key=${mapsKey}`);\n    const data = await res.json();\n    const places = (data.results || []).slice(0, 5).map(p => ({ name: p.name, vicinity: p.vicinity, rating: p.rating, open_now: p.opening_hours?.open_now }));\n    return { json: { query: input.query, places, count: places.length, radius_m: radius } };\n  }\n  if (searchType === 'youtube') {\n    const ytKey = creds.youtube_api_key || process.env.YOUTUBE_API_KEY || '';\n    if (!ytKey) return { json: { error: `YouTube API key ${i18n.not_connected}`, help: i18n.configure } };\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const maxResults = input.max_results || 5;\n    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(input.query)}&maxResults=${maxResults}&type=video&key=${ytKey}`);\n    const data = await res.json();\n    if (data.error) return { json: { error: data.error.message } };\n    const videos = (data.items || []).map(v => ({ title: v.snippet.title, channel: v.snippet.channelTitle, description: v.snippet.description?.slice(0, 150), url: `https://youtube.com/watch?v=${v.id.videoId}`, published: v.snippet.publishedAt }));\n    return { json: { query: input.query, videos, count: videos.length } };\n  }\n  return { json: { error: `Unknown search_type: ${searchType}. Use: text_search, nearby, youtube` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
       },
       "id": "tool-maps",
       "name": "maps_search",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2304, 480]
+      "position": [
+        2304,
+        480
+      ]
     },
     {
       "parameters": {
         "name": "dev_tools",
-        "description": "Developer tools. tool_type: github_repos (list user repos), github_issues (requires: repo e.g. user/repo; optional: state open|closed), github_search (requires: query; optional: type repos|code|users), npm_search (requires: query), pypi_info (requires: package), http_test (requires: url; optional: method, headers, body).",
-        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\nconst toolType = (input.tool_type || 'github_search').toLowerCase();\nconst ghToken = creds.github_token || process.env.GITHUB_TOKEN || '';\nconst ghHeaders = {\n  'Accept': 'application/vnd.github.v3+json',\n  'User-Agent': 'JARVIS-Explorer/5.0',\n  ...(ghToken ? { 'Authorization': `Bearer ${ghToken}` } : {})\n};\n\ntry {\n  if (toolType === 'github_repos') {\n    const username = ctx._persona?.github_username || input.username || '';\n    if (!username) return { json: { error: i18n.github_username_missing || 'github_username not set in persona' } };\n    const res = await fetch(\n      `https://api.github.com/users/${username}/repos?sort=updated&per_page=15`,\n      { headers: ghHeaders }\n    );\n    const data = await res.json();\n    if (!Array.isArray(data)) return { json: { error: data.message || `GitHub API ${i18n.error}` } };\n    return { json: {\n      repos: data.map(r => ({\n        name: r.name, description: r.description,\n        stars: r.stargazers_count, language: r.language,\n        updated: r.updated_at?.split('T')[0], url: r.html_url\n      })),\n      count: data.length\n    }};\n  }\n\n  if (toolType === 'github_issues') {\n    if (!input.repo) return { json: { error: i18n.repo_required || 'repo required (e.g. user/repo)' } };\n    const state = input.state || 'open';\n    const res = await fetch(\n      `https://api.github.com/repos/${input.repo}/issues?state=${state}&per_page=15`,\n      { headers: ghHeaders }\n    );\n    const data = await res.json();\n    if (!Array.isArray(data)) return { json: { error: data.message || `GitHub API ${i18n.error}` } };\n    const issues = data.filter(i => !i.pull_request).map(i => ({\n      number: i.number, title: i.title,\n      state: i.state, created: i.created_at?.split('T')[0], url: i.html_url\n    }));\n    return { json: { repo: input.repo, issues, count: issues.length } };\n  }\n\n  if (toolType === 'github_search') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const type = input.type || 'repos';\n    const endpoint = type === 'code' ? 'code' : type === 'users' ? 'users' : 'repositories';\n    const res = await fetch(\n      `https://api.github.com/search/${endpoint}?q=${encodeURIComponent(input.query)}&sort=stars&per_page=8`,\n      { headers: ghHeaders }\n    );\n    if (!res.ok) throw new Error(`GitHub API HTTP ${res.status}`);\n    const data = await res.json();\n    if (type === 'repos') {\n      return { json: {\n        results: (data.items || []).map(r => ({\n          name: r.full_name, description: r.description?.slice(0, 200),\n          stars: r.stargazers_count, language: r.language,\n          url: r.html_url, updated: r.updated_at?.split('T')[0]\n        })),\n        total: data.total_count\n      }};\n    }\n    return { json: { results: (data.items || []).slice(0, 8), total: data.total_count, type } };\n  }\n\n  if (toolType === 'npm_search') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const res = await fetch(`https://registry.npmjs.org/-/v1/search?text=${encodeURIComponent(input.query)}&size=5`);\n    const data = await res.json();\n    return { json: {\n      packages: (data.objects || []).map(o => ({\n        name: o.package.name, version: o.package.version,\n        description: o.package.description,\n        weekly_downloads: o.downloads?.weekly,\n        url: `https://npmjs.com/package/${o.package.name}`\n      })),\n      count: data.objects?.length || 0\n    }};\n  }\n\n  if (toolType === 'pypi_info') {\n    if (!input.package) return { json: { error: i18n.package_required || 'package name required' } };\n    const res = await fetch(`https://pypi.org/pypi/${input.package}/json`);\n    if (res.status === 404) return { json: { error: `Package '${input.package}' not found on PyPI` } };\n    const data = await res.json();\n    const info = data.info;\n    return { json: {\n      name: info.name, version: info.version, summary: info.summary,\n      author: info.author, license: info.license,\n      home_page: info.home_page, requires_python: info.requires_python\n    }};\n  }\n\n  if (toolType === 'http_test') {\n    if (!input.url) return { json: { error: i18n.url_required || 'url required' } };\n    const method = (input.method || 'GET').toUpperCase();\n    const startTime = Date.now();\n    const res = await fetch(input.url, {\n      method,\n      headers: { 'User-Agent': 'JARVIS-Explorer/5.0', ...(input.headers || {}) },\n      body: input.body ? JSON.stringify(input.body) : undefined\n    });\n    const duration = Date.now() - startTime;\n    const text = await res.text();\n    let body;\n    try { body = JSON.parse(text); } catch { body = text.slice(0, 500); }\n    return { json: { url: input.url, method, status: res.status, ok: res.ok, duration_ms: duration, response: body } };\n  }\n\n  return { json: { error: `Unknown tool_type: ${toolType}. Use: github_repos, github_issues, github_search, npm_search, pypi_info, http_test` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
+        "description": "Developer tools. tool_type: github_repos, github_issues (requires: repo e.g. user/repo), github_search (requires: query), npm_search (requires: query), pypi_info (requires: package), http_test (requires: url; optional: method, headers, body).",
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\nconst toolType = (input.tool_type || 'github_search').toLowerCase();\nconst ghToken = creds.github_token || process.env.GITHUB_TOKEN || '';\nconst ghHeaders = { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'JARVIS-Explorer/5.0', ...(ghToken ? { 'Authorization': `Bearer ${ghToken}` } : {}) };\n\ntry {\n  if (toolType === 'github_repos') {\n    const username = ctx._persona?.github_username || input.username || '';\n    if (!username) return { json: { error: i18n.github_username_missing || 'github_username not set in persona' } };\n    const res = await fetch(`https://api.github.com/users/${username}/repos?sort=updated&per_page=15`, { headers: ghHeaders });\n    const data = await res.json();\n    if (!Array.isArray(data)) return { json: { error: data.message || `GitHub API ${i18n.error}` } };\n    return { json: { repos: data.map(r => ({ name: r.name, description: r.description, stars: r.stargazers_count, language: r.language, updated: r.updated_at?.split('T')[0], url: r.html_url })), count: data.length }};\n  }\n  if (toolType === 'github_issues') {\n    if (!input.repo) return { json: { error: i18n.repo_required || 'repo required (e.g. user/repo)' } };\n    const state = input.state || 'open';\n    const res = await fetch(`https://api.github.com/repos/${input.repo}/issues?state=${state}&per_page=15`, { headers: ghHeaders });\n    const data = await res.json();\n    if (!Array.isArray(data)) return { json: { error: data.message || `GitHub API ${i18n.error}` } };\n    const issues = data.filter(i => !i.pull_request).map(i => ({ number: i.number, title: i.title, state: i.state, created: i.created_at?.split('T')[0], url: i.html_url }));\n    return { json: { repo: input.repo, issues, count: issues.length }};\n  }\n  if (toolType === 'github_search') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const type = input.type || 'repos';\n    const endpoint = type === 'code' ? 'code' : type === 'users' ? 'users' : 'repositories';\n    const res = await fetch(`https://api.github.com/search/${endpoint}?q=${encodeURIComponent(input.query)}&sort=stars&per_page=8`, { headers: ghHeaders });\n    if (!res.ok) throw new Error(`GitHub API HTTP ${res.status}`);\n    const data = await res.json();\n    if (type === 'repos') {\n      return { json: { results: (data.items || []).map(r => ({ name: r.full_name, description: r.description?.slice(0, 200), stars: r.stargazers_count, language: r.language, url: r.html_url, updated: r.updated_at?.split('T')[0] })), total: data.total_count }};\n    }\n    return { json: { results: (data.items || []).slice(0, 8), total: data.total_count, type }};\n  }\n  if (toolType === 'npm_search') {\n    if (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n    const res = await fetch(`https://registry.npmjs.org/-/v1/search?text=${encodeURIComponent(input.query)}&size=5`);\n    const data = await res.json();\n    return { json: { packages: (data.objects || []).map(o => ({ name: o.package.name, version: o.package.version, description: o.package.description, weekly_downloads: o.downloads?.weekly, url: `https://npmjs.com/package/${o.package.name}` })), count: data.objects?.length || 0 }};\n  }\n  if (toolType === 'pypi_info') {\n    if (!input.package) return { json: { error: i18n.package_required || 'package name required' } };\n    const res = await fetch(`https://pypi.org/pypi/${input.package}/json`);\n    if (res.status === 404) return { json: { error: `Package '${input.package}' not found on PyPI` } };\n    const data = await res.json();\n    const info = data.info;\n    return { json: { name: info.name, version: info.version, summary: info.summary, author: info.author, license: info.license, home_page: info.home_page, requires_python: info.requires_python }};\n  }\n  if (toolType === 'http_test') {\n    if (!input.url) return { json: { error: i18n.url_required || 'url required' } };\n    const method = (input.method || 'GET').toUpperCase();\n    const startTime = Date.now();\n    const res = await fetch(input.url, { method, headers: { 'User-Agent': 'JARVIS-Explorer/5.0', ...(input.headers || {}) }, body: input.body ? JSON.stringify(input.body) : undefined });\n    const duration = Date.now() - startTime;\n    const text = await res.text();\n    let body;\n    try { body = JSON.parse(text); } catch { body = text.slice(0, 500); }\n    return { json: { url: input.url, method, status: res.status, ok: res.ok, duration_ms: duration, response: body }};\n  }\n  return { json: { error: `Unknown tool_type: ${toolType}. Use: github_repos, github_issues, github_search, npm_search, pypi_info, http_test` } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
       },
       "id": "tool-dev",
       "name": "dev_tools",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2464, 480]
+      "position": [
+        2464,
+        480
+      ]
     },
     {
       "parameters": {
         "name": "rag_search",
-        "description": "Search user's personal knowledge base using semantic similarity. Use FIRST before web_search when user asks about personal notes, saved articles, or their own knowledge. Requires: query. Falls back to keyword search if no embed key.",
-        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\nconst userId = ctx.userId;\n\nif (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n\nconst dbUrl = creds.database_url || process.env.DATABASE_URL || '';\n\n// OpenRouter embed key\nconst persona = ctx._persona || ctx.persona || {};\nconst tokens  = persona.tokens || {};\nconst embedKey = tokens.openrouter_access_token || process.env.OPENROUTER_API_KEY || '';\n\nif (!dbUrl) return { json: { error: `Database ${i18n.not_connected || 'not connected'}`, results: [] } };\n\ntry {\n  if (embedKey) {\n    // ── Vector path ─────────────────────────────────────────\n    const embedRes = await fetch('https://openrouter.ai/api/v1/embeddings', {\n      method: 'POST',\n      headers: { 'Authorization': `Bearer ${embedKey}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify({ model: 'openai/text-embedding-3-small', input: input.query })\n    });\n    if (embedRes.ok) {\n      const embedData = await embedRes.json();\n      const embedding = embedData.data?.[0]?.embedding;\n      if (embedding && Array.isArray(embedding)) {\n        const { Pool } = require('pg');\n        const pool = new Pool({ connectionString: dbUrl });\n        const vectorStr = `[${embedding.join(',')}]`;\n        const result = await pool.query(\n          `SELECT content, metadata,\n                  1 - (embedding <=> $1::vector) AS similarity\n           FROM user_data_schema.knowledge_base\n           WHERE user_id = $2 AND embedding IS NOT NULL\n             AND 1 - (embedding <=> $1::vector) > 0.5\n           ORDER BY embedding <=> $1::vector LIMIT 5`,\n          [vectorStr, userId]\n        );\n        await pool.end();\n        return { json: { results: result.rows || [], count: result.rows.length, mode: 'vector' } };\n      }\n    }\n  }\n\n  // ── Keyword fallback ──────────────────────────────────────\n  console.log('[rag_search] fallback to keyword search');\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n  const result = await pool.query(\n    `SELECT content, metadata FROM user_data_schema.knowledge_base\n     WHERE user_id = $1 AND content ILIKE $2 LIMIT 5`,\n    [userId, `%${input.query}%`]\n  );\n  await pool.end();\n  return { json: { results: result.rows || [], count: result.rows.length, mode: 'keyword_fallback' } };\n\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}`, results: [] } };\n}"
+        "description": "Search user's personal knowledge base using semantic similarity. Use FIRST before web_search when user asks about personal notes, saved articles, or their own knowledge. Requires: query.",
+        "jsCode": "const input   = JSON.parse($input.first().json.query || '{}');\nconst ctx     = $('Load Credentials').first().json;\nconst creds   = ctx.credentials || {};\nconst i18n    = ctx.i18n || {};\nconst userId  = ctx.userId;\n\nif (!input.query) return { json: { error: i18n.query_required || 'query required' } };\n\nconst dbUrl    = creds.database_url || process.env.DATABASE_URL || '';\nconst persona  = ctx._persona || ctx.persona || {};\nconst tokens   = persona.tokens || {};\nconst embedKey = tokens.openrouter_access_token || process.env.OPENROUTER_API_KEY || '';\n\nif (!dbUrl) return { json: { error: `Database ${i18n.not_connected || 'not connected'}`, results: [] } };\n\ntry {\n  if (embedKey) {\n    const embedRes = await fetch('https://openrouter.ai/api/v1/embeddings', {\n      method: 'POST',\n      headers: { 'Authorization': `Bearer ${embedKey}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify({ model: 'openai/text-embedding-3-small', input: input.query })\n    });\n    if (embedRes.ok) {\n      const embedData = await embedRes.json();\n      const embedding = embedData.data?.[0]?.embedding;\n      if (embedding && Array.isArray(embedding)) {\n        const { Pool } = require('pg');\n        const pool = new Pool({ connectionString: dbUrl });\n        const vectorStr = `[${embedding.join(',')}]`;\n        const result = await pool.query(\n          `SELECT content, metadata, 1 - (embedding <=> $1::vector) AS similarity FROM user_data_schema.knowledge_base WHERE user_id = $2 AND embedding IS NOT NULL AND 1 - (embedding <=> $1::vector) > 0.5 ORDER BY embedding <=> $1::vector LIMIT 5`,\n          [vectorStr, userId]\n        );\n        await pool.end();\n        return { json: { results: result.rows || [], count: result.rows.length, mode: 'vector' } };\n      }\n    }\n  }\n  const { Pool } = require('pg');\n  const pool = new Pool({ connectionString: dbUrl });\n  const result = await pool.query(\n    `SELECT content, metadata FROM user_data_schema.knowledge_base WHERE user_id = $1 AND content ILIKE $2 LIMIT 5`,\n    [userId, `%${input.query}%`]\n  );\n  await pool.end();\n  return { json: { results: result.rows || [], count: result.rows.length, mode: 'keyword_fallback' } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}`, results: [] } };\n}"
       },
       "id": "tool-rag",
       "name": "rag_search",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2624, 480]
+      "position": [
+        2624,
+        480
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Format Output v5 — normalized for WF2 synthesis\n// Dispatch Gate reads: data?.message || data?.response || data?.output || data?.agentOutput || data?.text\nconst raw  = $input.first().json;\nconst out  = raw.output || raw.agentOutput || raw.text || raw.message || 'ไม่พบข้อมูล';\nconst prev = $('Extract Payload').item.json;\nconst result = {\n  ...prev,\n  message:       out,\n  response:      out,\n  output:        out,\n  agentOutput:   out,\n  agentCategory: 'explorer',\n  processedAt:   new Date().toISOString(),\n  _llm_tier:     raw._llm_tier || 'langchain'\n};\nreturn { json: result };"
+        "jsCode": "const raw  = $input.first().json;\nconst out  = raw.output || raw.agentOutput || raw.text || raw.message || 'ไม่พบข้อมูล';\nconst prev = $('Extract Payload').item.json;\nreturn { json: { ...prev, message: out, response: out, output: out, agentOutput: out, agentCategory: 'explorer', processedAt: new Date().toISOString(), _llm_tier: raw._llm_tier || 'langchain' } };"
       },
       "id": "format-output",
       "name": "Format Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1904, 240]
+      "position": [
+        1904,
+        240
+      ]
     }
   ],
   "connections": {
     "WF3-D Entry": {
-      "main": [[{ "node": "Extract Payload", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Extract Payload": {
-      "main": [[{ "node": "Load Credentials", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Load Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Load Credentials": {
-      "main": [[{ "node": "Explorer Agent", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Build Agent Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Agent Context": {
+      "main": [
+        [
+          {
+            "node": "Explorer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Explorer Agent": {
-      "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "OpenRouter LLM (Gemini Flash)": {
-      "ai_languageModel": [[{ "node": "Explorer Agent", "type": "ai_languageModel", "index": 0 }]]
+      "ai_languageModel": [
+        [
+          {
+            "node": "Explorer Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Session Memory": {
-      "ai_memory": [[{ "node": "Explorer Agent", "type": "ai_memory", "index": 0 }]]
+      "ai_memory": [
+        [
+          {
+            "node": "Explorer Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
     },
     "think": {
-      "ai_tool": [[{ "node": "Explorer Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Explorer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "search_memories": {
-      "ai_tool": [[{ "node": "Explorer Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Explorer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "web_search": {
-      "ai_tool": [[{ "node": "Explorer Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Explorer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "get_weather": {
-      "ai_tool": [[{ "node": "Explorer Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Explorer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "maps_search": {
-      "ai_tool": [[{ "node": "Explorer Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Explorer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "dev_tools": {
-      "ai_tool": [[{ "node": "Explorer Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Explorer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "rag_search": {
-      "ai_tool": [[{ "node": "Explorer Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Explorer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
@@ -234,8 +407,14 @@
     "templateCredsSetupCompleted": true
   },
   "tags": [
-    { "name": "wf3d" },
-    { "name": "explorer" },
-    { "name": "jarvis-v5" }
+    {
+      "name": "wf3d"
+    },
+    {
+      "name": "explorer"
+    },
+    {
+      "name": "jarvis-v5"
+    }
   ]
 }
