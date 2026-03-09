@@ -81,7 +81,8 @@
           "response": {
             "response": {
               "fullResponse": false,
-              "responseFormat": "json"
+              "responseFormat": "json",
+              "neverError": true
             }
           }
         }
@@ -93,11 +94,12 @@
       "position": [
         1360,
         580
-      ]
+      ],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Format Response v5.3\n// Normalize WF3x output → ส่งกลับ WF1 → Vercel\nconst raw = $input.first().json;\n\n// ดึง message จาก WF3x response\nconst msg = raw.message || raw.response || raw.output || raw.agentOutput || raw.text\n            || 'ขออภัย ไม่สามารถตอบได้ในขณะนี้ครับ';\n\nconsole.log(`[WF2 Response] agent=${raw._primary_agent || raw.targetAgent} | msg_len=${String(msg).length}`);\n\nreturn {\n  json: {\n    message:       msg,\n    response:      msg,\n    output:        msg,\n    userId:        raw.userId,\n    sessionId:     raw.sessionId,\n    _primary_agent: raw._primary_agent || raw.targetAgent,\n    _router_model:  raw._router_model,\n    _router_version:'v5.3',\n    _dispatch_mode: raw._dispatch_mode,\n    hasCrisis:      raw.hasCrisis || false\n  }\n};"
+        "jsCode": "// Format Response v5.6\n// Normalize WF3x output → ส่งกลับ WF1 → Vercel\n// Handle error responses gracefully\nconst raw = $input.first().json;\n\n// ถ้า WF3x error → ส่ง fallback message แทนที่จะ throw\nconst isError = raw.errorMessage || raw.error || raw.httpCode;\nif (isError) {\n  const errMsg = raw.errorMessage || raw.error || 'Service error';\n  console.warn(`[Format Response] WF3x error: ${errMsg}`);\n  return {\n    json: {\n      message:        'ขออภัยครับ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง',\n      response:       'ขออภัยครับ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง',\n      output:         'ขออภัยครับ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง',\n      userId:         raw.userId,\n      sessionId:      raw.sessionId,\n      _error:         errMsg,\n      _router_version:'v5.6'\n    }\n  };\n}\n\nconst msg = raw.message || raw.response || raw.output || raw.agentOutput || raw.text\n            || 'ขออภัย ไม่สามารถตอบได้ในขณะนี้ครับ';\n\nconsole.log(`[Format Response v5.6] agent=${raw._primary_agent || raw.targetAgent} | len=${String(msg).length}`);\n\nreturn {\n  json: {\n    message:        msg,\n    response:       msg,\n    output:         msg,\n    userId:         raw.userId,\n    sessionId:      raw.sessionId,\n    _primary_agent: raw._primary_agent || raw.targetAgent,\n    _router_model:  raw._router_model,\n    _router_version:'v5.6',\n    hasCrisis:      raw.hasCrisis || false\n  }\n};"
       },
       "id": "format-response-v53",
       "name": "Format Response",
