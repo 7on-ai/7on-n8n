@@ -63,19 +63,37 @@
     },
     {
       "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "PATCH_WF2_ID_HERE",
-          "mode": "id"
+        "method": "POST",
+        "url": "PATCH_WF2_WEBHOOK_URL_HERE",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
         },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
-          "waitForSubWorkflow": true
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "responseFormat": "json"
+            }
+          }
         }
       },
       "id": "074fdc9b-2644-4854-899a-53819f36d53a",
       "name": "→ WF2 Brain (Chat)",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         496,
         -16
