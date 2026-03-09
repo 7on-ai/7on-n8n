@@ -12,7 +12,10 @@
       "name": "Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-240, -420]
+      "position": [
+        -240,
+        -420
+      ]
     },
     {
       "parameters": {
@@ -25,7 +28,10 @@
       "name": "WF3-E Entry",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [608, 352],
+      "position": [
+        608,
+        352
+      ],
       "webhookId": "wf3e-creator-entry"
     },
     {
@@ -36,17 +42,36 @@
       "name": "Extract Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [896, 352]
+      "position": [
+        896,
+        352
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Load Credentials v5 — v4 architecture + v3 full i18n + USER_CONTEXT\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\n\nconst i18nMap = {\n  th: {\n    not_connected: 'ยังไม่ได้เชื่อมต่อ',\n    configure: 'กรุณาตั้งค่าที่ /dashboard/api-settings',\n    success: 'สำเร็จ',\n    error: 'เกิดข้อผิดพลาด',\n    completed: 'เสร็จแล้ว',\n    prompt_required: 'กรุณาระบุ prompt (ภาษาอังกฤษ)',\n    text_required: 'กรุณาระบุข้อความ',\n    query_required: 'กรุณาระบุคำค้นหา',\n    topic_required: 'กรุณาระบุหัวข้อ',\n    image_prompt_note: 'Image prompt ทำงานดีที่สุดเมื่อเป็นภาษาอังกฤษ จะช่วยแปลให้'\n  },\n  en: {\n    not_connected: 'Not connected',\n    configure: 'Please configure at /dashboard/api-settings',\n    success: 'Success',\n    error: 'Error occurred',\n    completed: 'Completed',\n    prompt_required: 'prompt is required (in English)',\n    text_required: 'text is required',\n    query_required: 'query is required',\n    topic_required: 'topic is required',\n    image_prompt_note: 'Image prompts work best in English'\n  },\n  ja: {\n    not_connected: '接続されていません',\n    configure: '/dashboard/api-settingsで設定してください',\n    success: '成功しました',\n    error: 'エラーが発生しました',\n    completed: '完了しました',\n    prompt_required: 'プロンプトが必要です（英語で）',\n    text_required: 'テキストが必要です',\n    query_required: '検索クエリが必要です',\n    topic_required: 'トピックが必要です',\n    image_prompt_note: '画像プロンプトは英語が最適です（翻訳のサポートあり）'\n  },\n  zh: {\n    not_connected: '未连接',\n    configure: '请在 /dashboard/api-settings 配置',\n    success: '成功',\n    error: '发生错误',\n    completed: '已完成',\n    prompt_required: '需要prompt（请用英文）',\n    text_required: '需要文本',\n    query_required: '需要搜索关键词',\n    topic_required: '需要主题',\n    image_prompt_note: '图像提示词用英语效果最好（可协助翻译）'\n  }\n};\nconst i18n = i18nMap[lang] || i18nMap['en'];\n\nconst get = (envKey, payloadKey) => t[payloadKey] || p[payloadKey] || process.env[envKey] || '';\n\nconst creds = {\n  google_access_token:    get('GOOGLE_ACCESS_TOKEN','google_access_token'),\n  google_refresh_token:   get('GOOGLE_REFRESH_TOKEN','google_refresh_token'),\n  microsoft_access_token: get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'),\n  outlook_access_token:   get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'),\n  telegram_bot_token:     get('TELEGRAM_BOT_TOKEN','telegram_bot_token'),\n  discord_bot_token:      get('DISCORD_BOT_TOKEN','discord_bot_token'),\n  slack_bot_token:        get('SLACK_BOT_TOKEN','slack_bot_token'),\n  twitter_bearer_token:   get('TWITTER_BEARER_TOKEN','twitter_bearer_token'),\n  facebook_access_token:  get('FACEBOOK_ACCESS_TOKEN','facebook_access_token'),\n  linkedin_access_token:  get('LINKEDIN_ACCESS_TOKEN','linkedin_access_token'),\n  spotify_access_token:   get('SPOTIFY_ACCESS_TOKEN','spotify_access_token'),\n  youtube_api_key:        get('YOUTUBE_API_KEY','youtube_api_key'),\n  line_notify_token:      get('LINE_NOTIFY_TOKEN','line_notify_token'),\n  google_maps_key:        get('GOOGLE_MAPS_API_KEY','google_maps_key'),\n  brave_api_key:          get('BRAVE_API_KEY','brave_api_key'),\n  openweathermap_key:     get('OPENWEATHERMAP_API_KEY','openweathermap_key'),\n  fal_api_key:            get('FAL_API_KEY','fal_api_key'),\n  elevenlabs_api_key:     get('ELEVENLABS_API_KEY','elevenlabs_api_key'),\n  elevenlabs_voice_id:    get('ELEVENLABS_VOICE_ID','elevenlabs_voice_id'),\n  unsplash_access_key:    get('UNSPLASH_ACCESS_KEY','unsplash_access_key'),\n  nutritionix_app_id:     get('NUTRITIONIX_APP_ID','nutritionix_app_id'),\n  nutritionix_api_key:    get('NUTRITIONIX_API_KEY','nutritionix_api_key'),\n  finnhub_api_key:        get('FINNHUB_API_KEY','finnhub_api_key'),\n  ha_url:                 get('HOME_ASSISTANT_URL','ha_url'),\n  ha_token:               get('HOME_ASSISTANT_TOKEN','ha_token'),\n  sonos_api_url:          get('SONOS_HTTP_API_URL','sonos_api_url'),\n  lastfm_api_key:         get('LASTFM_API_KEY','lastfm_api_key'),\n  lastfm_username:        get('LASTFM_USERNAME','lastfm_username'),\n  lastfm_session_key:     get('LASTFM_SESSION_KEY','lastfm_session_key'),\n  internal_auth_token:    get('INTERNAL_AUTH_TOKEN','internal_auth_token'),\n  n8n_base_url:           get('N8N_BASE_URL','n8n_base_url'),\n  database_url:           prev.databaseUrl || get('DATABASE_URL','database_url'),\n  github_token:           get('GITHUB_TOKEN','github_token')\n};\n\n// OpenRouter LLM fallback chain\nconst userOrKey  = t.openrouter_access_token || '';\nconst sysOrKey   = process.env.OPENROUTER_API_KEY || '';\n// Sonnet = best quality for creative tasks\nconst PAID_MODEL  = 'anthropic/claude-sonnet-4-5';\nconst FREE_MODEL  = 'meta-llama/llama-3.3-70b-instruct:free';\n\n// ── USER_CONTEXT (consistent with WF3-A/B/C/D v5) ─────────────\nconst userContextParts = [];\nif (p.name) userContextParts.push(`Name: ${p.name}`);\nif (p.interests?.length > 0) userContextParts.push(`Interests: ${p.interests.join(', ')}`);\nif (p.personality_notes) userContextParts.push(`Personality: ${p.personality_notes}`);\nif (p.key_facts?.length > 0) {\n  userContextParts.push(`Key Facts:\\n${p.key_facts.map(f => `  - ${f}`).join('\\n')}`);\n}\nif (p.physical_stats && Object.keys(p.physical_stats).length > 0) {\n  const stats = Object.entries(p.physical_stats).map(([k,v]) => `${k}: ${v}`).join(', ');\n  userContextParts.push(`Physical Stats: ${stats}`);\n}\nif (p.ethical_profile) {\n  const ep = p.ethical_profile;\n  userContextParts.push(\n    `Growth Stage: ${ep.growth_stage} (${ep.growth_stage_label})` +\n    (ep.top_strengths?.length > 0 ? ` | Strengths: ${ep.top_strengths.join(', ')}` : '')\n  );\n}\nif (p.relevant_memories?.length > 0) {\n  const memStr = p.relevant_memories.map(m => `  [${m.type}]: ${m.summary}`).join('\\n');\n  userContextParts.push(`Recent Memories (static snapshot):\\n${memStr}`);\n}\n\nconst USER_CONTEXT = userContextParts.length > 0\n  ? `\\n\\n## WHAT I KNOW ABOUT YOU:\\n${userContextParts.join('\\n')}\\n`\n  : '';\n\n// ── GROWTH_GUIDANCE ───────────────────────────────────────────\nconst stage = p.ethical_profile?.growth_stage || 2;\nconst GROWTH_GUIDANCE = {\n  1: 'User is new to creative tools — explain what is possible, give examples, keep outputs simple',\n  2: 'User is developing — offer options and variations, show creative possibilities',\n  3: 'User is growing — explore their aesthetic, refine prompts together, discuss style',\n  4: 'User is advanced — peer-level creative discussion, push stylistic boundaries',\n  5: 'User is expert — focus on craft, subtlety, and distinctive creative voice'\n}[stage] || '';\n\nconst connected = Object.entries(creds).filter(([k,v]) => v).map(([k]) => k);\n\nconsole.log('[Load Credentials v5 Creator]', {\n  userId: prev.userId?.substring(0,8)+'...',\n  connected: connected.length,\n  lang,\n  hasUserKey: !!userOrKey,\n  growthStage: stage\n});\n\nreturn {\n  json: {\n    ...prev,\n    credentials: creds,\n    lang, i18n,\n    USER_CONTEXT,\n    GROWTH_GUIDANCE,\n    stage,\n    userOrKey, sysOrKey,\n    PAID_MODEL, FREE_MODEL,\n    _connected: connected,\n    _persona: p\n  }\n};"
+        "jsCode": "// Load Credentials v5 — v4 architecture + v3 full i18n\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\n\nconst i18nMap = {\n  th: {\n    not_connected: 'ยังไม่ได้เชื่อมต่อ',\n    configure: 'กรุณาตั้งค่าที่ /dashboard/api-settings',\n    success: 'สำเร็จ',\n    error: 'เกิดข้อผิดพลาด',\n    completed: 'เสร็จแล้ว',\n    prompt_required: 'กรุณาระบุ prompt (ภาษาอังกฤษ)',\n    text_required: 'กรุณาระบุข้อความ',\n    query_required: 'กรุณาระบุคำค้นหา',\n    topic_required: 'กรุณาระบุหัวข้อ',\n    image_prompt_note: 'Image prompt ทำงานดีที่สุดเมื่อเป็นภาษาอังกฤษ จะช่วยแปลให้'\n  },\n  en: {\n    not_connected: 'Not connected',\n    configure: 'Please configure at /dashboard/api-settings',\n    success: 'Success',\n    error: 'Error occurred',\n    completed: 'Completed',\n    prompt_required: 'prompt is required (in English)',\n    text_required: 'text is required',\n    query_required: 'query is required',\n    topic_required: 'topic is required',\n    image_prompt_note: 'Image prompts work best in English'\n  },\n  ja: {\n    not_connected: '接続されていません',\n    configure: '/dashboard/api-settingsで設定してください',\n    success: '成功しました',\n    error: 'エラーが発生しました',\n    completed: '完了しました',\n    prompt_required: 'プロンプトが必要です（英語で）',\n    text_required: 'テキストが必要です',\n    query_required: '検索クエリが必要です',\n    topic_required: 'トピックが必要です',\n    image_prompt_note: '画像プロンプトは英語が最適です（翻訳のサポートあり）'\n  },\n  zh: {\n    not_connected: '未连接',\n    configure: '请在 /dashboard/api-settings 配置',\n    success: '成功',\n    error: '发生错误',\n    completed: '已完成',\n    prompt_required: '需要prompt（请用英文）',\n    text_required: '需要文本',\n    query_required: '需要搜索关键词',\n    topic_required: '需要主题',\n    image_prompt_note: '图像提示词用英语效果最好（可协助翻译）'\n  }\n};\nconst i18n = i18nMap[lang] || i18nMap['en'];\n\nconst get = (envKey, payloadKey) => t[payloadKey] || p[payloadKey] || process.env[envKey] || '';\n\nconst creds = {\n  google_access_token:    get('GOOGLE_ACCESS_TOKEN','google_access_token'),\n  google_refresh_token:   get('GOOGLE_REFRESH_TOKEN','google_refresh_token'),\n  microsoft_access_token: get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'),\n  outlook_access_token:   get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'),\n  telegram_bot_token:     get('TELEGRAM_BOT_TOKEN','telegram_bot_token'),\n  discord_bot_token:      get('DISCORD_BOT_TOKEN','discord_bot_token'),\n  slack_bot_token:        get('SLACK_BOT_TOKEN','slack_bot_token'),\n  twitter_bearer_token:   get('TWITTER_BEARER_TOKEN','twitter_bearer_token'),\n  facebook_access_token:  get('FACEBOOK_ACCESS_TOKEN','facebook_access_token'),\n  linkedin_access_token:  get('LINKEDIN_ACCESS_TOKEN','linkedin_access_token'),\n  spotify_access_token:   get('SPOTIFY_ACCESS_TOKEN','spotify_access_token'),\n  youtube_api_key:        get('YOUTUBE_API_KEY','youtube_api_key'),\n  line_notify_token:      get('LINE_NOTIFY_TOKEN','line_notify_token'),\n  google_maps_key:        get('GOOGLE_MAPS_API_KEY','google_maps_key'),\n  brave_api_key:          get('BRAVE_API_KEY','brave_api_key'),\n  openweathermap_key:     get('OPENWEATHERMAP_API_KEY','openweathermap_key'),\n  fal_api_key:            get('FAL_API_KEY','fal_api_key'),\n  elevenlabs_api_key:     get('ELEVENLABS_API_KEY','elevenlabs_api_key'),\n  elevenlabs_voice_id:    get('ELEVENLABS_VOICE_ID','elevenlabs_voice_id'),\n  unsplash_access_key:    get('UNSPLASH_ACCESS_KEY','unsplash_access_key'),\n  nutritionix_app_id:     get('NUTRITIONIX_APP_ID','nutritionix_app_id'),\n  nutritionix_api_key:    get('NUTRITIONIX_API_KEY','nutritionix_api_key'),\n  finnhub_api_key:        get('FINNHUB_API_KEY','finnhub_api_key'),\n  ha_url:                 get('HOME_ASSISTANT_URL','ha_url'),\n  ha_token:               get('HOME_ASSISTANT_TOKEN','ha_token'),\n  sonos_api_url:          get('SONOS_HTTP_API_URL','sonos_api_url'),\n  lastfm_api_key:         get('LASTFM_API_KEY','lastfm_api_key'),\n  lastfm_username:        get('LASTFM_USERNAME','lastfm_username'),\n  lastfm_session_key:     get('LASTFM_SESSION_KEY','lastfm_session_key'),\n  internal_auth_token:    get('INTERNAL_AUTH_TOKEN','internal_auth_token'),\n  n8n_base_url:           get('N8N_BASE_URL','n8n_base_url'),\n  database_url:           prev.databaseUrl || get('DATABASE_URL','database_url'),\n  github_token:           get('GITHUB_TOKEN','github_token')\n};\n\nconst userOrKey  = t.openrouter_access_token || '';\nconst sysOrKey   = process.env.OPENROUTER_API_KEY || '';\nconst PAID_MODEL  = 'anthropic/claude-sonnet-4-5';\nconst FREE_MODEL  = 'meta-llama/llama-3.3-70b-instruct:free';\n\nconst stage = p.ethical_profile?.growth_stage || 2;\nconst GROWTH_GUIDANCE = {\n  1: 'User is new to creative tools — explain what is possible, give examples, keep outputs simple',\n  2: 'User is developing — offer options and variations, show creative possibilities',\n  3: 'User is growing — explore their aesthetic, refine prompts together, discuss style',\n  4: 'User is advanced — peer-level creative discussion, push stylistic boundaries',\n  5: 'User is expert — focus on craft, subtlety, and distinctive creative voice'\n}[stage] || '';\n\nconst connected = Object.entries(creds).filter(([k,v]) => v).map(([k]) => k);\n\nconsole.log('[Load Credentials v5 Creator]', {\n  userId: prev.userId?.substring(0,8)+'...',\n  connected: connected.length,\n  lang,\n  hasUserKey: !!userOrKey,\n  growthStage: stage\n});\n\nreturn {\n  json: {\n    ...prev,\n    credentials: creds,\n    lang, i18n,\n    GROWTH_GUIDANCE,\n    stage,\n    userOrKey, sysOrKey,\n    PAID_MODEL, FREE_MODEL,\n    _connected: connected,\n    _persona: p\n  }\n};"
       },
       "id": "load-credentials",
       "name": "Load Credentials",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1152, 352]
+      "position": [
+        1152,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Agent Context v2 — Long-Life Memory\nconst payload = $input.first().json;\nconst persona = payload._persona || payload.persona || {};\nconst userId = payload.userId;\n\nconst relevantMemories    = persona.relevant_memories     || [];\nconst keyFacts            = persona.key_facts             || [];\nconst ethicalProfile      = persona.ethical_profile       || {};\nconst interests           = persona.interests             || [];\nconst preferences         = persona.preferences           || {};\nconst relationshipFacts   = persona.relationship_facts    || [];\nconst goalsAndAspirations = persona.goals_and_aspirations || [];\nconst physicalStats       = persona.physical_stats        || {};\n\nfunction buildUserContext(p) {\n  const lines = [];\n  lines.push('\\u{1F464} USER PROFILE');\n  lines.push('Name: ' + (p.name || 'Unknown'));\n  lines.push('Language: ' + (p.language_preference || 'th'));\n  lines.push('Tier: ' + (p.subscriptionTier || 'FREE'));\n  lines.push('Timezone: ' + (p.timezone || 'Asia/Bangkok'));\n\n  const hasStats = Object.values(physicalStats).some(v => v != null);\n  if (hasStats) {\n    const s = physicalStats;\n    const parts = [];\n    if (s.age)       parts.push('age ' + s.age);\n    if (s.gender)    parts.push(s.gender);\n    if (s.weight_kg) parts.push(s.weight_kg + 'kg');\n    if (s.height_cm) parts.push(s.height_cm + 'cm');\n    if (parts.length) lines.push('Physical: ' + parts.join(', '));\n  }\n\n  if (p.personality_notes) lines.push('Personality: ' + p.personality_notes);\n\n  if (keyFacts.length > 0) {\n    lines.push('\\n\\u{1F4CC} KEY FACTS (remember these always):');\n    keyFacts.slice(0, 8).forEach(f => lines.push('  \\u2022 ' + f));\n  }\n\n  if (interests.length > 0) {\n    lines.push('\\n\\u{1F4A1} INTERESTS: ' + interests.slice(0, 6).join(', '));\n  }\n\n  if (Object.keys(preferences).length > 0) {\n    const prefStr = Object.entries(preferences).slice(0, 4).map(([k,v]) => k + ': ' + v).join(', ');\n    lines.push('\\u2699\\uFE0F  PREFERENCES: ' + prefStr);\n  }\n\n  if (relationshipFacts.length > 0) {\n    lines.push('\\n\\u2764\\uFE0F  RELATIONSHIPS:');\n    relationshipFacts.slice(0, 3).forEach(r => lines.push('  \\u2022 ' + r));\n  }\n\n  if (goalsAndAspirations.length > 0) {\n    lines.push('\\n\\u{1F3AF} GOALS & ASPIRATIONS:');\n    goalsAndAspirations.slice(0, 4).forEach(g => lines.push('  \\u2022 ' + g));\n  }\n\n  if (ethicalProfile.growth_stage) {\n    lines.push('\\n\\u{1F331} GROWTH: Stage ' + ethicalProfile.growth_stage + '/5 (' + (ethicalProfile.growth_stage_label || '') + ')');\n    if (ethicalProfile.top_strengths && ethicalProfile.top_strengths.length) {\n      lines.push('   Strengths: ' + ethicalProfile.top_strengths.join(', '));\n    }\n  }\n\n  if (relevantMemories.length > 0) {\n    lines.push('\\n\\u{1F9E0} RELEVANT MEMORIES (from past conversations):');\n    relevantMemories.forEach((m, i) => {\n      const sim = m.similarity ? ' [' + (m.similarity*100).toFixed(0) + '% match]' : '';\n      lines.push('  ' + (i+1) + '. [' + m.type + ']' + sim + ' ' + m.summary);\n      if (m.insight) lines.push('     -> ' + m.insight);\n    });\n  }\n\n  return lines.join('\\n');\n}\n\nconst userContext = buildUserContext(persona);\nconsole.log('[BuildAgentContext] userId=' + (userId ? userId.slice(0,8) : 'unknown') + '... | facts=' + keyFacts.length + ' | memories=' + relevantMemories.length + ' | goals=' + goalsAndAspirations.length + ' | relationships=' + relationshipFacts.length);\n\nreturn {\n  json: {\n    ...payload,\n    USER_CONTEXT: userContext,\n    _context_built: true,\n    _facts_count: keyFacts.length,\n    _memories_count: relevantMemories.length\n  }\n};\n"
+      },
+      "id": "build-agent-context",
+      "name": "Build Agent Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        352
+      ]
     },
     {
       "parameters": {
@@ -60,7 +85,10 @@
       "name": "Creator Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.8,
-      "position": [1648, 240]
+      "position": [
+        1648,
+        240
+      ]
     },
     {
       "parameters": {
@@ -71,7 +99,10 @@
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
-      "position": [1344, 480],
+      "position": [
+        1344,
+        480
+      ],
       "id": "llm-fallback",
       "name": "OpenRouter LLM (Sonnet)",
       "credentials": {
@@ -90,7 +121,10 @@
       "name": "Session Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
-      "position": [1504, 480]
+      "position": [
+        1504,
+        480
+      ]
     },
     {
       "parameters": {},
@@ -98,7 +132,10 @@
       "name": "think",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
-      "position": [1664, 480]
+      "position": [
+        1664,
+        480
+      ]
     },
     {
       "parameters": {
@@ -110,31 +147,40 @@
       "name": "search_memories",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [1824, 480]
+      "position": [
+        1824,
+        480
+      ]
     },
     {
       "parameters": {
         "name": "generate_image",
         "description": "Generate AI image using fal.ai FLUX. Requires: prompt (MUST be in English — translate first if needed). Optional: aspect_ratio (square|landscape|portrait, default square), style (photorealistic|artistic|anime, default photorealistic).",
-        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\n\nif (!input.prompt) return { json: { error: i18n.prompt_required || 'prompt required (in English)', note: i18n.image_prompt_note } };\n\nconst falKey = creds.fal_api_key || process.env.FAL_API_KEY || '';\nif (!falKey) return { json: { error: `fal.ai API key ${i18n.not_connected}`, help: i18n.configure } };\n\n// v3 aspect_ratio named map (more intuitive than raw WxH)\nconst imageSizeMap = {\n  square:    'square_hd',\n  landscape: 'landscape_4_3',\n  portrait:  'portrait_4_3'\n};\nconst imageSize = imageSizeMap[input.aspect_ratio] || 'square_hd';\n\n// v3 style prompts — richer enhancement\nconst stylePrompts = {\n  photorealistic: 'photorealistic, high quality, 8k, detailed, sharp focus',\n  artistic:       'artistic, painterly, expressive, colorful, gallery quality',\n  anime:          'anime style, manga art, clean lines, vibrant colors'\n};\nconst styleAdd  = stylePrompts[input.style] || stylePrompts.photorealistic;\nconst fullPrompt = `${input.prompt}, ${styleAdd}`;\n\ntry {\n  const submitRes = await fetch('https://queue.fal.run/fal-ai/flux/schnell', {\n    method: 'POST',\n    headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      prompt: fullPrompt,\n      image_size: imageSize,\n      num_images: 1,\n      num_inference_steps: 4\n    })\n  });\n  if (!submitRes.ok) {\n    const err = await submitRes.json().catch(() => ({}));\n    return { json: { error: err.detail || `fal.ai submit failed: ${submitRes.status}` } };\n  }\n  const job = await submitRes.json();\n  const requestId = job.request_id;\n  if (!requestId) return { json: { error: 'No request_id from fal.ai' } };\n\n  // Poll max 30s (15 × 2s)\n  for (let i = 0; i < 15; i++) {\n    await new Promise(r => setTimeout(r, 2000));\n    const pollRes = await fetch(\n      `https://queue.fal.run/fal-ai/flux/schnell/requests/${requestId}`,\n      { headers: { 'Authorization': `Key ${falKey}` } }\n    );\n    const result = await pollRes.json();\n    if (result.status === 'COMPLETED' && result.response?.images?.[0]) {\n      const img = result.response.images[0];\n      return { json: {\n        success:         true,\n        message:         i18n.success || 'Image generated',\n        image_url:       img.url,\n        prompt:          fullPrompt,\n        original_prompt: input.prompt,\n        style:           input.style || 'photorealistic',\n        aspect_ratio:    input.aspect_ratio || 'square',\n        width:           img.width,\n        height:          img.height\n      }};\n    }\n    if (result.status === 'FAILED') return { json: { error: 'Image generation failed', detail: result.error } };\n  }\n  return { json: { error: 'Timeout waiting for image generation (30s)', requestId } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\n\nif (!input.prompt) return { json: { error: i18n.prompt_required || 'prompt required (in English)', note: i18n.image_prompt_note } };\n\nconst falKey = creds.fal_api_key || process.env.FAL_API_KEY || '';\nif (!falKey) return { json: { error: `fal.ai API key ${i18n.not_connected}`, help: i18n.configure } };\n\nconst imageSizeMap = {\n  square:    'square_hd',\n  landscape: 'landscape_4_3',\n  portrait:  'portrait_4_3'\n};\nconst imageSize = imageSizeMap[input.aspect_ratio] || 'square_hd';\n\nconst stylePrompts = {\n  photorealistic: 'photorealistic, high quality, 8k, detailed, sharp focus',\n  artistic:       'artistic, painterly, expressive, colorful, gallery quality',\n  anime:          'anime style, manga art, clean lines, vibrant colors'\n};\nconst styleAdd  = stylePrompts[input.style] || stylePrompts.photorealistic;\nconst fullPrompt = `${input.prompt}, ${styleAdd}`;\n\ntry {\n  const submitRes = await fetch('https://queue.fal.run/fal-ai/flux/schnell', {\n    method: 'POST',\n    headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      prompt: fullPrompt,\n      image_size: imageSize,\n      num_images: 1,\n      num_inference_steps: 4\n    })\n  });\n  if (!submitRes.ok) {\n    const err = await submitRes.json().catch(() => ({}));\n    return { json: { error: err.detail || `fal.ai submit failed: ${submitRes.status}` } };\n  }\n  const job = await submitRes.json();\n  const requestId = job.request_id;\n  if (!requestId) return { json: { error: 'No request_id from fal.ai' } };\n\n  for (let i = 0; i < 15; i++) {\n    await new Promise(r => setTimeout(r, 2000));\n    const pollRes = await fetch(\n      `https://queue.fal.run/fal-ai/flux/schnell/requests/${requestId}`,\n      { headers: { 'Authorization': `Key ${falKey}` } }\n    );\n    const result = await pollRes.json();\n    if (result.status === 'COMPLETED' && result.response?.images?.[0]) {\n      const img = result.response.images[0];\n      return { json: {\n        success:         true,\n        message:         i18n.success || 'Image generated',\n        image_url:       img.url,\n        prompt:          fullPrompt,\n        original_prompt: input.prompt,\n        style:           input.style || 'photorealistic',\n        aspect_ratio:    input.aspect_ratio || 'square',\n        width:           img.width,\n        height:          img.height\n      }};\n    }\n    if (result.status === 'FAILED') return { json: { error: 'Image generation failed', detail: result.error } };\n  }\n  return { json: { error: 'Timeout waiting for image generation (30s)', requestId } };\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
       },
       "id": "tool-image",
       "name": "generate_image",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [1984, 480]
+      "position": [
+        1984,
+        480
+      ]
     },
     {
       "parameters": {
         "name": "text_to_speech",
         "description": "Convert text to speech using ElevenLabs multilingual v2. Requires: text (max 2500 chars). Optional: voice_id, stability (0-1), similarity_boost (0-1). Returns both audio_base64 and audioDataUrl.",
-        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\n\nif (!input.text) return { json: { error: i18n.text_required || 'text required' } };\n\nconst elKey   = creds.elevenlabs_api_key || process.env.ELEVENLABS_API_KEY || '';\nif (!elKey) return { json: { error: `ElevenLabs ${i18n.not_connected}`, help: i18n.configure } };\n\n// v3: check persona voice first, then input override, then default\nconst voiceId = input.voice_id || creds.elevenlabs_voice_id || 'pNInz6obpgDQGcFmaJgB';\nconst text    = input.text.slice(0, 2500);\n\ntry {\n  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {\n    method: 'POST',\n    headers: {\n      'xi-api-key': elKey,\n      'Content-Type': 'application/json',\n      'Accept': 'audio/mpeg'\n    },\n    body: JSON.stringify({\n      text,\n      model_id: 'eleven_multilingual_v2',\n      voice_settings: {\n        stability:        parseFloat(input.stability || 0.5),\n        similarity_boost: parseFloat(input.similarity_boost || 0.75)\n      }\n    })\n  });\n  if (!res.ok) {\n    const err = await res.json().catch(() => ({}));\n    return { json: { error: err.detail?.message || `ElevenLabs HTTP ${res.status}` } };\n  }\n  const buffer = await res.arrayBuffer();\n  // v3: audio_base64 (raw Base64)  +  v4: audioDataUrl (data URI) — both for max compatibility\n  const audio_base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));\n  const audioDataUrl = `data:audio/mpeg;base64,${audio_base64}`;\n  return { json: {\n    success:       true,\n    message:       i18n.success || 'Audio generated',\n    audio_base64,\n    audioDataUrl,\n    format:        'mp3',\n    mimeType:      'audio/mpeg',\n    text_length:   text.length,\n    voice_id:      voiceId\n  }};\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
+        "jsCode": "const input = JSON.parse($input.first().json.query || '{}');\nconst ctx   = $('Load Credentials').first().json;\nconst creds = ctx.credentials || {};\nconst i18n  = ctx.i18n || {};\n\nif (!input.text) return { json: { error: i18n.text_required || 'text required' } };\n\nconst elKey   = creds.elevenlabs_api_key || process.env.ELEVENLABS_API_KEY || '';\nif (!elKey) return { json: { error: `ElevenLabs ${i18n.not_connected}`, help: i18n.configure } };\n\nconst voiceId = input.voice_id || creds.elevenlabs_voice_id || 'pNInz6obpgDQGcFmaJgB';\nconst text    = input.text.slice(0, 2500);\n\ntry {\n  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {\n    method: 'POST',\n    headers: {\n      'xi-api-key': elKey,\n      'Content-Type': 'application/json',\n      'Accept': 'audio/mpeg'\n    },\n    body: JSON.stringify({\n      text,\n      model_id: 'eleven_multilingual_v2',\n      voice_settings: {\n        stability:        parseFloat(input.stability || 0.5),\n        similarity_boost: parseFloat(input.similarity_boost || 0.75)\n      }\n    })\n  });\n  if (!res.ok) {\n    const err = await res.json().catch(() => ({}));\n    return { json: { error: err.detail?.message || `ElevenLabs HTTP ${res.status}` } };\n  }\n  const buffer = await res.arrayBuffer();\n  const audio_base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));\n  const audioDataUrl = `data:audio/mpeg;base64,${audio_base64}`;\n  return { json: {\n    success:       true,\n    message:       i18n.success || 'Audio generated',\n    audio_base64,\n    audioDataUrl,\n    format:        'mp3',\n    mimeType:      'audio/mpeg',\n    text_length:   text.length,\n    voice_id:      voiceId\n  }};\n} catch(e) {\n  return { json: { error: `${i18n.error||'Error'}: ${e.message}` } };\n}"
       },
       "id": "tool-tts",
       "name": "text_to_speech",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2144, 480]
+      "position": [
+        2144,
+        480
+      ]
     },
     {
       "parameters": {
@@ -146,7 +192,10 @@
       "name": "find_media",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2304, 480]
+      "position": [
+        2304,
+        480
+      ]
     },
     {
       "parameters": {
@@ -158,7 +207,10 @@
       "name": "write_content",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2464, 480]
+      "position": [
+        2464,
+        480
+      ]
     },
     {
       "parameters": {
@@ -170,7 +222,10 @@
       "name": "translate_text",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2624, 480]
+      "position": [
+        2624,
+        480
+      ]
     },
     {
       "parameters": {
@@ -182,61 +237,190 @@
       "name": "creative_writing",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2784, 480]
+      "position": [
+        2784,
+        480
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Format Output v5 — normalized for WF2 synthesis\n// Dispatch Gate reads: data?.message || data?.response || data?.output || data?.agentOutput || data?.text\nconst raw  = $input.first().json;\nconst out  = raw.output || raw.agentOutput || raw.text || raw.message || 'ดำเนินการแล้วครับ';\nconst prev = $('Extract Payload').item.json;\nconst result = {\n  ...prev,\n  message:       out,\n  response:      out,\n  output:        out,\n  agentOutput:   out,\n  agentCategory: 'creator',\n  processedAt:   new Date().toISOString(),\n  _llm_tier:     raw._llm_tier || 'langchain'\n};\nreturn { json: result };"
+        "jsCode": "// Format Output v5 — normalized for WF2 synthesis\nconst raw  = $input.first().json;\nconst out  = raw.output || raw.agentOutput || raw.text || raw.message || 'ดำเนินการแล้วครับ';\nconst prev = $('Extract Payload').item.json;\nconst result = {\n  ...prev,\n  message:       out,\n  response:      out,\n  output:        out,\n  agentOutput:   out,\n  agentCategory: 'creator',\n  processedAt:   new Date().toISOString(),\n  _llm_tier:     raw._llm_tier || 'langchain'\n};\nreturn { json: result };"
       },
       "id": "format-output",
       "name": "Format Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1904, 240]
+      "position": [
+        1904,
+        240
+      ]
     }
   ],
   "connections": {
     "WF3-E Entry": {
-      "main": [[{ "node": "Extract Payload", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Extract Payload": {
-      "main": [[{ "node": "Load Credentials", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Load Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Load Credentials": {
-      "main": [[{ "node": "Creator Agent", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Build Agent Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Creator Agent": {
-      "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "OpenRouter LLM (Sonnet)": {
-      "ai_languageModel": [[{ "node": "Creator Agent", "type": "ai_languageModel", "index": 0 }]]
+      "ai_languageModel": [
+        [
+          {
+            "node": "Creator Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Session Memory": {
-      "ai_memory": [[{ "node": "Creator Agent", "type": "ai_memory", "index": 0 }]]
+      "ai_memory": [
+        [
+          {
+            "node": "Creator Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
     },
     "think": {
-      "ai_tool": [[{ "node": "Creator Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Creator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "search_memories": {
-      "ai_tool": [[{ "node": "Creator Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Creator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "generate_image": {
-      "ai_tool": [[{ "node": "Creator Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Creator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "text_to_speech": {
-      "ai_tool": [[{ "node": "Creator Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Creator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "find_media": {
-      "ai_tool": [[{ "node": "Creator Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Creator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "write_content": {
-      "ai_tool": [[{ "node": "Creator Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Creator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "translate_text": {
-      "ai_tool": [[{ "node": "Creator Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Creator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "creative_writing": {
-      "ai_tool": [[{ "node": "Creator Agent", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Creator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Agent Context": {
+      "main": [
+        [
+          {
+            "node": "Creator Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
@@ -249,8 +433,14 @@
     "templateCredsSetupCompleted": true
   },
   "tags": [
-    { "name": "wf3e" },
-    { "name": "creator" },
-    { "name": "jarvis-v5" }
+    {
+      "name": "wf3e"
+    },
+    {
+      "name": "creator"
+    },
+    {
+      "name": "jarvis-v5"
+    }
   ]
 }
