@@ -92,7 +92,7 @@
     },
     {
       "parameters": {
-        "model": "={{ $json.userOrKey ? ($json.PAID_MODEL || 'anthropic/claude-sonnet-4-5') : ($json.FREE_MODEL || 'meta-llama/llama-3.3-70b-instruct:free') }}",
+        "model": "={{ ($json.userOrKey || $json.sysOrKey) ? ($json.PAID_MODEL || 'anthropic/claude-sonnet-4-5') : ($json.FREE_MODEL || 'meta-llama/llama-3.3-70b-instruct:free') }}",
         "options": {
           "maxTokens": 4000
         }
@@ -107,7 +107,7 @@
       "name": "OpenRouter LLM (Sonnet)",
       "credentials": {
         "openRouterApi": {
-          "id": "FUm3Fg9B8euy8cH3",
+          "id": "Jv35fZXKtN2bqFpr",
           "name": "OpenRouter"
         }
       }
