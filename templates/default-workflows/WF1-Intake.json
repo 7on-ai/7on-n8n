@@ -37,7 +37,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const b = $input.item.json.body || $input.item.json;\nif (!b.userId || !b.message) throw new Error('Missing userId or message');\nif (!b.databaseUrl) throw new Error('Missing databaseUrl');\nreturn { json: { userId: b.userId, sessionId: b.sessionId || b.userId, message: b.message.trim(), databaseUrl: b.databaseUrl, source: b.source || 'chat', inputType: 'text', replyTarget: b.replyTarget || 'webhook', timestamp: new Date().toISOString() } };"
+        "jsCode": "const b = $input.item.json.body || $input.item.json;\nif (!b.userId || !b.message) throw new Error('Missing userId or message');\nif (!b.databaseUrl) throw new Error('Missing databaseUrl');\nreturn { json: {\n  userId:      b.userId,\n  sessionId:   b.sessionId || b.userId,\n  message:     b.message.trim(),\n  databaseUrl: b.databaseUrl,\n  source:      b.source || 'chat',\n  inputType:   'text',\n  replyTarget: b.replyTarget || 'webhook',\n  persona:     b.persona || {},\n  timestamp:   new Date().toISOString()\n} };"
       },
       "id": "9c8f1865-2a38-406c-9d76-c303db74e2b7",
       "name": "Normalize Chat",
@@ -50,7 +50,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const b = $input.item.json.body || $input.item.json;\nif (!b.userId || !b.message) throw new Error('Missing userId or transcribed message');\nif (!b.databaseUrl) throw new Error('Missing databaseUrl');\nreturn { json: { userId: b.userId, sessionId: b.sessionId || b.userId, message: b.message.trim(), databaseUrl: b.databaseUrl, source: 'voice', inputType: 'voice', replyTarget: 'voice_esp32', timestamp: new Date().toISOString() } };"
+        "jsCode": "const b = $input.item.json.body || $input.item.json;\nif (!b.userId || !b.message) throw new Error('Missing userId or transcribed message');\nif (!b.databaseUrl) throw new Error('Missing databaseUrl');\nreturn { json: {\n  userId:      b.userId,\n  sessionId:   b.sessionId || b.userId,\n  message:     b.message.trim(),\n  databaseUrl: b.databaseUrl,\n  source:      'voice',\n  inputType:   'voice',\n  replyTarget: b.replyTarget || 'voice_agent',\n  persona:     b.persona || {},\n  timestamp:   new Date().toISOString()\n} };"
       },
       "id": "56a3e9ef-33b4-4e8c-87fd-7b290e7d8a30",
       "name": "Normalize Voice",
@@ -113,6 +113,44 @@
         736,
         -16
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "PATCH_WF2_WEBHOOK_URL_HERE",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "02f6dc22-3829-45cc-9704-dc8e3ca255ec",
+      "name": "→ WF2 Brain (Voice)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        496,
+        184
+      ]
     }
   ],
   "pinData": {},
@@ -154,7 +192,7 @@
       "main": [
         [
           {
-            "node": "→ WF2 Brain (Chat)",
+            "node": "→ WF2 Brain (Voice)",
             "type": "main",
             "index": 0
           }
@@ -162,6 +200,17 @@
       ]
     },
     "→ WF2 Brain (Chat)": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "→ WF2 Brain (Voice)": {
       "main": [
         [
           {
