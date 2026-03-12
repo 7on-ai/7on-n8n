@@ -3,19 +3,16 @@
   "nodes": [
     {
       "parameters": {
-        "content": "# WF3-B — SOUL v5.2 (JARVIS AGI)\n\n### Long-Life Memory:\n- ✅ Build Agent Context node (after Load Credentials)\n- ✅ USER_CONTEXT: key_facts, relevant_memories, relationships, goals, growth_stage\n- ✅ System prompt references {{ $json.USER_CONTEXT }}\n\n### Tools (10 + think):\ncall_gating_service, search_memories, journal_entry, mood_tracker,\ngrowth_reflection, relationship_insights, manage_habits, manage_persona,\nmindfulness_guide, think",
-        "height": 380,
-        "width": 480,
+        "content": "# WF3-B — SOUL v5.5 (JARVIS AGI)\n\n### FIX v5.5:\n- ✅ Load Credentials: ลบ $env[envKey] ออกทั้งหมด\n- ✅ n8n 2.11.2 sandbox blocks $env in Code nodes\n- ✅ ใช้เฉพาะ persona.tokens (t) และ persona fields (p)\n\n### Long-Life Memory:\n- ✅ Build Agent Context node (after Load Credentials)\n- ✅ USER_CONTEXT: key_facts, relevant_memories, relationships, goals, growth_stage\n- ✅ System prompt references {{ $json.USER_CONTEXT }}\n\n### Tools (10 + think):\ncall_gating_service, search_memories, journal_entry, mood_tracker,\ngrowth_reflection, relationship_insights, manage_habits, manage_persona,\nmindfulness_guide, think",
+        "height": 400,
+        "width": 500,
         "color": 2
       },
       "id": "sticky-wf3b",
       "name": "Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        -220,
-        -400
-      ]
+      "position": [-220, -420]
     },
     {
       "parameters": {
@@ -28,10 +25,7 @@
       "name": "WF3-B Entry",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [
-        608,
-        352
-      ],
+      "position": [608, 352],
       "webhookId": "wf3b-soul-entry"
     },
     {
@@ -42,23 +36,17 @@
       "name": "Extract Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        896,
-        352
-      ]
+      "position": [896, 352]
     },
     {
       "parameters": {
-        "jsCode": "// Load Credentials v5.4 — $env FREE — FREE_MODEL updated to deepseek (no rate limit)\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\nconst i18nMap = {\n  th: { not_connected:'ยังไม่ได้เชื่อมต่อ', configure:'กรุณาตั้งค่าที่ /dashboard/api-settings', success:'สำเร็จ', error:'เกิดข้อผิดพลาด', completed:'เสร็จแล้ว', db_not_configured:'ยังไม่ได้ตั้งค่าฐานข้อมูล', habit_name_required:'กรุณาระบุชื่อนิสัย', no_updates:'ไม่มีข้อมูลที่ต้องการอัปเดต' },\n  en: { not_connected:'Not connected', configure:'Please configure at /dashboard/api-settings', success:'Success', error:'Error occurred', completed:'Completed', db_not_configured:'Database not configured', habit_name_required:'habit_name is required', no_updates:'No updates provided' },\n  ja: { not_connected:'接続されていません', configure:'/dashboard/api-settingsで設定してください', success:'成功しました', error:'エラーが発生しました', completed:'完了しました', db_not_configured:'データベースが設定されていません', habit_name_required:'習慣名が必要です', no_updates:'更新情報がありません' },\n  zh: { not_connected:'未连接', configure:'请在 /dashboard/api-settings 配置', success:'成功', error:'发生错误', completed:'已完成', db_not_configured:'数据库未配置', habit_name_required:'需要习惯名称', no_updates:'没有提供更新' }\n};\nconst i18n = i18nMap[lang] || i18nMap['en'];\nconst get = (envKey, payloadKey) => t[payloadKey] || p[payloadKey] || '';\nconst creds = {\n  google_access_token:get('GOOGLE_ACCESS_TOKEN','google_access_token'), google_refresh_token:get('GOOGLE_REFRESH_TOKEN','google_refresh_token'), microsoft_access_token:get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'), outlook_access_token:get('MICROSOFT_ACCESS_TOKEN','microsoft_access_token'), telegram_bot_token:get('TELEGRAM_BOT_TOKEN','telegram_bot_token'), discord_bot_token:get('DISCORD_BOT_TOKEN','discord_bot_token'), slack_bot_token:get('SLACK_BOT_TOKEN','slack_bot_token'), twitter_bearer_token:get('TWITTER_BEARER_TOKEN','twitter_bearer_token'), facebook_access_token:get('FACEBOOK_ACCESS_TOKEN','facebook_access_token'), linkedin_access_token:get('LINKEDIN_ACCESS_TOKEN','linkedin_access_token'), spotify_access_token:get('SPOTIFY_ACCESS_TOKEN','spotify_access_token'), youtube_api_key:get('YOUTUBE_API_KEY','youtube_api_key'), line_notify_token:get('LINE_NOTIFY_TOKEN','line_notify_token'), google_maps_key:get('GOOGLE_MAPS_API_KEY','google_maps_key'), brave_api_key:get('BRAVE_API_KEY','brave_api_key'), openweathermap_key:get('OPENWEATHERMAP_API_KEY','openweathermap_key'), fal_api_key:get('FAL_API_KEY','fal_api_key'), elevenlabs_api_key:get('ELEVENLABS_API_KEY','elevenlabs_api_key'), elevenlabs_voice_id:get('ELEVENLABS_VOICE_ID','elevenlabs_voice_id'), unsplash_access_key:get('UNSPLASH_ACCESS_KEY','unsplash_access_key'), nutritionix_app_id:get('NUTRITIONIX_APP_ID','nutritionix_app_id'), nutritionix_api_key:get('NUTRITIONIX_API_KEY','nutritionix_api_key'), finnhub_api_key:get('FINNHUB_API_KEY','finnhub_api_key'), ha_url:get('HOME_ASSISTANT_URL','ha_url'), ha_token:get('HOME_ASSISTANT_TOKEN','ha_token'), sonos_api_url:get('SONOS_HTTP_API_URL','sonos_api_url'), lastfm_api_key:get('LASTFM_API_KEY','lastfm_api_key'), lastfm_username:get('LASTFM_USERNAME','lastfm_username'), lastfm_session_key:get('LASTFM_SESSION_KEY','lastfm_session_key'), internal_auth_token:get('INTERNAL_AUTH_TOKEN','internal_auth_token'), n8n_base_url:get('N8N_BASE_URL','n8n_base_url'), database_url:prev.databaseUrl||get('DATABASE_URL','database_url'), github_token:get('GITHUB_TOKEN','github_token')\n};\nconst userOrKey=t.openrouter_access_token||'';\nconst sysOrKey=''; // system key removed — use userOrKey (persona.tokens) only\nconst PAID_MODEL='anthropic/claude-haiku-4-5';\nconst FREE_MODEL='meta-llama/llama-3.3-70b-instruct:free';\nconst stage=p.ethical_profile?.growth_stage||2;\nconst GROWTH_GUIDANCE={1:'User is a beginner — be very gentle, nurturing, highly supportive',2:'User is developing — encourage warmly, guide step by step',3:'User is growing — use reflective questions, stimulate self-discovery',4:'User is advanced — engage as a peer, challenge with depth',5:'User is mature — be a thinking partner, space for their own wisdom'}[stage]||'';\nconst connected=Object.entries(creds).filter(([k,v])=>v).map(([k])=>k);\nconsole.log('[Load Credentials v5.4 Soul]',{userId:prev.userId?.substring(0,8)+'...',connected:connected.length,lang,hasUserKey:!!userOrKey,growthStage:stage,hasCrisis:prev.hasCrisis});\nreturn{json:{...prev,credentials:creds,lang,i18n,GROWTH_GUIDANCE,stage,userOrKey,sysOrKey,PAID_MODEL,FREE_MODEL,_connected:connected,_persona:p}};"
+        "jsCode": "// Load Credentials v5.5 — $env FREE (n8n 2.11.2 sandbox blocks $env)\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\nconst i18nMap = {\n  th: { not_connected:'ยังไม่ได้เชื่อมต่อ', configure:'กรุณาตั้งค่าที่ /dashboard/api-settings', success:'สำเร็จ', error:'เกิดข้อผิดพลาด', completed:'เสร็จแล้ว', db_not_configured:'ยังไม่ได้ตั้งค่าฐานข้อมูล', habit_name_required:'กรุณาระบุชื่อนิสัย', no_updates:'ไม่มีข้อมูลที่ต้องการอัปเดต' },\n  en: { not_connected:'Not connected', configure:'Please configure at /dashboard/api-settings', success:'Success', error:'Error occurred', completed:'Completed', db_not_configured:'Database not configured', habit_name_required:'habit_name is required', no_updates:'No updates provided' },\n  ja: { not_connected:'接続されていません', configure:'/dashboard/api-settingsで設定してください', success:'成功しました', error:'エラーが発生しました', completed:'完了しました', db_not_configured:'データベースが設定されていません', habit_name_required:'習慣名が必要です', no_updates:'更新情報がありません' },\n  zh: { not_connected:'未连接', configure:'请在 /dashboard/api-settings 配置', success:'成功', error:'发生错误', completed:'已完成', db_not_configured:'数据库未配置', habit_name_required:'需要习惯名称', no_updates:'没有提供更新' }\n};\nconst i18n = i18nMap[lang] || i18nMap['en'];\n\n// ✅ FIX v5.5: ลบ $env[envKey] ออกทั้งหมด — n8n 2.11.2 sandbox blocks $env\n// ใช้เฉพาะ persona.tokens (t) และ persona fields (p) เท่านั้น\nconst get = (envKey, payloadKey) => t[payloadKey] || p[payloadKey] || '';\n\nconst creds = {\n  google_access_token:get('','google_access_token'), google_refresh_token:get('','google_refresh_token'), microsoft_access_token:get('','microsoft_access_token'), outlook_access_token:get('','microsoft_access_token'), telegram_bot_token:get('','telegram_bot_token'), discord_bot_token:get('','discord_bot_token'), slack_bot_token:get('','slack_bot_token'), twitter_bearer_token:get('','twitter_bearer_token'), facebook_access_token:get('','facebook_access_token'), linkedin_access_token:get('','linkedin_access_token'), spotify_access_token:get('','spotify_access_token'), youtube_api_key:get('','youtube_api_key'), line_notify_token:get('','line_notify_token'), google_maps_key:get('','google_maps_key'), brave_api_key:get('','brave_api_key'), openweathermap_key:get('','openweathermap_key'), fal_api_key:get('','fal_api_key'), elevenlabs_api_key:get('','elevenlabs_api_key'), elevenlabs_voice_id:get('','elevenlabs_voice_id'), unsplash_access_key:get('','unsplash_access_key'), nutritionix_app_id:get('','nutritionix_app_id'), nutritionix_api_key:get('','nutritionix_api_key'), finnhub_api_key:get('','finnhub_api_key'), ha_url:get('','ha_url'), ha_token:get('','ha_token'), sonos_api_url:get('','sonos_api_url'), lastfm_api_key:get('','lastfm_api_key'), lastfm_username:get('','lastfm_username'), lastfm_session_key:get('','lastfm_session_key'), internal_auth_token:get('','internal_auth_token'), n8n_base_url:get('','n8n_base_url'), database_url:prev.databaseUrl||get('','database_url'), github_token:get('','github_token')\n};\nconst userOrKey=t.openrouter_access_token||'';\nconst sysOrKey='';\nconst PAID_MODEL='anthropic/claude-haiku-4-5';\nconst FREE_MODEL='meta-llama/llama-3.3-70b-instruct:free';\nconst stage=p.ethical_profile?.growth_stage||2;\nconst GROWTH_GUIDANCE={1:'User is a beginner — be very gentle, nurturing, highly supportive',2:'User is developing — encourage warmly, guide step by step',3:'User is growing — use reflective questions, stimulate self-discovery',4:'User is advanced — engage as a peer, challenge with depth',5:'User is mature — be a thinking partner, space for their own wisdom'}[stage]||'';\nconst connected=Object.entries(creds).filter(([k,v])=>v).map(([k])=>k);\nconsole.log('[Load Credentials v5.5 Soul]',{userId:prev.userId?.substring(0,8)+'...',connected:connected.length,lang,hasUserKey:!!userOrKey,growthStage:stage,hasCrisis:prev.hasCrisis});\nreturn{json:{...prev,credentials:creds,lang,i18n,GROWTH_GUIDANCE,stage,userOrKey,sysOrKey,PAID_MODEL,FREE_MODEL,_connected:connected,_persona:p}};"
       },
       "id": "load-credentials",
       "name": "Load Credentials",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1152,
-        352
-      ]
+      "position": [1152, 352]
     },
     {
       "parameters": {
@@ -68,10 +56,7 @@
       "name": "Build Agent Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1408,
-        352
-      ]
+      "position": [1408, 352]
     },
     {
       "parameters": {
@@ -85,10 +70,7 @@
       "name": "Soul Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.8,
-      "position": [
-        1648,
-        240
-      ]
+      "position": [1648, 240]
     },
     {
       "parameters": {
@@ -99,15 +81,12 @@
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
-      "position": [
-        1344,
-        480
-      ],
+      "position": [1344, 480],
       "id": "llm-fallback",
       "name": "OpenRouter LLM (Auto-Fallback)",
       "credentials": {
         "openRouterApi": {
-          "id": "OPENROUTER_CRED_ID_PLACEHOLDER",
+          "id": "Jv35fZXKtN2bqFpr",
           "name": "OpenRouter"
         }
       }
@@ -122,10 +101,7 @@
       "name": "Session Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
-      "position": [
-        1504,
-        480
-      ]
+      "position": [1504, 480]
     },
     {
       "parameters": {},
@@ -133,10 +109,7 @@
       "name": "think",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
-      "position": [
-        1664,
-        480
-      ]
+      "position": [1664, 480]
     },
     {
       "parameters": {
@@ -148,10 +121,7 @@
       "name": "call_gating_service",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [
-        1824,
-        480
-      ]
+      "position": [1824, 480]
     },
     {
       "parameters": {
@@ -163,10 +133,7 @@
       "name": "search_memories",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [
-        1984,
-        480
-      ]
+      "position": [1984, 480]
     },
     {
       "parameters": {
@@ -178,10 +145,7 @@
       "name": "journal_entry",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [
-        2144,
-        480
-      ]
+      "position": [2144, 480]
     },
     {
       "parameters": {
@@ -193,10 +157,7 @@
       "name": "mood_tracker",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [
-        2304,
-        480
-      ]
+      "position": [2304, 480]
     },
     {
       "parameters": {
@@ -208,10 +169,7 @@
       "name": "growth_reflection",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [
-        2464,
-        480
-      ]
+      "position": [2464, 480]
     },
     {
       "parameters": {
@@ -223,10 +181,7 @@
       "name": "relationship_insights",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [
-        2624,
-        480
-      ]
+      "position": [2624, 480]
     },
     {
       "parameters": {
@@ -238,10 +193,7 @@
       "name": "manage_habits",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [
-        2784,
-        480
-      ]
+      "position": [2784, 480]
     },
     {
       "parameters": {
@@ -253,10 +205,7 @@
       "name": "manage_persona",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [
-        2944,
-        480
-      ]
+      "position": [2944, 480]
     },
     {
       "parameters": {
@@ -268,10 +217,7 @@
       "name": "mindfulness_guide",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [
-        3104,
-        480
-      ]
+      "position": [3104, 480]
     },
     {
       "parameters": {
@@ -281,199 +227,60 @@
       "name": "Format Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1904,
-        240
-      ]
+      "position": [1904, 240]
     }
   ],
   "connections": {
     "WF3-B Entry": {
-      "main": [
-        [
-          {
-            "node": "Extract Payload",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Extract Payload", "type": "main", "index": 0}]]
     },
     "Extract Payload": {
-      "main": [
-        [
-          {
-            "node": "Load Credentials",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Load Credentials", "type": "main", "index": 0}]]
     },
     "Load Credentials": {
-      "main": [
-        [
-          {
-            "node": "Build Agent Context",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Build Agent Context", "type": "main", "index": 0}]]
     },
     "Build Agent Context": {
-      "main": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Soul Agent", "type": "main", "index": 0}]]
     },
     "Soul Agent": {
-      "main": [
-        [
-          {
-            "node": "Format Output",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Format Output", "type": "main", "index": 0}]]
     },
     "OpenRouter LLM (Auto-Fallback)": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_languageModel": [[{"node": "Soul Agent", "type": "ai_languageModel", "index": 0}]]
     },
     "Session Memory": {
-      "ai_memory": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_memory",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_memory": [[{"node": "Soul Agent", "type": "ai_memory", "index": 0}]]
     },
     "think": {
-      "ai_tool": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
     },
     "call_gating_service": {
-      "ai_tool": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
     },
     "search_memories": {
-      "ai_tool": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
     },
     "journal_entry": {
-      "ai_tool": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
     },
     "mood_tracker": {
-      "ai_tool": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
     },
     "growth_reflection": {
-      "ai_tool": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
     },
     "relationship_insights": {
-      "ai_tool": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
     },
     "manage_habits": {
-      "ai_tool": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
     },
     "manage_persona": {
-      "ai_tool": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
     },
     "mindfulness_guide": {
-      "ai_tool": [
-        [
-          {
-            "node": "Soul Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
+      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
     }
   },
   "pinData": {},
@@ -486,14 +293,8 @@
     "templateCredsSetupCompleted": true
   },
   "tags": [
-    {
-      "name": "wf3b"
-    },
-    {
-      "name": "soul"
-    },
-    {
-      "name": "jarvis-v5.5"
-    }
+    {"name": "wf3b"},
+    {"name": "soul"},
+    {"name": "jarvis-v5.5"}
   ]
 }
