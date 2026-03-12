@@ -40,7 +40,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Load Credentials v5.5 — $env FREE (n8n 2.11.2 sandbox blocks $env)\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\nconst i18nMap = {\n  th: { not_connected:'ยังไม่ได้เชื่อมต่อ', configure:'กรุณาตั้งค่าที่ /dashboard/api-settings', success:'สำเร็จ', error:'เกิดข้อผิดพลาด', completed:'เสร็จแล้ว', db_not_configured:'ยังไม่ได้ตั้งค่าฐานข้อมูล', habit_name_required:'กรุณาระบุชื่อนิสัย', no_updates:'ไม่มีข้อมูลที่ต้องการอัปเดต' },\n  en: { not_connected:'Not connected', configure:'Please configure at /dashboard/api-settings', success:'Success', error:'Error occurred', completed:'Completed', db_not_configured:'Database not configured', habit_name_required:'habit_name is required', no_updates:'No updates provided' },\n  ja: { not_connected:'接続されていません', configure:'/dashboard/api-settingsで設定してください', success:'成功しました', error:'エラーが発生しました', completed:'完了しました', db_not_configured:'データベースが設定されていません', habit_name_required:'習慣名が必要です', no_updates:'更新情報がありません' },\n  zh: { not_connected:'未连接', configure:'请在 /dashboard/api-settings 配置', success:'成功', error:'发生错误', completed:'已完成', db_not_configured:'数据库未配置', habit_name_required:'需要习惯名称', no_updates:'没有提供更新' }\n};\nconst i18n = i18nMap[lang] || i18nMap['en'];\n\n// ✅ FIX v5.5: ลบ $env[envKey] ออกทั้งหมด — n8n 2.11.2 sandbox blocks $env\n// ใช้เฉพาะ persona.tokens (t) และ persona fields (p) เท่านั้น\nconst get = (envKey, payloadKey) => t[payloadKey] || p[payloadKey] || '';\n\nconst creds = {\n  google_access_token:get('','google_access_token'), google_refresh_token:get('','google_refresh_token'), microsoft_access_token:get('','microsoft_access_token'), outlook_access_token:get('','microsoft_access_token'), telegram_bot_token:get('','telegram_bot_token'), discord_bot_token:get('','discord_bot_token'), slack_bot_token:get('','slack_bot_token'), twitter_bearer_token:get('','twitter_bearer_token'), facebook_access_token:get('','facebook_access_token'), linkedin_access_token:get('','linkedin_access_token'), spotify_access_token:get('','spotify_access_token'), youtube_api_key:get('','youtube_api_key'), line_notify_token:get('','line_notify_token'), google_maps_key:get('','google_maps_key'), brave_api_key:get('','brave_api_key'), openweathermap_key:get('','openweathermap_key'), fal_api_key:get('','fal_api_key'), elevenlabs_api_key:get('','elevenlabs_api_key'), elevenlabs_voice_id:get('','elevenlabs_voice_id'), unsplash_access_key:get('','unsplash_access_key'), nutritionix_app_id:get('','nutritionix_app_id'), nutritionix_api_key:get('','nutritionix_api_key'), finnhub_api_key:get('','finnhub_api_key'), ha_url:get('','ha_url'), ha_token:get('','ha_token'), sonos_api_url:get('','sonos_api_url'), lastfm_api_key:get('','lastfm_api_key'), lastfm_username:get('','lastfm_username'), lastfm_session_key:get('','lastfm_session_key'), internal_auth_token:get('','internal_auth_token'), n8n_base_url:get('','n8n_base_url'), database_url:prev.databaseUrl||get('','database_url'), github_token:get('','github_token')\n};\nconst userOrKey=t.openrouter_access_token||'';\nconst sysOrKey='';\nconst PAID_MODEL='anthropic/claude-haiku-4-5';\nconst FREE_MODEL='meta-llama/llama-3.3-70b-instruct:free';\nconst stage=p.ethical_profile?.growth_stage||2;\nconst GROWTH_GUIDANCE={1:'User is a beginner — be very gentle, nurturing, highly supportive',2:'User is developing — encourage warmly, guide step by step',3:'User is growing — use reflective questions, stimulate self-discovery',4:'User is advanced — engage as a peer, challenge with depth',5:'User is mature — be a thinking partner, space for their own wisdom'}[stage]||'';\nconst connected=Object.entries(creds).filter(([k,v])=>v).map(([k])=>k);\nconsole.log('[Load Credentials v5.5 Soul]',{userId:prev.userId?.substring(0,8)+'...',connected:connected.length,lang,hasUserKey:!!userOrKey,growthStage:stage,hasCrisis:prev.hasCrisis});\nreturn{json:{...prev,credentials:creds,lang,i18n,GROWTH_GUIDANCE,stage,userOrKey,sysOrKey,PAID_MODEL,FREE_MODEL,_connected:connected,_persona:p}};"
+        "jsCode": "// Load Credentials v5.5 — $env FREE (n8n 2.11.2 sandbox blocks $env)\nconst prev = $('Extract Payload').first().json;\nconst p = prev.persona || {};\nconst t = p.tokens || {};\nconst lang = p.language_preference || 'th';\nconst i18nMap = {\n  th: { not_connected:'ยังไม่ได้เชื่อมต่อ', configure:'กรุณาตั้งค่าที่ /dashboard/api-settings', success:'สำเร็จ', error:'เกิดข้อผิดพลาด', completed:'เสร็จแล้ว', db_not_configured:'ยังไม่ได้ตั้งค่าฐานข้อมูล', habit_name_required:'กรุณาระบุชื่อนิสัย', no_updates:'ไม่มีข้อมูลที่ต้องการอัปเดต' },\n  en: { not_connected:'Not connected', configure:'Please configure at /dashboard/api-settings', success:'Success', error:'Error occurred', completed:'Completed', db_not_configured:'Database not configured', habit_name_required:'habit_name is required', no_updates:'No updates provided' },\n  ja: { not_connected:'接続されていません', configure:'/dashboard/api-settingsで設定してください', success:'成功しました', error:'エラーが発生しました', completed:'完了しました', db_not_configured:'データベースが設定されていません', habit_name_required:'習慣名が必要です', no_updates:'更新情報がありません' },\n  zh: { not_connected:'未连接', configure:'请在 /dashboard/api-settings 配置', success:'成功', error:'发生错误', completed:'已完成', db_not_configured:'数据库未配置', habit_name_required:'需要习惯名称', no_updates:'没有提供更新' }\n};\nconst i18n = i18nMap[lang] || i18nMap['en'];\nconst get = (envKey, payloadKey) => t[payloadKey] || p[payloadKey] || '';\nconst creds = {\n  google_access_token:get('','google_access_token'), google_refresh_token:get('','google_refresh_token'), microsoft_access_token:get('','microsoft_access_token'), outlook_access_token:get('','microsoft_access_token'), telegram_bot_token:get('','telegram_bot_token'), discord_bot_token:get('','discord_bot_token'), slack_bot_token:get('','slack_bot_token'), twitter_bearer_token:get('','twitter_bearer_token'), facebook_access_token:get('','facebook_access_token'), linkedin_access_token:get('','linkedin_access_token'), spotify_access_token:get('','spotify_access_token'), youtube_api_key:get('','youtube_api_key'), line_notify_token:get('','line_notify_token'), google_maps_key:get('','google_maps_key'), brave_api_key:get('','brave_api_key'), openweathermap_key:get('','openweathermap_key'), fal_api_key:get('','fal_api_key'), elevenlabs_api_key:get('','elevenlabs_api_key'), elevenlabs_voice_id:get('','elevenlabs_voice_id'), unsplash_access_key:get('','unsplash_access_key'), nutritionix_app_id:get('','nutritionix_app_id'), nutritionix_api_key:get('','nutritionix_api_key'), finnhub_api_key:get('','finnhub_api_key'), ha_url:get('','ha_url'), ha_token:get('','ha_token'), sonos_api_url:get('','sonos_api_url'), lastfm_api_key:get('','lastfm_api_key'), lastfm_username:get('','lastfm_username'), lastfm_session_key:get('','lastfm_session_key'), internal_auth_token:get('','internal_auth_token'), n8n_base_url:get('','n8n_base_url'), database_url:prev.databaseUrl||get('','database_url'), github_token:get('','github_token')\n};\nconst userOrKey=t.openrouter_access_token||'';\nconst sysOrKey='';\nconst PAID_MODEL='anthropic/claude-haiku-4-5';\nconst FREE_MODEL='meta-llama/llama-3.3-70b-instruct:free';\nconst stage=p.ethical_profile?.growth_stage||2;\nconst GROWTH_GUIDANCE={1:'User is a beginner — be very gentle, nurturing, highly supportive',2:'User is developing — encourage warmly, guide step by step',3:'User is growing — use reflective questions, stimulate self-discovery',4:'User is advanced — engage as a peer, challenge with depth',5:'User is mature — be a thinking partner, space for their own wisdom'}[stage]||'';\nconst connected=Object.entries(creds).filter(([k,v])=>v).map(([k])=>k);\nconsole.log('[Load Credentials v5.5 Soul]',{userId:prev.userId?.substring(0,8)+'...',connected:connected.length,lang,hasUserKey:!!userOrKey,growthStage:stage,hasCrisis:prev.hasCrisis});\nreturn{json:{...prev,credentials:creds,lang,i18n,GROWTH_GUIDANCE,stage,userOrKey,sysOrKey,PAID_MODEL,FREE_MODEL,_connected:connected,_persona:p}};"
       },
       "id": "load-credentials",
       "name": "Load Credentials",
@@ -86,7 +86,7 @@
       "name": "OpenRouter LLM (Auto-Fallback)",
       "credentials": {
         "openRouterApi": {
-          "id": "Jv35fZXKtN2bqFpr",
+          "id": "OPENROUTER_CRED_ID_PLACEHOLDER",
           "name": "OpenRouter"
         }
       }
@@ -211,7 +211,7 @@
       "parameters": {
         "name": "mindfulness_guide",
         "description": "Get a step-by-step mindfulness or breathing exercise guide. Exercises: box_breathing, four_seven_eight, loving_kindness, body_scan.",
-        "jsCode": "const input=JSON.parse($input.first().json.query||'{}');const ctx=$('Load Credentials').first().json;const lang=ctx.lang||'th';const ex=(input.exercise||'box_breathing').toLowerCase().replace(/[- ]/g,'_');const guidesI18n={box_breathing:{name:{th:'Box Breathing 4-4-4-4 (หายใจกล่อง)',en:'Box Breathing 4-4-4-4',ja:'ボックス呼吸法 4-4-4-4',zh:'方块呼吸法 4-4-4-4'},steps:{th:['หายใจเข้าช้าๆ นับ 1-2-3-4','กลั้นลมหายใจ นับ 1-2-3-4','หายใจออกช้าๆ นับ 1-2-3-4','พักก่อนหายใจใหม่ นับ 1-2-3-4'],en:['Inhale slowly, count 1-2-3-4','Hold your breath, count 1-2-3-4','Exhale slowly, count 1-2-3-4','Rest before next breath, count 1-2-3-4'],ja:['ゆっくり息を吸う、1-2-3-4と数える','息を止める、1-2-3-4と数える','ゆっくり息を吐く、1-2-3-4と数える','次の呼吸まで休む、1-2-3-4と数える'],zh:['缓慢吸气，数1-2-3-4','屏住呼吸，数1-2-3-4','缓慢呼气，数1-2-3-4','停顿休息，数1-2-3-4']},benefit:{th:'ลดความเครียด ทำให้ระบบประสาทสงบ',en:'Reduces stress and calms the nervous system',ja:'ストレスを軽減し、神経系を落ち着かせる',zh:'减轻压力，平静神经系统'},duration_min:5,rounds:4},four_seven_eight:{name:{th:'4-7-8 Breathing (หายใจผ่อนคลาย)',en:'4-7-8 Breathing (Relaxing Breath)',ja:'4-7-8呼吸法（リラックス呼吸）',zh:'4-7-8呼吸法（放松呼吸）'},steps:{th:['หายใจเข้าทางจมูก นับ 4','กลั้นลมหายใจ นับ 7','หายใจออกทางปาก นับ 8 (เสียง ฮ่า)'],en:['Inhale through nose, count 4','Hold breath, count 7','Exhale through mouth with whoosh sound, count 8'],ja:['鼻から息を吸う、4と数える','息を止める、7と数える','口から音を立てて息を吐く、8と数える'],zh:['用鼻子吸气，数4','屏住呼吸，数7','用嘴呼气发出声音，数8']},benefit:{th:'ช่วยให้หลับง่าย ลดวิตกกังวล',en:'Aids sleep, reduces anxiety',ja:'睡眠を改善し、不安を軽減する',zh:'帮助入睡，减轻焦虑'},duration_min:4,rounds:4},loving_kindness:{name:{th:'เมตตาภาวนา (Metta Meditation)',en:'Loving-Kindness Meditation (Metta)',ja:'慈悲の瞑想（メッタ）',zh:'慈悲冥想（Metta）'},steps:{th:['นั่งสบาย หลับตา หายใจลึกๆ 3 ครั้ง','นึกถึงตัวเอง พูดในใจว่า: ขอให้ฉันมีความสุข ขอให้ฉันมีสุขภาพดี ขอให้ฉันปลอดภัย','นึกถึงคนที่รัก ส่งความปรารถนาดีให้เขา','ขยายไปยังคนรู้จัก คนแปลกหน้า และสรรพสัตว์','จบด้วยการหายใจลึกๆ และค่อยๆ ลืมตา'],en:['Sit comfortably, close your eyes, take 3 deep breaths','Think of yourself, say inwardly: May I be happy, May I be healthy, May I be safe','Think of someone you love, send them good wishes','Expand to acquaintances, strangers, and all beings','End with deep breaths and slowly open your eyes'],ja:['楽に座り、目を閉じ、深呼吸を3回する','自分自身を思い浮かべ、心の中で言う：私が幸せでありますように','愛する人を思い浮かべ、善意を送る','知人、見知らぬ人、すべての生き物に広げる','深呼吸でしめくくり、ゆっくりと目を開ける'],zh:['舒适地坐好，闭上眼睛，深呼吸3次','想到自己，在心里说：愿我快乐，愿我健康，愿我平安','想到你爱的人，向他们送去祝福','扩展到熟人、陌生人和所有众生','以深呼吸结束，慢慢睁开眼睛']},benefit:{th:'เพิ่มความเมตตา ลดความโกรธ ความเหงา',en:'Increases compassion, reduces anger and loneliness',ja:'思いやりを高め、怒りや孤独感を軽減する',zh:'增加慈悲心，减少愤怒和孤独感'},duration_min:10,rounds:null},body_scan:{name:{th:'Body Scan (สแกนร่างกาย)',en:'Body Scan Meditation',ja:'ボディスキャン瞑想',zh:'身体扫描冥想'},steps:{th:['นอนหงายหรือนั่งสบาย หลับตา','สังเกตลมหายใจ 5 ครั้ง ไม่ต้องบังคับ','เริ่มจากเท้า — รู้สึกถึงส่วนต่างๆ ค่อยๆ ขยับขึ้น','ถึงส่วนไหนที่ตึงหรือเจ็บปวด — แค่รับรู้ ไม่ต้องแก้','จบที่ศีรษะ หายใจลึก แล้วค่อยๆ ลืมตา'],en:['Lie on your back or sit comfortably, close your eyes','Observe your breath for 5 cycles, no need to control','Start from your feet — feel each part, slowly moving upward','When you reach tense or painful areas — just notice, no need to fix','End at the top of your head, take a deep breath, then slowly open your eyes'],ja:['仰向けに寝るか、楽に座り、目を閉じる','呼吸を5回観察する、コントロールしなくてよい','足から始め、各部位を感じながらゆっくり上へ','緊張や痛みのある部位に来たら — ただ気づくだけでよい','頭の先で終わり、深呼吸してゆっくり目を開ける'],zh:['仰卧或舒适地坐好，闭上眼睛','观察呼吸5次，不需要控制','从脚开始 — 感受各个部位，慢慢向上移动','遇到紧张或疼痛的部位 — 只需察觉，无需修复','在头顶结束，深呼吸，然后慢慢睁开眼睛']},benefit:{th:'คลายความตึงเครียดสะสม เพิ่มการรับรู้ร่างกาย',en:'Releases accumulated tension, increases body awareness',ja:'蓄積された緊張をほぐし、身体意識を高める',zh:'释放累积的紧张，提高身体意识'},duration_min:10,rounds:null}};const guideData=guidesI18n[ex]||guidesI18n['box_breathing'];const localLang=['th','en','ja','zh'].includes(lang)?lang:'en';return{json:{name:guideData.name[localLang]||guideData.name['en'],steps:guideData.steps[localLang]||guideData.steps['en'],benefit:guideData.benefit[localLang]||guideData.benefit['en'],duration_min:guideData.duration_min,rounds:guideData.rounds,requested:ex,available:Object.keys(guidesI18n)}};"
+        "jsCode": "const input=JSON.parse($input.first().json.query||'{}');const ctx=$('Load Credentials').first().json;const lang=ctx.lang||'th';const ex=(input.exercise||'box_breathing').toLowerCase().replace(/[- ]/g,'_');const guidesI18n={box_breathing:{name:{th:'Box Breathing 4-4-4-4 (หายใจกล่อง)',en:'Box Breathing 4-4-4-4',ja:'ボックス呼吸法 4-4-4-4',zh:'方块呼吸法 4-4-4-4'},steps:{th:['หายใจเข้าช้าๆ นับ 1-2-3-4','กลั้นลมหายใจ นับ 1-2-3-4','หายใจออกช้าๆ นับ 1-2-3-4','พักก่อนหายใจใหม่ นับ 1-2-3-4'],en:['Inhale slowly, count 1-2-3-4','Hold your breath, count 1-2-3-4','Exhale slowly, count 1-2-3-4','Rest before next breath, count 1-2-3-4'],ja:['ゆっくり息を吸う、1-2-3-4と数える','息を止める、1-2-3-4と数える','ゆっくり息を吐く、1-2-3-4と数える','次の呼吸まで休む、1-2-3-4と数える'],zh:['缓慢吸气，数1-2-3-4','屏住呼吸，数1-2-3-4','缓慢呼气，数1-2-3-4','停顿休息，数1-2-3-4']},benefit:{th:'ลดความเครียด ทำให้ระบบประสาทสงบ',en:'Reduces stress and calms the nervous system',ja:'ストレスを軽減し、神経系を落ち着かせる',zh:'减轻压力，平静神经系统'},duration_min:5,rounds:4},four_seven_eight:{name:{th:'4-7-8 Breathing (หายใจผ่อนคลาย)',en:'4-7-8 Breathing (Relaxing Breath)',ja:'4-7-8呼吸法（リラックス呼吸）',zh:'4-7-8呼吸法（放松呼吸）'},steps:{th:['หายใจเข้าทางจมูก นับ 4','กลั้นลมหายใจ นับ 7','หายใจออกทางปาก นับ 8 (เสียง ฮ่า)'],en:['Inhale through nose, count 4','Hold breath, count 7','Exhale through mouth with whoosh sound, count 8'],ja:['鼻から息を吸う、4と数える','息を止める、7と数える','口から音を立てて息を吐く、8と数える'],zh:['用鼻子吸气，数4','屏住呼吸，数7','用嘴呼气发出声音，数8']},benefit:{th:'ช่วยให้หลับง่าย ลดวิตกกังวล',en:'Aids sleep, reduces anxiety',ja:'睡眠を改善し、不安を軽減する',zh:'帮助入睡，减轻焦虑'},duration_min:4,rounds:4},loving_kindness:{name:{th:'เมตตาภาวนา (Metta Meditation)',en:'Loving-Kindness Meditation (Metta)',ja:'慈悲の瞑想（メッタ）',zh:'慈悲冥想（Metta）'},steps:{th:['นั่งสบาย หลับตา หายใจลึกๆ 3 ครั้ง','นึกถึงตัวเอง พูดในใจว่า: ขอให้ฉันมีความสุข ขอให้ฉันมีสุขภาพดี ขอให้ฉันปลอดภัย','นึกถึงคนที่รัก ส่งความปรารถนาดีให้เขา','ขยายไปยังคนรู้จัก คนแปลกหน้า และสรรพสัตว์','จบด้วยการหายใจลึกๆ และค่อยๆ ลืมตา'],en:['Sit comfortably, close your eyes, take 3 deep breaths','Think of yourself, say inwardly: May I be happy, May I be healthy, May I be safe','Think of someone you love, send them good wishes','Expand to acquaintances, strangers, and all beings','End with deep breaths and slowly open your eyes'],ja:['楽に座り、目を閉じ、深呼吸を3回する','自分自身を思い浮かべ、心の中で言う：私が幸せでありますように','愛する人を思い浮かべ、善意を送る','知人、見知らぬ人、すべての生き物に広げる','深呼吸でしめくくり、ゆっくりと目を開ける'],zh:['舒适地坐好，闭上眼睛，深呼吸3次','想到自己，在心里说：愿我快乐，愿我健康，愿我平安','想到你爱的人，向他们送去祝福','扩展到熟人、陌生人和所有众生','以深呼吸结束，慢慢睁开眼睛']},benefit:{th:'เพิ่มความเมตตา ลดความโกรธ ความเหงา',en:'Increases compassion, reduces anger and loneliness',ja:'思いやりを高め、怒りや孤独感を軽減する',zh:'增加慈悲心，减少愤怒和孤独感'},duration_min:10,rounds:null},body_scan:{name:{th:'Body Scan (สแกนร่างกาย)',en:'Body Scan Meditation',ja:'ボディスキャン瞑想',zh:'身体扫描冥想'},steps:{th:['นอนหงายหรือนั่งสบาย หลับตา','สังเกตลมหายใจ 5 ครั้ง ไม่ต้องบังคับ','เริ่มจากเท้า — รู้สึกถึงส่วนต่างๆ ค่อยๆ ขยับขึ้น','ถึงส่วนไหนที่ตึงหรือเจ็บปวด — แค่รับรู้ ไม่ต้องแก้','จบที่ศีรษะ หายใจลึก แล้วค่อยๆ ลืมตา'],en:['Lie on your back or sit comfortably, close your eyes','Observe your breath for 5 cycles, no need to control','Start from your feet — feel each part, slowly moving upward','When you reach tense or painful areas — just notice, no need to fix','End at the top of your head, take a deep breath, then slowly open your eyes'],ja:['仰向けに寝るか、楽に座り、目を閉じる','呼吸を5回観察する、コントロールしなくてよい','足から始め、各部位を感じながらゆっくり上へ','緊張や痛みのある部位に来たら — ただ気づくだけでよい','頭の先で終わり、深呼吸してゆっくり目を開ける'],zh:['仰卧或舒适地坐好，闭上眼睛','观察呼吸5次，不需要控制','从脚开始 — 感受各个部位，慢慢向上移动','遇到紧张或疼痛的部位 — 只需察觉，无需修复','在头顶结束，深呼吸，然后慢慢睁开眼睛']},benefit:{th:'คลายความตึงเครียดสะสม เพิ่มการรับรู้ร่างกาย',en:'Releases accumulated tension, increases body awareness',ja:'蓄積された緊張をほぐし、身体意識を高める',zh:'释放累积的紧张，提高身体意识'},duration_min:10,rounds:null}};const guideData=guidesI18n[ex]||guidesI18n['box_breathing'];const localLang=['th','en','ja','zh'].includes(lang)?lang:'en';return{json:{name:guideData.name[localLang]||guideData.name['en'],steps:guideData.steps[localLang]||guideData.steps['en'],benefit:guideData.benefit[localLang]||guideData.benefit['en'],duration_min:guideData.duration_min,rounds:guideData.rounds,requested:ex,available:Object.keys(guidesI18n)}}};"
       },
       "id": "tool-mindfulness",
       "name": "mindfulness_guide",
@@ -231,70 +231,30 @@
     }
   ],
   "connections": {
-    "WF3-B Entry": {
-      "main": [[{"node": "Extract Payload", "type": "main", "index": 0}]]
-    },
-    "Extract Payload": {
-      "main": [[{"node": "Load Credentials", "type": "main", "index": 0}]]
-    },
-    "Load Credentials": {
-      "main": [[{"node": "Build Agent Context", "type": "main", "index": 0}]]
-    },
-    "Build Agent Context": {
-      "main": [[{"node": "Soul Agent", "type": "main", "index": 0}]]
-    },
-    "Soul Agent": {
-      "main": [[{"node": "Format Output", "type": "main", "index": 0}]]
-    },
-    "OpenRouter LLM (Auto-Fallback)": {
-      "ai_languageModel": [[{"node": "Soul Agent", "type": "ai_languageModel", "index": 0}]]
-    },
-    "Session Memory": {
-      "ai_memory": [[{"node": "Soul Agent", "type": "ai_memory", "index": 0}]]
-    },
-    "think": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
-    },
-    "call_gating_service": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
-    },
-    "search_memories": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
-    },
-    "journal_entry": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
-    },
-    "mood_tracker": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
-    },
-    "growth_reflection": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
-    },
-    "relationship_insights": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
-    },
-    "manage_habits": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
-    },
-    "manage_persona": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
-    },
-    "mindfulness_guide": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
-    }
+    "WF3-B Entry": { "main": [[{"node": "Extract Payload", "type": "main", "index": 0}]] },
+    "Extract Payload": { "main": [[{"node": "Load Credentials", "type": "main", "index": 0}]] },
+    "Load Credentials": { "main": [[{"node": "Build Agent Context", "type": "main", "index": 0}]] },
+    "Build Agent Context": { "main": [[{"node": "Soul Agent", "type": "main", "index": 0}]] },
+    "Soul Agent": { "main": [[{"node": "Format Output", "type": "main", "index": 0}]] },
+    "OpenRouter LLM (Auto-Fallback)": { "ai_languageModel": [[{"node": "Soul Agent", "type": "ai_languageModel", "index": 0}]] },
+    "Session Memory": { "ai_memory": [[{"node": "Soul Agent", "type": "ai_memory", "index": 0}]] },
+    "think": { "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]] },
+    "call_gating_service": { "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]] },
+    "search_memories": { "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]] },
+    "journal_entry": { "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]] },
+    "mood_tracker": { "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]] },
+    "growth_reflection": { "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]] },
+    "relationship_insights": { "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]] },
+    "manage_habits": { "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]] },
+    "manage_persona": { "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]] },
+    "mindfulness_guide": { "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]] }
   },
   "pinData": {},
-  "active": true,
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "errorWorkflow": "WF0-Error-Handler"
   },
-  "meta": {
-    "templateCredsSetupCompleted": true
-  },
-  "tags": [
-    {"name": "wf3b"},
-    {"name": "soul"},
-    {"name": "jarvis-v5.5"}
-  ]
+  "meta": { "templateCredsSetupCompleted": true },
+  "tags": [{"name": "wf3b"}, {"name": "soul"}, {"name": "jarvis-v5.5"}]
 }
