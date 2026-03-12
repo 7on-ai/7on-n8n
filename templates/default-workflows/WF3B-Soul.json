@@ -12,7 +12,10 @@
       "name": "Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-220, -420]
+      "position": [
+        -220,
+        -420
+      ]
     },
     {
       "parameters": {
@@ -25,7 +28,10 @@
       "name": "WF3-B Entry",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [608, 352],
+      "position": [
+        608,
+        352
+      ],
       "webhookId": "wf3b-soul-entry"
     },
     {
@@ -36,7 +42,10 @@
       "name": "Extract Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [896, 352]
+      "position": [
+        896,
+        352
+      ]
     },
     {
       "parameters": {
@@ -46,7 +55,10 @@
       "name": "Load Credentials",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1152, 352]
+      "position": [
+        1152,
+        352
+      ]
     },
     {
       "parameters": {
@@ -56,7 +68,10 @@
       "name": "Build Agent Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1408, 352]
+      "position": [
+        1408,
+        352
+      ]
     },
     {
       "parameters": {
@@ -70,7 +85,10 @@
       "name": "Soul Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.8,
-      "position": [1648, 240]
+      "position": [
+        1648,
+        240
+      ]
     },
     {
       "parameters": {
@@ -81,12 +99,15 @@
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
-      "position": [1344, 480],
+      "position": [
+        1344,
+        480
+      ],
       "id": "llm-fallback",
       "name": "OpenRouter LLM (Auto-Fallback)",
       "credentials": {
         "openRouterApi": {
-          "id": "Jv35fZXKtN2bqFpr",
+          "id": "OPENROUTER_CRED_ID_PLACEHOLDER",
           "name": "OpenRouter"
         }
       }
@@ -101,7 +122,10 @@
       "name": "Session Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
-      "position": [1504, 480]
+      "position": [
+        1504,
+        480
+      ]
     },
     {
       "parameters": {},
@@ -109,7 +133,10 @@
       "name": "think",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
-      "position": [1664, 480]
+      "position": [
+        1664,
+        480
+      ]
     },
     {
       "parameters": {
@@ -121,7 +148,10 @@
       "name": "call_gating_service",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [1824, 480]
+      "position": [
+        1824,
+        480
+      ]
     },
     {
       "parameters": {
@@ -133,7 +163,10 @@
       "name": "search_memories",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [1984, 480]
+      "position": [
+        1984,
+        480
+      ]
     },
     {
       "parameters": {
@@ -145,7 +178,10 @@
       "name": "journal_entry",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2144, 480]
+      "position": [
+        2144,
+        480
+      ]
     },
     {
       "parameters": {
@@ -157,7 +193,10 @@
       "name": "mood_tracker",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2304, 480]
+      "position": [
+        2304,
+        480
+      ]
     },
     {
       "parameters": {
@@ -169,7 +208,10 @@
       "name": "growth_reflection",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2464, 480]
+      "position": [
+        2464,
+        480
+      ]
     },
     {
       "parameters": {
@@ -181,7 +223,10 @@
       "name": "relationship_insights",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2624, 480]
+      "position": [
+        2624,
+        480
+      ]
     },
     {
       "parameters": {
@@ -193,7 +238,10 @@
       "name": "manage_habits",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2784, 480]
+      "position": [
+        2784,
+        480
+      ]
     },
     {
       "parameters": {
@@ -205,7 +253,10 @@
       "name": "manage_persona",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [2944, 480]
+      "position": [
+        2944,
+        480
+      ]
     },
     {
       "parameters": {
@@ -217,7 +268,10 @@
       "name": "mindfulness_guide",
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.1,
-      "position": [3104, 480]
+      "position": [
+        3104,
+        480
+      ]
     },
     {
       "parameters": {
@@ -227,60 +281,199 @@
       "name": "Format Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1904, 240]
+      "position": [
+        1904,
+        240
+      ]
     }
   ],
   "connections": {
     "WF3-B Entry": {
-      "main": [[{"node": "Extract Payload", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Extract Payload": {
-      "main": [[{"node": "Load Credentials", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Load Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Load Credentials": {
-      "main": [[{"node": "Build Agent Context", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Build Agent Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Build Agent Context": {
-      "main": [[{"node": "Soul Agent", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Soul Agent": {
-      "main": [[{"node": "Format Output", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "OpenRouter LLM (Auto-Fallback)": {
-      "ai_languageModel": [[{"node": "Soul Agent", "type": "ai_languageModel", "index": 0}]]
+      "ai_languageModel": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Session Memory": {
-      "ai_memory": [[{"node": "Soul Agent", "type": "ai_memory", "index": 0}]]
+      "ai_memory": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
     },
     "think": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "call_gating_service": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "search_memories": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "journal_entry": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "mood_tracker": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "growth_reflection": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "relationship_insights": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "manage_habits": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "manage_persona": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "mindfulness_guide": {
-      "ai_tool": [[{"node": "Soul Agent", "type": "ai_tool", "index": 0}]]
+      "ai_tool": [
+        [
+          {
+            "node": "Soul Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
@@ -293,8 +486,14 @@
     "templateCredsSetupCompleted": true
   },
   "tags": [
-    {"name": "wf3b"},
-    {"name": "soul"},
-    {"name": "jarvis-v5.5"}
+    {
+      "name": "wf3b"
+    },
+    {
+      "name": "soul"
+    },
+    {
+      "name": "jarvis-v5.5"
+    }
   ]
 }
