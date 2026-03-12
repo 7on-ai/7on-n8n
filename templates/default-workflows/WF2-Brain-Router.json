@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "# WF2 — JARVIS Brain Router v5.8\n\n### KEY FIX v5.8:\n- ✅ ลบ $env ทั้งหมด — n8n 2.11 sandbox BLOCK อย่างสมบูรณ์\n- ✅ ใช้ openrouterToken จาก persona.tokens เท่านั้น\n- ✅ $helpers.httpRequest() แทน fetch()\n- ✅ keyword fallback เมื่อไม่มี token\n\n### Flow:\nWF2 Entry → Extract Payload → JARVIS Router\n→ Dispatch Gate → Format Response",
+        "content": "# WF2 — JARVIS Brain Router v5.7\n\n### FIX v5.7 ($env FREE):\n- ✅ ลบ $env ทั้งหมดออก (n8n 2.11.2 sandbox blocks $env)\n- ✅ AGENT_URLS hardcoded localhost:5678 (Northflank internal)\n- ✅ API Key: user token เท่านั้น → ถ้าไม่มี → keyword fallback\n- ✅ $helpers.httpRequest() คงไว้ (built-in, ไม่ถูก block)\n\n### Flow (5 nodes):\nWF2 Entry → Extract Payload → JARVIS Router\n→ Dispatch Gate → Format Response",
         "height": 300,
         "width": 420,
         "color": 4
@@ -12,7 +12,10 @@
       "name": "Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-200, 200]
+      "position": [
+        -200,
+        200
+      ]
     },
     {
       "parameters": {
@@ -25,7 +28,10 @@
       "name": "WF2 Entry",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-208, 580],
+      "position": [
+        -208,
+        580
+      ],
       "webhookId": "wf2-brain-entry"
     },
     {
@@ -36,17 +42,23 @@
       "name": "Extract Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [16, 580]
+      "position": [
+        16,
+        580
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// JARVIS Router v5.8 — NO $env AT ALL\n// ใช้ token จาก persona.tokens เท่านั้น\n// $helpers.httpRequest() — n8n built-in, ไม่ถูก sandbox block\n// ─────────────────────────────────────────────────────────────\nconst payload  = $input.first().json;\nconst message  = payload.message || '';\nconst persona  = payload.persona || {};\nconst lang     = persona.language_preference || 'th';\nconst userName = persona.name || 'User';\nconst tier     = persona.subscriptionTier || 'FREE';\nconst stage    = persona.ethical_profile?.growth_stage || 2;\nconst stageLabel = persona.ethical_profile?.growth_stage_label || 'Developing';\nconst interests  = (persona.interests || []).slice(0, 5).join(', ') || 'not specified';\nconst keyFacts   = (persona.key_facts || []).slice(0, 3).join(' | ') || 'none';\nconst recentMemTypes = (persona.relevant_memories || []).map(m => m.type).join(', ') || 'none';\n\n// ── API Key — จาก persona.tokens เท่านั้น (NO $env) ──────────\nconst apiKey  = persona.tokens?.openrouter_access_token || '';\nconst keyType = apiKey ? 'user' : 'none';\n\nconst PAID_MODEL = 'anthropic/claude-haiku-4-5';\nconst FREE_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';\nconst model = apiKey ? PAID_MODEL : FREE_MODEL;\n\n// ── n8n base URL — hardcode จาก webhookUrl ────────────────────\n// ดึง base URL จาก WF2 Entry webhook URL (ไม่ต้องใช้ $env)\nconst n8nBase = 'http://localhost:5678';\nconst AGENT_URLS = {\n  wf3a: `${n8nBase}/webhook/wf3a-secretary`,\n  wf3b: `${n8nBase}/webhook/wf3b-soul`,\n  wf3c: `${n8nBase}/webhook/wf3c-careercoach`,\n  wf3d: `${n8nBase}/webhook/wf3d-explorer`,\n  wf3e: `${n8nBase}/webhook/wf3e-creator`,\n  wf3f: `${n8nBase}/webhook/wf3f-homemate`,\n  wf3g: `${n8nBase}/webhook/wf3g-healthcoach`\n};\n\n// ── System Prompt ─────────────────────────────────────────────\nconst SYSTEM_PROMPT = `You are JARVIS — the central cognitive router of an advanced personal AI system.\nYour function: Decompose the user's message into a structured dispatch plan.\n\nAGENT REGISTRY:\nwf3a [SECRETARY] — Calendar, reminders, email, LINE notify, Telegram, Discord, tasks, social media\nwf3b [SOUL] — Emotions, journaling, personal growth, habits, relationships, crisis (hopelessness/self-harm → always wf3b + crisis=true)\nwf3c [CAREER COACH] — Finance, budget, investment, stocks, career, resume, interview\nwf3d [EXPLORER] — Web search, news, weather, exchange rates, maps, research\nwf3e [CREATOR] — AI image, TTS, creative writing, translation\nwf3f [HOME MATE] — Music (Spotify/Sonos), smart home (Home Assistant)\nwf3g [HEALTH COACH] — Nutrition, calorie, workout, exercise, health tracking\n\nRULES:\n- Single intent → 1 item; Multi → max 3, ordered by priority\n- crisis → wf3b, crisis=true always\n- Output ONLY valid JSON, no markdown:\n{\"intents\":[{\"agent\":\"wf3x\",\"priority\":1,\"sub_task\":\"instruction\",\"gating\":false,\"crisis\":false}]}\n\nCONTEXT: User=${userName} | Lang=${lang} | Tier=${tier} | Growth=${stage}/5 (${stageLabel})\nInterests: ${interests} | Key facts: ${keyFacts} | Recent memories: ${recentMemTypes}`;\n\n// ── Keyword Fallback ──────────────────────────────────────────\nfunction keywordRoute(msg) {\n  const t = msg.toLowerCase();\n  if (/อยากตาย|ฆ่าตัว|สิ้นหวัง|want to die|hopeless/.test(t))\n    return { agent: 'wf3b', priority: 1, sub_task: msg, gating: true, crisis: true };\n  if (/นัด|ปฏิทิน|เตือน|ส่ง email|ส่งเมล|แจ้งเตือน/.test(t))\n    return { agent: 'wf3a', priority: 1, sub_task: msg, gating: false, crisis: false };\n  if (/หุ้น|กองทุน|งบ|เงิน|ลงทุน|resume|สัมภาษณ์/.test(t))\n    return { agent: 'wf3c', priority: 1, sub_task: msg, gating: false, crisis: false };\n  if (/ค้นหา|ข่าว|สภาพอากาศ|แผนที่|search|weather/.test(t))\n    return { agent: 'wf3d', priority: 1, sub_task: msg, gating: false, crisis: false };\n  if (/รูปภาพ|สร้างรูป|แปล|image|translate|tts/.test(t))\n    return { agent: 'wf3e', priority: 1, sub_task: msg, gating: false, crisis: false };\n  if (/เพลง|spotify|music|บ้าน|home/.test(t))\n    return { agent: 'wf3f', priority: 1, sub_task: msg, gating: false, crisis: false };\n  if (/อาหาร|แคล|ออกกำลัง|สุขภาพ|nutrition|workout/.test(t))\n    return { agent: 'wf3g', priority: 1, sub_task: msg, gating: false, crisis: false };\n  // default → wf3b (soul) สำหรับ general conversation\n  return { agent: 'wf3b', priority: 1, sub_task: msg, gating: false, crisis: false };\n}\n\nfunction parseIntents(text) {\n  const VALID = ['wf3a','wf3b','wf3c','wf3d','wf3e','wf3f','wf3g'];\n  try {\n    const clean = (text || '').replace(/```json|```/g, '').trim();\n    const parsed = JSON.parse(clean);\n    const arr = Array.isArray(parsed.intents) ? parsed.intents : [parsed];\n    const valid = arr\n      .filter(i => i && VALID.includes(i.agent))\n      .map(i => ({\n        agent:    i.agent,\n        priority: [1,2,3].includes(i.priority) ? i.priority : 1,\n        sub_task: i.sub_task || message,\n        gating:   i.gating === true,\n        crisis:   i.crisis === true\n      }))\n      .sort((a, b) => a.priority - b.priority);\n    const seen = new Set();\n    const deduped = valid.filter(i => !seen.has(i.agent) && seen.add(i.agent));\n    if (deduped.length === 0) throw new Error('empty');\n    return deduped;\n  } catch(_) {\n    return [keywordRoute(message)];\n  }\n}\n\n// ── Call OpenRouter via $helpers.httpRequest (NO fetch, NO $env) ─\nlet rawText    = null;\nlet usedModel  = null;\nlet routerError = null;\n\nif (apiKey) {\n  try {\n    const responseData = await $helpers.httpRequest({\n      method:  'POST',\n      url:     'https://openrouter.ai/api/v1/chat/completions',\n      headers: {\n        'Authorization': `Bearer ${apiKey}`,\n        'Content-Type':  'application/json',\n        'HTTP-Referer':  'https://7on.ai'\n      },\n      body: JSON.stringify({\n        model,\n        max_tokens: 300,\n        temperature: 0,\n        response_format: { type: 'json_object' },\n        messages: [\n          { role: 'system', content: SYSTEM_PROMPT },\n          { role: 'user',   content: message }\n        ]\n      })\n    });\n    const data = typeof responseData === 'string' ? JSON.parse(responseData) : responseData;\n    rawText   = data?.choices?.[0]?.message?.content || null;\n    usedModel = model;\n    console.log(`[JARVIS v5.8] ✅ OpenRouter ok | model=${model} | keyType=${keyType}`);\n  } catch (err) {\n    routerError = err.message || String(err);\n    console.warn(`[JARVIS v5.8] ⚠️ OpenRouter failed: ${routerError} — keyword fallback`);\n  }\n} else {\n  console.log('[JARVIS v5.8] No API key — keyword fallback');\n}\n\n// ── Parse & dispatch ──────────────────────────────────────────\nconst intents  = parseIntents(rawText);\nconst intent   = intents[0];\nconst hasCrisis = intents.some(i => i.crisis);\nconst hasGating = intents.some(i => i.gating || i.crisis);\n\nconsole.log(`[JARVIS v5.8] → ${intent.agent} | crisis=${hasCrisis} | model=${usedModel || 'keyword'}`);\n\nreturn {\n  json: {\n    userId:           payload.userId,\n    sessionId:        payload.sessionId,\n    source:           payload.source,\n    message:          intent.sub_task,\n    originalMessage:  message,\n    databaseUrl:      payload.databaseUrl,\n    replyTarget:      payload.replyTarget,\n    replyToken:       payload.replyToken,\n    timestamp:        payload.timestamp,\n    persona:          payload.persona,\n    targetAgent:      intent.agent,\n    targetUrl:        AGENT_URLS[intent.agent],\n    needsGating:      intent.gating,\n    hasCrisis,\n    _intents:         intents,\n    _dispatch_mode:   'single',\n    _router_model:    usedModel,\n    _router_key_type: keyType,\n    _router_version:  'v5.8',\n    _gating_intents:  hasGating ? intents.filter(i => i.gating || i.crisis) : [],\n    _router_error:    routerError\n  }\n};"
+        "jsCode": "// JARVIS Router v5.7 — $env FREE\n// ─────────────────────────────────────────────────────────────\n// FIX v5.7: ลบ $env ทั้งหมด (n8n 2.11.2 sandbox blocks $env in Code nodes)\n// - AGENT_URLS: hardcoded localhost:5678 (Northflank internal routing)\n// - API Key: ใช้เฉพาะ persona.tokens.openrouter_access_token (user key)\n//   ถ้าไม่มี user key → keyword fallback (FREE tier)\n// - $helpers.httpRequest() ยังใช้อยู่ (n8n built-in, ไม่ถูก block)\n// ─────────────────────────────────────────────────────────────\nconst payload  = $input.first().json;\nconst message  = payload.message || '';\nconst persona  = payload.persona || {};\nconst lang     = persona.language_preference || 'th';\nconst userName = persona.name || 'User';\nconst tier     = persona.subscriptionTier || 'FREE';\nconst stage    = persona.ethical_profile?.growth_stage || 2;\nconst stageLabel = persona.ethical_profile?.growth_stage_label || 'Developing';\nconst interests  = (persona.interests || []).slice(0, 5).join(', ') || 'not specified';\nconst keyFacts   = (persona.key_facts || []).slice(0, 3).join(' | ') || 'none';\nconst recentMemTypes = (persona.relevant_memories || []).map(m => m.type).join(', ') || 'none';\n\n// ── API Key: user key เท่านั้น (ไม่ใช้ $env) ─────────────────\nconst apiKey  = persona.tokens?.openrouter_access_token || '';\nconst keyType = apiKey ? 'user' : 'none';\n\nconst PAID_MODEL = 'anthropic/claude-haiku-4-5';\nconst FREE_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';\nconst model      = apiKey ? PAID_MODEL : FREE_MODEL;\n\n// ── Agent URLs: hardcoded (ไม่ใช้ $env) ──────────────────────\n// localhost:5678 = n8n internal URL ใน Northflank container\nconst AGENT_URLS = {\n  wf3a: 'http://localhost:5678/webhook/wf3a-secretary',\n  wf3b: 'http://localhost:5678/webhook/wf3b-soul',\n  wf3c: 'http://localhost:5678/webhook/wf3c-careercoach',\n  wf3d: 'http://localhost:5678/webhook/wf3d-explorer',\n  wf3e: 'http://localhost:5678/webhook/wf3e-creator',\n  wf3f: 'http://localhost:5678/webhook/wf3f-homemate',\n  wf3g: 'http://localhost:5678/webhook/wf3g-healthcoach'\n};\n\n// ── System Prompt ─────────────────────────────────────────────\nconst SYSTEM_PROMPT = `You are JARVIS — the central cognitive router of an advanced personal AI system.\nYour function: Decompose the user's message into a structured dispatch plan.\n\nAGENT REGISTRY:\nwf3a [SECRETARY] — Calendar, reminders, email, LINE notify, Telegram, Discord, tasks, social media\nwf3b [SOUL] — Emotions, journaling, personal growth, habits, relationships, crisis (hopelessness/self-harm → always wf3b + crisis=true)\nwf3c [CAREER COACH] — Finance, budget, investment, stocks, career, resume, interview\nwf3d [EXPLORER] — Web search, news, weather, exchange rates, maps, research\nwf3e [CREATOR] — AI image, TTS, creative writing, translation\nwf3f [HOME MATE] — Music (Spotify/Sonos), smart home (Home Assistant)\nwf3g [HEALTH COACH] — Nutrition, calorie, workout, exercise, health tracking\n\nRULES:\n- Single intent → 1 item; Multi → max 3, ordered by priority\n- crisis → wf3b, crisis=true always\n- Output ONLY valid JSON, no markdown:\n{\"intents\":[{\"agent\":\"wf3x\",\"priority\":1,\"sub_task\":\"instruction\",\"gating\":false,\"crisis\":false}]}\n\nCONTEXT: User=${userName} | Lang=${lang} | Tier=${tier} | Growth=${stage}/5 (${stageLabel})\nInterests: ${interests} | Key facts: ${keyFacts} | Recent memories: ${recentMemTypes}`;\n\n// ── Keyword Fallback ──────────────────────────────────────────\nfunction keywordRoute(msg) {\n  const t = msg.toLowerCase();\n  if (/อยากตาย|ฆ่าตัว|สิ้นหวัง|want to die|hopeless/.test(t))\n    return { agent: 'wf3b', priority: 1, sub_task: msg, gating: true, crisis: true };\n  if (/นัด|ปฏิทิน|เตือน|ส่ง email|ส่งเมล|แจ้งเตือน/.test(t))\n    return { agent: 'wf3a', priority: 1, sub_task: msg, gating: false, crisis: false };\n  if (/หุ้น|กองทุน|งบ|เงิน|ลงทุน|resume|สัมภาษณ์/.test(t))\n    return { agent: 'wf3c', priority: 1, sub_task: msg, gating: false, crisis: false };\n  if (/ค้นหา|ข่าว|สภาพอากาศ|แผนที่|search|weather/.test(t))\n    return { agent: 'wf3d', priority: 1, sub_task: msg, gating: false, crisis: false };\n  if (/รูปภาพ|สร้างรูป|แปล|image|translate|tts/.test(t))\n    return { agent: 'wf3e', priority: 1, sub_task: msg, gating: false, crisis: false };\n  if (/เพลง|spotify|music|บ้าน|home/.test(t))\n    return { agent: 'wf3f', priority: 1, sub_task: msg, gating: false, crisis: false };\n  if (/อาหาร|แคล|ออกกำลัง|สุขภาพ|nutrition|workout/.test(t))\n    return { agent: 'wf3g', priority: 1, sub_task: msg, gating: false, crisis: false };\n  return { agent: 'wf3b', priority: 1, sub_task: msg, gating: false, crisis: false };\n}\n\nfunction parseIntents(text) {\n  const VALID = ['wf3a','wf3b','wf3c','wf3d','wf3e','wf3f','wf3g'];\n  try {\n    const clean = (text || '').replace(/```json|```/g, '').trim();\n    const parsed = JSON.parse(clean);\n    const arr = Array.isArray(parsed.intents) ? parsed.intents : [parsed];\n    const valid = arr\n      .filter(i => i && VALID.includes(i.agent))\n      .map(i => ({\n        agent:    i.agent,\n        priority: [1,2,3].includes(i.priority) ? i.priority : 1,\n        sub_task: i.sub_task || message,\n        gating:   i.gating === true,\n        crisis:   i.crisis === true\n      }))\n      .sort((a, b) => a.priority - b.priority);\n    const seen = new Set();\n    const deduped = valid.filter(i => !seen.has(i.agent) && seen.add(i.agent));\n    if (deduped.length === 0) throw new Error('empty');\n    return deduped;\n  } catch(_) {\n    return [keywordRoute(message)];\n  }\n}\n\n// ── Call OpenRouter via $helpers.httpRequest ──────────────────\nlet rawText   = null;\nlet usedModel = null;\nlet routerError = null;\n\nif (apiKey) {\n  try {\n    const responseData = await $helpers.httpRequest({\n      method:  'POST',\n      url:     'https://openrouter.ai/api/v1/chat/completions',\n      headers: {\n        'Authorization': `Bearer ${apiKey}`,\n        'Content-Type':  'application/json',\n        'HTTP-Referer':  'https://7on.ai'\n      },\n      body: JSON.stringify({\n        model,\n        max_tokens: 300,\n        temperature: 0,\n        response_format: { type: 'json_object' },\n        messages: [\n          { role: 'system', content: SYSTEM_PROMPT },\n          { role: 'user',   content: message }\n        ]\n      })\n    });\n\n    const data = typeof responseData === 'string' ? JSON.parse(responseData) : responseData;\n    rawText   = data?.choices?.[0]?.message?.content || null;\n    usedModel = model;\n    console.log(`[JARVIS v5.7] ✅ OpenRouter ok | model=${model} | keyType=${keyType}`);\n\n  } catch (err) {\n    routerError = err.message || String(err);\n    console.warn(`[JARVIS v5.7] ⚠️ OpenRouter failed: ${routerError} — using keyword fallback`);\n  }\n} else {\n  console.log('[JARVIS v5.7] No user key — keyword fallback');\n}\n\n// ── Parse intents ─────────────────────────────────────────────\nconst intents = parseIntents(rawText);\nconst intent  = intents[0];\nconst hasCrisis = intents.some(i => i.crisis);\nconst hasGating = intents.some(i => i.gating || i.crisis);\n\nconsole.log(`[JARVIS v5.7] → ${intent.agent} | crisis=${hasCrisis} | model=${usedModel || 'keyword'}`);\n\nreturn {\n  json: {\n    userId:          payload.userId,\n    sessionId:       payload.sessionId,\n    source:          payload.source,\n    message:         intent.sub_task,\n    originalMessage: message,\n    databaseUrl:     payload.databaseUrl,\n    replyTarget:     payload.replyTarget,\n    replyToken:      payload.replyToken,\n    timestamp:       payload.timestamp,\n    persona:         payload.persona,\n    targetAgent:     intent.agent,\n    targetUrl:       AGENT_URLS[intent.agent],\n    needsGating:     intent.gating,\n    hasCrisis,\n    _intents:        intents,\n    _dispatch_mode:  'single',\n    _router_model:   usedModel,\n    _router_key_type: keyType,\n    _router_version: 'v5.7',\n    _gating_intents: hasGating ? intents.filter(i => i.gating || i.crisis) : [],\n    _router_error:   routerError\n  }\n};"
       },
       "id": "jarvis-router-v58",
       "name": "JARVIS Router",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [464, 580]
+      "position": [
+        464,
+        580
+      ]
     },
     {
       "parameters": {
@@ -55,7 +67,10 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -76,7 +91,10 @@
       "name": "Dispatch Gate",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1360, 580],
+      "position": [
+        1360,
+        580
+      ],
       "onError": "continueRegularOutput"
     },
     {
@@ -87,21 +105,56 @@
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1584, 580]
+      "position": [
+        1584,
+        580
+      ]
     }
   ],
   "connections": {
     "WF2 Entry": {
-      "main": [[{ "node": "Extract Payload", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Extract Payload": {
-      "main": [[{ "node": "JARVIS Router", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "JARVIS Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "JARVIS Router": {
-      "main": [[{ "node": "Dispatch Gate", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Dispatch Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Dispatch Gate": {
-      "main": [[{ "node": "Format Response", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
@@ -110,10 +163,18 @@
     "executionOrder": "v1",
     "errorWorkflow": "WF0-Error-Handler"
   },
-  "meta": { "templateCredsSetupCompleted": true },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
   "tags": [
-    { "name": "wf2" },
-    { "name": "brain-router" },
-    { "name": "jarvis-v5.8" }
+    {
+      "name": "wf2"
+    },
+    {
+      "name": "brain-router"
+    },
+    {
+      "name": "jarvis-v5.8"
+    }
   ]
 }
